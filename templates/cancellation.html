@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Báo Vắng - Cơ sở 2{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-2">
+    
+    <!-- THANH THÔNG TIN ĐẦU TRANG: ĐƠN VỊ & TÀI KHOẢN -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill fw-medium">
+                <i class="bi bi-geo-alt-fill me-1"></i> Cơ sở 2 &bull; Tòa B-42
+            </span>
+        </div>
+        <div class="text-muted small">
+            Người thực hiện: <strong class="text-dark">{{ current_user_name }}</strong>
+            {% if current_user_email %}
+                <span>({{ current_user_email }})</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- BỐ CỤC 2 CỘT HIỆN ĐẠI (DESKTOP SPLIT LAYOUT) -->
+    <div class="row g-4">
+        
+        <!-- ======================================================== -->
+        <!-- CỘT TRÁI (FORM BÁO VẮNG - CHIẾM 7/12 HOẶC 8/12)            -->
+        <!-- ======================================================== -->
+        <div class="col-lg-7 col-xl-8">
+            <div class="card shadow-sm border-0 rounded-4 bg-white overflow-hidden mb-4">
+                
+                <!-- HERO CARD HEADER (TÔNG ĐỎ KHẨN CẤP / BÁO VẮNG) -->
+                <div class="card-header bg-danger text-white text-center py-4 border-0">
+                    <i class="bi bi-calendar-x display-5 mb-2 d-block"></i>
+                    <h3 class="fw-bold mb-1">Báo Vắng</h3>
+                    <p class="mb-0 opacity-90 small">Tiếp nhận thông tin báo vắng để kịp thời niêm phong, khóa cửa và bảo quản thiết bị phòng máy</p>
+                </div>
+
+                <div class="card-body p-4 p-md-5">
+                    <form action="{{ url_for('submit_cancellation') }}" method="POST">
+                        
+                        <!-- 1. NGÀY VẮNG / NGHỈ HỌC ĐƯA LÊN ĐẦU -->
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Ngày vắng / nghỉ học *</label>
+                            <input type="date" class="form-control bg-light border-0 py-2" name="cancel_date" id="cancel_date" required>
+                        </div>
+
+                        <!-- 2. PHÒNG HỌC & CA / TIẾT NGHỈ -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Phòng học *</label>
+                                <select class="form-select bg-light border-0 py-2" name="room" required>
+                                    {% for r in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6'] %}
+                                        <option value="{{ r }}">Phòng {{ r }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Ca / Tiết vắng *</label>
+                                <input type="text" class="form-control bg-light border-0 py-2" name="period" required placeholder="VD: Tiết 1 - 5 hoặc Ca Sáng">
+                            </div>
+                        </div>
+
+                        <!-- 3. TÊN GIẢNG VIÊN -->
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Tên Giảng viên *</label>
+                            <input type="text" class="form-control bg-light border-0 py-2" name="teacher_name" placeholder="Ví dụ: Nguyễn Văn A" required value="{{ current_user_name }}">
+                        </div>
+
+                        <!-- 4. LÝ DO VẮNG & KẾ HOẠCH HỌC BÙ -->
+                        <div class="mb-4">
+                            <label class="form-label text-muted small fw-bold">Lý do vắng & Kế hoạch học bù (nếu có)</label>
+                            <textarea class="form-control bg-light border-0" name="reason" rows="3" placeholder="Ghi rõ lý do vắng và dự kiến thời gian dạy bù (nếu có) để phòng máy hỗ trợ sắp xếp..."></textarea>
+                        </div>
+
+                        <!-- NÚT THAO TÁC -->
+                        <div class="d-flex justify-content-end align-items-center gap-2 pt-3 border-top">
+                            <a href="{{ url_for('home_page') }}" class="btn btn-light px-4 rounded-pill">Hủy bỏ</a>
+                            <button type="submit" class="btn btn-danger fw-bold px-4 rounded-pill shadow-sm">
+                                <i class="bi bi-send-fill me-1"></i> Gửi Thông Báo Ngay
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- CỘT PHẢI (SIDEBAR LƯU Ý & THÔNG TIN LIÊN HỆ)              -->
+        <!-- ======================================================== -->
+        <div class="col-lg-5 col-xl-4">
+            
+            <!-- WIDGET 1: MỤC ĐÍCH & QUY TRÌNH XỬ LÝ -->
+            <div class="card shadow-sm border-0 rounded-4 bg-white p-4 mb-3">
+                <h6 class="fw-bold text-danger mb-3 d-flex align-items-center">
+                    <i class="bi bi-shield-exclamation me-2 fs-5"></i>Mục Đích Báo Vắng
+                </h6>
+                <ul class="list-unstyled small mb-0 d-flex flex-column gap-3 text-secondary">
+                    <li class="d-flex align-items-start">
+                        <i class="bi bi-lock-fill text-danger me-2 mt-1 flex-shrink-0"></i>
+                        <span><strong>Khóa phòng bảo vệ tài sản:</strong> Bộ phận QTTB sẽ kịp thời đến đóng và khóa cửa phòng máy, tránh tình trạng phòng trống không ai trông coi dẫn đến mất mát tài sản (chuột, phím, thiết bị...).</span>
+                    </li>
+                    <li class="d-flex align-items-start">
+                        <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
+                        <span><strong>Tiết kiệm năng lượng:</strong> Đảm bảo hệ thống máy tính và máy lạnh trong phòng được ngắt điện hoàn toàn.</span>
+                    </li>
+                    <li class="d-flex align-items-start">
+                        <i class="bi bi-info-circle-fill text-primary me-2 mt-1 flex-shrink-0"></i>
+                        <span><strong>Hỗ trợ thông báo cho SV:</strong> Ngay khi nhận được thông báo, Bộ phận Trực phòng sẽ lập tức kiểm tra, đóng cửa và hỗ trợ thông tin cho sinh viên.</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- WIDGET 2: LIÊN HỆ KHẨN CẤP -->
+            <div class="card shadow-sm border-0 rounded-4 p-4 bg-danger bg-opacity-10">
+                <h6 class="fw-bold text-danger mb-3" style="font-size: 0.95rem;">Liên hệ khẩn cấp:</h6>
+                <div class="text-dark small">
+                    <p class="mb-2"><i class="bi bi-telephone-fill me-2"></i>Trực phòng: <strong>0931437955</strong></p>
+                    <p class="mb-0"><i class="bi bi-telephone-fill me-2"></i>Quản lý: <strong>0899396960</strong></p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const cancelDateInput = document.getElementById('cancel_date');
+    if (cancelDateInput && !cancelDateInput.value) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        cancelDateInput.value = `${yyyy}-${mm}-${dd}`;
+    }
+});
+</script>
+{% endblock %}

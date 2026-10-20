@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Lịch sử hoạt động của tôi{% endblock %}
+{% block content %}
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-primary mb-1"><i class="bi bi-clock-history me-2"></i>Lịch sử của tôi</h2>
+            <p class="text-muted mb-0">Theo dõi trạng thái các yêu cầu bạn đã gửi</p>
+        </div>
+        <div class="text-end d-none d-md-block">
+            <span class="badge bg-light text-dark border p-2 px-3 rounded-pill">
+                <i class="bi bi-envelope me-1"></i>{{ current_user_email }}
+            </span>
+        </div>
+    </div>
+
+    <ul class="nav nav-pills mb-4" id="dashboardTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-bold px-4 rounded-pill" id="bookings-tab" data-bs-toggle="pill" data-bs-target="#bookings" type="button" role="tab"><i class="bi bi-calendar-check me-1"></i>Mượn phòng</button>
+        </li>
+        <li class="nav-item ms-2" role="presentation">
+            <button class="nav-link fw-bold px-4 rounded-pill" id="issues-tab" data-bs-toggle="pill" data-bs-target="#issues" type="button" role="tab"><i class="bi bi-tools me-1"></i>Báo sự cố</button>
+        </li>
+        <li class="nav-item ms-2" role="presentation">
+            <button class="nav-link fw-bold px-4 rounded-pill" id="cancels-tab" data-bs-toggle="pill" data-bs-target="#cancels" type="button" role="tab"><i class="bi bi-exclamation-triangle me-1"></i>Báo Vắng</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="dashboardTabsContent">
+        <!-- BOOKINGS TAB -->
+        <div class="tab-pane fade show active" id="bookings" role="tabpanel">
+            {% if bookings %}
+                <div class="row g-3">
+                {% for b in bookings %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 border-0 shadow-sm rounded-4 position-relative overflow-hidden">
+                            {% if b.status == 'Pending' %}
+                                <div class="bg-warning position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
+                            {% elif b.status == 'Approved' %}
+                                <div class="bg-success position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
+                            {% else %}
+                                <div class="bg-danger position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
+                            {% endif %}
+                            
+                            <div class="card-body p-4">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 rounded-pill">P.{{ b.room }}</span>
+                                    
+                                    {% if b.status == 'Pending' %}
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Chờ duyệt</span>
+                                    {% elif b.status == 'Approved' %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đã duyệt</span>
+                                    {% else %}
+                                        <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Từ chối</span>
+                                    {% endif %}
+                                </div>
+                                <h5 class="fw-bold mb-1">{{ b.subject_name }}</h5>
+                                <p class="text-muted small mb-3">Thứ {{ b.day_of_week }} | Tiết {{ b.start_period }}-{{ b.end_period }}</p>
+                                
+                                <div class="bg-light p-3 rounded-3 small text-secondary mb-3">
+                                    <i class="bi bi-info-circle me-1"></i>{{ b.purpose }}
+                                </div>
+
+                                {% if b.admin_note %}
+                                    <div class="alert alert-{% if b.status == 'Approved' %}success{% else %}danger{% endif %} border-0 p-3 small mb-0 rounded-3">
+                                        <strong>Phản hồi từ QTTB:</strong><br>
+                                        {{ b.admin_note }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer bg-white border-0 pt-0 pb-3 px-4 text-muted" style="font-size: 0.75rem;">
+                                Gửi lúc: {{ b.created_at }}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-5 bg-white rounded-4 shadow-sm border-0">
+                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                    <p class="text-muted mt-3 mb-0">Bạn chưa có yêu cầu mượn phòng nào.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- ISSUES TAB -->
+        <div class="tab-pane fade" id="issues" role="tabpanel">
+            {% if issues %}
+                <div class="row g-3">
+                {% for i in issues %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 border-0 shadow-sm rounded-4 position-relative overflow-hidden">
+                            {% if i.status == 'Processing' %}
+                                <div class="bg-warning position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
+                            {% elif i.status == 'Resolved' %}
+                                <div class="bg-success position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
+                            {% else %}
+                                <div class="bg-secondary position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
+                            {% endif %}
+                            <div class="card-body p-4">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="badge bg-secondary"><i class="bi bi-pc-display me-1"></i>Máy {{ i.machine_number }} (P.{{ i.room }})</span>
+                                    {% if i.status == 'Processing' %}
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
+                                    {% elif i.status == 'Resolved' %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đã khắc phục</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary"><i class="bi bi-hourglass-split me-1"></i>Chờ xử lý</span>
+                                    {% endif %}
+                                </div>
+                                <h6 class="fw-bold">{{ i.issue_category }}</h6>
+                                <p class="small text-muted mb-3">{{ i.description }}</p>
+                                
+                                {% if i.admin_note %}
+                                    <div class="alert alert-info border-0 p-2 small mb-0 rounded-3">
+                                        <i class="bi bi-chat-dots me-1"></i><strong>QTTB:</strong> {{ i.admin_note }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer bg-white border-0 pt-0 pb-3 px-4 text-muted" style="font-size: 0.75rem;">
+                                Gửi lúc: {{ i.created_at }}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-5 bg-white rounded-4 shadow-sm border-0">
+                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                    <p class="text-muted mt-3 mb-0">Bạn chưa báo cáo sự cố nào.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- CANCELS TAB -->
+        <div class="tab-pane fade" id="cancels" role="tabpanel">
+            {% if cancellations %}
+                <div class="row g-3">
+                {% for c in cancellations %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 border-0 shadow-sm rounded-4">
+                            <div class="card-body p-4">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 rounded-pill">P.{{ c.room }}</span>
+                                    {% if c.status == 'Pending' %}
+                                        <span class="badge bg-warning text-dark">Chờ xác nhận</span>
+                                    {% else %}
+                                        <span class="badge bg-success"><i class="bi bi-check2-all"></i> Đã duyệt</span>
+                                    {% endif %}
+                                </div>
+                                <h6 class="fw-bold mb-1">Ngày vắng: {{ c.cancel_date }}</h6>
+                                <p class="text-muted small mb-2">Ca/Tiết: {{ c.period }}</p>
+                                <p class="small bg-light p-2 rounded-3 text-secondary mb-0">Lý do: {{ c.reason }}</p>
+                            </div>
+                            <div class="card-footer bg-white border-0 pt-0 pb-3 px-4 text-muted" style="font-size: 0.75rem;">
+                                Gửi lúc: {{ c.created_at }}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-5 bg-white rounded-4 shadow-sm border-0">
+                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                    <p class="text-muted mt-3 mb-0">Bạn chưa gửi báo vắng nào.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Thông tin liên hệ khẩn cấp -->
+    <div class="card shadow-sm border-0 rounded-4 p-4 bg-danger bg-opacity-10 mt-4">
+        <h6 class="fw-bold text-danger mb-3" style="font-size: 0.95rem;">Liên hệ khẩn cấp:</h6>
+        <div class="text-dark small">
+            <p class="mb-2"><i class="bi bi-telephone-fill me-2"></i>Trực phòng: <strong>0931437955</strong></p>
+            <p class="mb-0"><i class="bi bi-telephone-fill me-2"></i>Quản lý: <strong>0899396960</strong></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

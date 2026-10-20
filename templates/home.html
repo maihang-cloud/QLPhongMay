@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Trang chủ hệ thống phòng máy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-8">
+        <div class="card shadow-sm border-0 rounded-4 mt-4 mb-5">
+            <div class="card-header bg-primary text-white text-center py-4 border-0 rounded-top-4">
+                <i class="bi bi-info-circle display-4 mb-2"></i>
+                <h3 class="fw-bold mb-0">Trang Chủ Hệ Thống Phòng Máy</h3>
+                <p class="mb-0 opacity-75">Thông tin hạ tầng, trang thiết bị và quy định sử dụng tại Cơ sở 2</p>
+            </div>
+            <div class="card-body p-4 p-md-5">
+                <!-- 1. Tổng quan Hạ tầng Phòng Máy -->
+                <h5 class="fw-bold text-primary mb-3 border-bottom pb-2">1. Tổng quan Hạ tầng Phòng Máy</h5>
+                <p>Hệ thống phòng máy tính tại Cơ sở 2 (Tòa nhà B4.2) bao gồm 8 phòng thực hành hiện đại và đáp ứng quy mô giảng dạy.</p>
+                <ul>
+                    <li><strong>Tổng số lượng máy:</strong> Hơn 300 máy trạm.</li>
+                    <li><strong>Phân bổ:</strong> Phòng 6.1, 6.2, 6.5, 6.6, 5.1, 5.2, 5.3: Mỗi phòng trang bị 40 máy tính sinh viên và 1 máy tính giáo viên.</li>
+                    <li><strong>Trang bị:</strong> Máy chiếu, âm thanh, bảng viết lông, bàn ghế.</li>
+                </ul>
+
+                <!-- 2. Thông số Kỹ thuật & Cấu hình -->
+                <h5 class="fw-bold text-primary mt-4 mb-3 border-bottom pb-2">2. Thông số Kỹ thuật & Cấu hình</h5>
+                <p>Hệ thống được đầu tư đồng bộ với các dòng máy trạm hiệu năng cao từ Dell và HP:</p>
+                <div class="ms-3 mb-3">
+                    <strong class="text-dark">Dòng máy Dell Optiplex Tower (Plus 7020) - Đầu tư năm 2025:</strong>
+                    <ul class="mt-2">
+                        <li><strong>Máy Sinh viên (280 máy):</strong> CPU Intel® Core™ i7-14700 vPro®, RAM 8GB DDR5, Ổ cứng M.2 512GB PCIe NVMe Class 35. Màn hình Dell LCD E2020H 19.5 inch.</li>
+                        <li><strong>Máy Giáo viên (7 máy):</strong> Cấu hình cao cấp hơn với RAM 16GB DDR5, Card màn hình rời NVIDIA® GeForce® RTX™ 4060 8GB GDDR6. Màn hình Dell LCD E2423 23.8 inch.</li>
+                        <li><strong>Kết nối:</strong> Mạng LAN Gigabit Ethernet, tích hợp WiFi 6 và Bluetooth.</li>
+                    </ul>
+                </div>
+                <div class="ms-3 mb-3">
+                    <strong class="text-dark">Dòng máy HP 280 Pro G6 (Phòng 6.3):</strong>
+                    <ul class="mt-2">
+                        <li>CPU Intel Core i5 2.90GHz, RAM 8GB/4GB, ổ cứng HDD và SSD.</li>
+                    </ul>
+                </div>
+
+                <!-- 3. Hệ sinh thái Phần mềm Giảng dạy -->
+                <h5 class="fw-bold text-primary mt-4 mb-3 border-bottom pb-2">3. Hệ sinh thái Phần mềm Giảng dạy</h5>
+                <p>Phòng máy được cài đặt sẵn các môi trường phát triển và phần mềm chuyên dụng, bao gồm:</p>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover mt-3">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col" class="text-center" style="width: 5%">STT</th>
+                                <th scope="col" style="width: 35%">Phân loại</th>
+                                <th scope="col" style="width: 60%">Danh sách phần mềm</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-center">1</td>
+                                <td class="fw-bold">Tiện ích & Ứng dụng văn phòng</td>
+                                <td>
+                                    <ul class="mb-0 ps-3">
+                                        <li>MS365 A3</li>
+                                        <li>7-zip/WinRAR (2024)</li>
+                                        <li>Unikey</li>
+                                        <li>K-Lite Codec Pack (18.5.0)</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">2</td>
+                                <td class="fw-bold">Môi trường lập trình & Công cụ phát triển</td>
+                                <td>
+                                    <ul class="mb-0 ps-3">
+                                        <li>Visual Studio 2022</li>
+                                        <li>Visual Studio Code (1.81.1)</li>
+                                        <li>Python (3.11.4)</li>
+                                        <li>PyCharm (2024.3)</li>
+                                        <li>IntelliJ (2023.2)</li>
+                                        <li>Eclipse (C/C++, Java) (2023.6)</li>
+                                        <li>Code Block (20.3)</li>
+                                        <li>Free Pascal (3.2.2)</li>
+                                        <li>Arduino IDE (2.1.1)</li>
+                                        <li>NodeJS (18.7.1)</li>
+                                        <li>Anaconda</li>
+                                        <li>Dev C++ (5.11)</li>
+                                        <li>Open JDK / JDK (21.0.11)</li>
+                                        <li>GCC/G++ (9.2.0)</li>
+                                        <li>MSYS</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">3</td>
+                                <td class="fw-bold">Hệ quản trị CSDL</td>
+                                <td>
+                                    <ul class="mb-0 ps-3">
+                                        <li>SQL Server 2022</li>
+                                        <li>PostgreSQL (12.2)</li>
+                                        <li>Xampp (2.0.3)</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">4</td>
+                                <td class="fw-bold">Công cụ chuyên ngành</td>
+                                <td>
+                                    <ul class="mb-0 ps-3">
+                                        <li>Cisco Packet Tracer (8.2.2)</li>
+                                        <li>VMware Workstation</li>
+                                        <li>Matlab (2025)</li>
+                                        <li>Maple</li>
+                                        <li>QGis</li>
+                                        <li>R & R Studio (2026)</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">5</td>
+                                <td class="fw-bold">Phần mềm quản lý lớp học</td>
+                                <td>
+                                    <ul class="mb-0 ps-3">
+                                        <li>Veyon (dành cho chung các phòng)</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 4. Quy định Cài đặt Phần mềm -->
+                <h5 class="fw-bold text-primary mt-4 mb-3 border-bottom pb-2">4. Quy định Cài đặt Phần mềm (Dành cho Giảng viên)</h5>
+                <ul>
+                    <li>Chỉ sử dụng phần mềm chính thống.</li>
+                    <li>Yêu cầu cài đặt phần mềm mới phải gửi cho Bộ phận QTTB trước <strong>ÍT NHẤT 1 THÁNG</strong>. Do việc đồng bộ trên hơn 300 máy trạm mất rất nhiều thời gian. Nếu báo trễ, Giảng viên sẽ phải phối hợp trực tiếp với bộ phận kỹ thuật để tự triển khai.</li>
+                </ul>
+
+                <!-- 5. Nội quy Phòng Máy -->
+                <h5 class="fw-bold text-primary mt-4 mb-3 border-bottom pb-2">5. Quy định chung tại Phòng máy</h5>
+                <p>Để đảm bảo môi trường học tập hiệu quả và bảo vệ tài sản, sinh viên cần tuân thủ các quy định:</p>
+                <ul>
+                    <li><strong>Vệ sinh:</strong> KHÔNG mang đồ ăn, thức uống (ly nước đá) vào phòng. Bỏ rác đúng nơi quy định.</li>
+                    <li><strong>Lưu trữ:</strong> Máy tính đã được cấu hình ĐÓNG BĂNG nhằm mục đích đồng bộ và bảo vệ dữ liệu trên hệ thống (Disk C).</li>
+                    <li><strong>Sử dụng an toàn:</strong> Nghiêm cấm truy cập web xấu, chơi game online, hoặc chạy các phần mềm độc hại (virus, đào coin...). KHÔNG tự ý thay đổi cấu hình, rút dây mạng, dây điện.</li>
+                    <li><strong>Kết thúc:</strong> Tắt máy (Shut down) đúng quy trình, kéo ghế gọn gàng.</li>
+                </ul>
+
+                <!-- 6. Hướng dẫn sử dụng phòng máy-->
+                 <h5 class="fw-bold text-primary mt-4 border-bottom pb-2">6. Hướng dẫn sử dụng Phòng máy</h5>
+                <div class="mt-3">
+                    <div class="mb-3">
+                        <strong class="text-dark">a, Cách trình chiếu</strong>
+                        <p class="mb-1">Máy chiếu: Có 2 remote (Nguồn và Màn chiếu)</p>
+                        <ul>
+                            <li>Bật remote Nguồn (Nút màu đỏ)</li>
+                            <li>Bấm nút Lên/Xuống để điều chỉnh màn chiếu lên xuống theo nhu cầu</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong class="text-dark">b. Cách quản lí máy học viên:</strong>
+                        <p class="mb-1">Sử dụng phần mềm Veyon master. Đây là phần mềm dung để quan sát máy học viên từ xa</p>
+                        <ul>
+                            <li class="mb-1"><strong>Hiển thị Danh sách tất cả máy Học viên:</strong> Bấm vào mục "Location & Computers" bên dưới góc trái màn hình, danh sách máy tính Học viên của phòng sẽ hiển thị.</li>
+                            <li class="mb-1"><strong>Tính năng "Remote Control"</strong> (Thao tác trực tiếp trên máy Học viên): Bôi đen hoặc Chuột phải vào bất kỳ máy tính nào sau đó bấm "Remote Control" để thao tác tự do trên máy tính Học viên.</li>
+                            <li class="mb-1"><strong>Tính năng "Remote View"</strong> (Chỉ xem và không thao tác được): Bôi đen hoặc Chuột phải vào bất kỳ máy tính nào sau đó bấm "Remote View" để xem trực tiếp trên máy Học viên và đặc biệt Học viên sẽ không biết Giáo viên đang xem máy của mình.</li>
+                            <li class="mb-1"><strong>Tính năng "Lock":</strong> Dùng để Khóa màn hình máy Học viên</li>
+                            <li class="mb-1"><strong>Tính năng "Power down"</strong> (Tắt tất cả các máy tính Học viên): Sau mỗi buổi học, Thầy/Cô vui long sử dụng tính năng này để Tắt Nguồn tất cả các máy Học viên.</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong class="text-dark">c. Lưu trữ:</strong> Lưu dữ liệu đúng ổ đĩa quy định (Ổ Z, D, USB, Cloud) và luôn đăng xuất tài khoản cá nhân trước khi về.
+                    </div>
+                </div>
+
+                <!-- 7. Thông tin liên hệ khẩn cấp -->
+                <div class="card shadow-sm border-0 rounded-4 p-4 bg-danger bg-opacity-10 mt-4">
+                    <h6 class="fw-bold text-danger mb-3" style="font-size: 0.95rem;">Liên hệ khẩn cấp:</h6>
+                    <div class="text-dark small">
+                        <p class="mb-2"><i class="bi bi-telephone-fill me-2"></i>Trực phòng: <strong>0931437955</strong></p>
+                        <p class="mb-0"><i class="bi bi-telephone-fill me-2"></i>Quản lý: <strong>0899396960</strong></p>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-5">
+                    <a href="{{ url_for('booking_page') }}" class="btn btn-primary fw-bold px-4 rounded-pill ms-2">Đăng ký sử dụng ngay</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

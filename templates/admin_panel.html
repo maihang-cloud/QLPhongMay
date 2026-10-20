@@ -1,0 +1,1131 @@
+{% extends "base.html" %}
+{% block title %}Bảng Điều Khiển Admin{% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2 admin-wrapper-font">
+    <div>
+        <h3 class="fw-bold mb-1" style="color: var(--text-main);">Quản Trị Hệ Thống</h3>
+        <p class="text-muted mb-0">Hệ thống quản lý phòng máy Cơ sở 2</p>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 rounded-pill"><i class="bi bi-person-circle me-1"></i>{{ request.headers.get("Ngrok-Auth-User-Email", "Admin") }}</span>
+        <a href="{{ url_for('home_page') }}" class="btn btn-outline-primary btn-sm fw-bold rounded-pill px-3"><i class="bi bi-house-door me-1"></i>Về Trang Chủ</a>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- THANH ĐIỀU HƯỚNG CÁC TAB & CSS ĐỒNG BỘ DESKTOP/MOBILE -->
+<style>
+    .admin-wrapper-font {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        letter-spacing: -0.01em;
+    }
+    #adminTabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        gap: 4px;
+    }
+    #adminTabs::-webkit-scrollbar {
+        display: none;
+    }
+    #adminTabs .nav-link {
+        font-size: 0.85rem;
+        padding: 0.55rem 0.85rem;
+        color: #475569;
+        border-radius: 8px;
+        transition: all 0.18s ease;
+        white-space: nowrap;
+    }
+    #adminTabs .nav-link:hover:not(.active) {
+        background-color: #f1f5f9;
+        color: #0f172a;
+    }
+    #adminTabs .nav-link.active {
+        background-color: var(--primary-color, #0066ff);
+        color: #fff;
+        box-shadow: 0 4px 10px rgba(0, 102, 255, 0.22);
+    }
+
+    /* Bộ lọc nhanh trên Tab Lịch học */
+    .schedule-filter-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.76rem;
+        padding: 4px 11px;
+        border-radius: 999px;
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        color: #475569;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+    .schedule-filter-pill:hover {
+        background: #f1f5f9;
+        color: #0f172a;
+    }
+    .schedule-filter-pill.active-all {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border-color: #bfdbfe;
+    }
+    .schedule-filter-pill.active-open {
+        background: #ecfdf5;
+        color: #047857;
+        border-color: #a7f3d0;
+    }
+    .schedule-filter-pill.active-locked {
+        background: #fef2f2;
+        color: #b91c1c;
+        border-color: #fecaca;
+    }
+
+    /* Bảng Lịch học */
+    .schedule-mgmt-table th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        color: #475569;
+        background-color: #f8fafc !important;
+        padding: 11px 8px;
+        white-space: nowrap;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .schedule-mgmt-table td {
+        font-size: 0.82rem;
+        padding: 10px 8px;
+        vertical-align: middle;
+    }
+    .row-ended-early {
+        background-color: #fff5f5 !important;
+    }
+    .row-ended-early td {
+        color: #64748b;
+    }
+
+    /* Thanh công cụ Google Calendar trên Tab Thời khóa biểu */
+    .gcal-toolbar {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 10px 14px;
+        box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
+        border: 1px solid #e2e8f0;
+    }
+    .btn-gcal {
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        color: #1e293b;
+        font-weight: 600;
+        font-size: 0.79rem;
+        padding: 5px 10px;
+        border-radius: 8px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+    .btn-gcal:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+        color: #0f172a;
+    }
+    .gcal-date-input-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #f8fafc;
+        border: 1.5px solid #cbd5e1;
+        padding: 3px 9px;
+        border-radius: 8px;
+        font-size: 0.79rem;
+        white-space: nowrap;
+    }
+    .gcal-date-input-wrap input[type="date"] {
+        border: none;
+        background: transparent;
+        font-weight: 700;
+        color: #0066ff;
+        font-size: 0.8rem;
+        outline: none;
+        cursor: pointer;
+    }
+    .week-range-badge {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        color: #1d4ed8;
+        font-weight: 700;
+        font-size: 0.78rem;
+        padding: 5px 11px;
+        border-radius: 999px;
+        white-space: nowrap;
+    }
+
+    /* Thẻ môn học trên Lưới Thời khóa biểu */
+    .tt-course-card {
+        border-radius: 8px;
+        padding: 6px 8px;
+        height: 100%;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+        overflow: hidden;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .tt-course-card:hover {
+        z-index: 10;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+    }
+    .tt-theme-green {
+        background-color: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-left: 4px solid #10b981 !important;
+        color: #065f46;
+    }
+    .tt-theme-blue {
+        background-color: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-left: 4px solid #2563eb !important;
+        color: #1e40af;
+    }
+    .tt-theme-amber {
+        background-color: #fffbeb;
+        border: 1px solid #fde68a;
+        border-left: 4px solid #f59e0b !important;
+        color: #92400e;
+    }
+    .tt-theme-ended {
+        background: repeating-linear-gradient(135deg, #fff5f5, #fff5f5 10px, #fef2f2 10px, #fef2f2 20px);
+        border: 1.5px dashed #f87171;
+        border-left: 4px solid #ef4444 !important;
+        color: #7f1d1d;
+    }
+    .tt-subject-title {
+        font-size: 0.76rem;
+        font-weight: 700;
+        line-height: 1.25;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 2px;
+    }
+    .tt-mini-btn {
+        font-size: 0.64rem;
+        font-weight: 700;
+        padding: 2px 5px;
+        border-radius: 5px;
+        border: 1px solid rgba(15, 23, 42, 0.16);
+        background: rgba(255, 255, 255, 0.92);
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+        line-height: 1.3;
+    }
+    .tt-mini-btn:hover {
+        background: #ffffff;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    @media (max-width: 768px) {
+        .gcal-toolbar {
+            padding: 10px 12px;
+        }
+        .week-range-badge {
+            width: 100%;
+            text-align: center;
+            font-size: 0.75rem;
+        }
+        .schedule-mgmt-table th,
+        .schedule-mgmt-table td {
+            font-size: 0.78rem;
+            padding: 8px 6px;
+        }
+    }
+</style>
+{% set active_tab = request.args.get('tab', 'dashboard') %}
+<ul class="nav nav-pills mb-4 bg-white p-2 rounded-3 shadow-sm border d-flex justify-content-between flex-nowrap admin-wrapper-font" id="adminTabs" role="tablist" style="white-space: nowrap;">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'dashboard' %}active{% endif %} fw-bold" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard" type="button" role="tab" >
+            <i class="bi bi-speedometer2 me-1"></i> Trang chủ
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'requests' %}active{% endif %} fw-bold" id="requests-tab" data-bs-toggle="tab" data-bs-target="#requests" type="button" role="tab" >
+            <i class="bi bi-bell me-1"></i> Yêu cầu
+            {% if pending_requests|length > 0 %}
+                <span class="badge bg-danger ms-1">{{ pending_requests|length }}</span>
+            {% endif %}
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'schedules' %}active{% endif %} fw-bold" id="schedules-tab" data-bs-toggle="tab" data-bs-target="#schedules" type="button" role="tab" >
+            <i class="bi bi-journal-text me-1"></i> Lịch học
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'timetable' %}active{% endif %} fw-bold" id="timetable-tab" data-bs-toggle="tab" data-bs-target="#timetable" type="button" role="tab" >
+            <i class="bi bi-calendar3 me-1"></i> Thời khóa biểu
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'issues' %}active{% endif %} fw-bold" id="issues-tab" data-bs-toggle="tab" data-bs-target="#issues" type="button" role="tab" >
+            <i class="bi bi-tools me-1"></i> Quản lý sự cố
+            {% set pending_issues = issues|selectattr("status", "equalto", "Pending")|list %}
+            {% if pending_issues|length > 0 %}
+                <span class="badge bg-danger ms-1">{{ pending_issues|length }}</span>
+            {% endif %}
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'freerooms' %}active{% endif %} fw-bold" id="freerooms-tab" data-bs-toggle="tab" data-bs-target="#freerooms" type="button" role="tab" >
+            <i class="bi bi-search me-1"></i> Tìm phòng trống
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'cancellations' %}active{% endif %} fw-bold text-danger" id="cancellations-tab" data-bs-toggle="tab" data-bs-target="#cancellations" type="button" role="tab" >
+            <i class="bi bi-exclamation-triangle me-1"></i> Báo nghỉ gấp
+            {%- set pending_cancellations = cancellations|selectattr("status", "equalto", "Pending")|list %}
+            {% if pending_cancellations|length > 0 %}
+                <span class="badge bg-danger ms-1">{{ pending_cancellations|length }}</span>
+            {% endif %}
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if active_tab == 'security' %}active{% endif %} fw-bold" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab" >
+            <i class="bi bi-shield-lock me-1"></i> Security
+        </button>
+    </li>
+</ul>
+
+<!-- ========================================== -->
+<!-- NỘI DUNG CÁC TAB -->
+<div class="tab-content" id="adminTabsContent">
+    
+    <!-- TAB 1: DASHBOARD (Trang chủ) -->
+    <div class="tab-pane fade {% if active_tab == 'dashboard' %}show active{% endif %}" id="dashboard" role="tabpanel">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="card bg-white shadow-sm border-0 h-100 border-start border-primary border-4">
+                    <div class="card-body p-4">
+                        <h6 class="card-title text-muted fw-bold small">TỔNG SỐ LỊCH HỌC</h6>
+                        <h2 class="display-5 fw-bold mb-0 text-dark">{{ schedule_counts['all'] }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-white shadow-sm border-0 h-100 border-start border-warning border-4">
+                    <div class="card-body p-4">
+                        <h6 class="card-title text-muted fw-bold small">YÊU CẦU CHỜ DUYỆT</h6>
+                        <h2 class="display-5 fw-bold mb-0 text-dark">{{ pending_requests|length }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-white shadow-sm border-0 h-100 border-start border-success border-4">
+                    <div class="card-body p-4">
+                        <h6 class="card-title text-muted fw-bold small">TỔNG SỐ PHÒNG MÁY</h6>
+                        <h2 class="display-5 fw-bold mb-0 text-dark">8</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: XỬ LÝ YÊU CẦU -->
+    <div class="tab-pane fade {% if active_tab == 'requests' %}show active{% endif %}" id="requests" role="tabpanel">
+        <div class="card shadow-sm border-0 ">
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Người/Đơn vị</th>
+                            <th>Môn/Lớp</th>
+                            <th>Phòng</th>
+                            <th>Thời gian</th>
+                            <th>Mục đích & Phần mềm</th>
+                            <th class="text-center pe-4">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in pending_requests %}
+                        <tr>
+                            <td class="ps-4 align-middle">
+                                <strong>{{ req['requester_name'] }}</strong><br>
+                                <span class="text-muted small">{{ req['department'] }}</span>
+                                {% if req['created_at'] %}
+                                    <br><span class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-clock me-1"></i>{{ req['created_at'] }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">
+                                {% if req['subject_name'] or req['class_code'] or req['subject_code'] %}
+                                    <span class="fw-bold">{{ req['subject_name'] }}</span><br>
+                                    {% if req['subject_code'] %}<span class="text-muted small">Mã môn: {{ req['subject_code'] }}</span><br>{% endif %}
+                                    {% if req['class_code'] %}<span class="text-muted small">Mã lớp: {{ req['class_code'] }}</span>{% endif %}
+                                {% else %}
+                                    <span class="text-muted small">Không có</span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle"><span class="badge bg-primary">P.{{ req['room'] }}</span></td>
+                            <td class="align-middle">
+                                Thứ {{ req['day_of_week'] }}<br>
+                                <span class="text-muted small">Tiết {{ req['start_period'] }} - {{ req['end_period'] }}</span>
+                            </td>
+                            <td class="align-middle text-muted small" style="max-width: 250px;">
+                                <strong>Mục đích:</strong> {{ req['purpose'] }}
+                                {% if req['software_required'] %}
+                                    <br><strong>Phần mềm:</strong> <span class="text-danger">{{ req['software_required'] }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center pe-4 align-middle">
+                                <form action="{{ url_for('approve_request', request_id=req['id']) }}" method="POST" style="display:inline;"><button type="submit" class="btn btn-sm btn-success shadow-sm mb-1 mb-md-0">✅ Duyệt</button></form>
+                                <form action="{{ url_for('reject_request', request_id=req['id']) }}" method="POST" style="display:inline;" onsubmit="let reason = prompt('Bạn có chắc chắn muốn từ chối yêu cầu này? Vui lòng nhập lý do (tùy chọn):'); if(reason === null) return false; this.insertAdjacentHTML('beforeend', '<input type=\'hidden\' name=\'admin_note\' value=\'' + reason + '\'>'); return true;"><button type="submit" class="btn btn-sm btn-danger shadow-sm">❌ Hủy</button></form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 text-light"></i><br>
+                                Không có yêu cầu nào đang chờ xử lý.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: QUẢN LÝ DANH SÁCH MÔN HỌC (LỊCH HỌC) -->
+    <div class="tab-pane fade {% if active_tab == 'schedules' %}show active{% endif %} admin-wrapper-font" id="schedules" role="tabpanel">
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2 py-3 px-4 border-bottom">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="fw-bold text-dark fs-6 me-1"><i class="bi bi-journal-bookmark-fill text-primary me-1"></i>Dữ liệu thời khóa biểu hiện hành</span>
+                    <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='all') }}" class="schedule-filter-pill {% if schedule_filter == 'all' %}active-all{% endif %}">
+                        Tất cả ({{ schedule_counts['all'] }})
+                    </a>
+                    <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='active') }}" class="schedule-filter-pill {% if schedule_filter == 'active' %}active-open{% else %}text-success border-success-subtle{% endif %}">
+                        🔓 Đang học / Mở cửa ({{ schedule_counts['active'] }})
+                    </a>
+                    <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='locked') }}" class="schedule-filter-pill {% if schedule_filter == 'locked' %}active-locked{% else %}text-danger border-danger-subtle{% endif %}">
+                        🔒 Đã KT sớm / Khóa cửa ({{ schedule_counts['locked'] }})
+                    </a>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <form action="{{ url_for('delete_all_schedules') }}" method="POST" class="d-inline" onsubmit="return confirm('⚠️ Xóa TOÀN BỘ lịch học? Không thể hoàn tác!');">
+                        <button type="submit" class="btn btn-sm btn-danger fw-bold shadow-sm px-2" style="font-size: 0.78rem;">
+                            <i class="bi bi-trash me-1"></i>Xóa Tất Cả
+                        </button>
+                    </form>
+                    <button type="button" class="btn btn-sm btn-success fw-bold shadow-sm px-2" style="font-size: 0.78rem;" data-bs-toggle="modal" data-bs-target="#importScheduleModal">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Import Excel (15 tuần)
+                    </button>
+                    <button type="button" class="btn btn-sm btn-primary-saas fw-bold shadow-sm px-2" style="font-size: 0.78rem;" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
+                        <i class="bi bi-plus-lg me-1"></i>Thêm Lịch
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 620px; overflow-y: auto;">
+                    <table class="table table-hover schedule-mgmt-table mb-0">
+                        <thead style="position: sticky; top: 0; z-index: 5;">
+                            <tr>
+                                <th class="ps-3">ID</th>
+                                <th>Phòng</th>
+                                <th>Thứ / Tiết</th>
+                                <th>Mã Lớp</th>
+                                <th>Tên Môn Học</th>
+                                <th>Đơn Vị</th>
+                                <th>Giai Đoạn (BĐ &rarr; KT)</th>
+                                <th>Chu Kỳ Lặp & Tiến Độ</th>
+                                <th>Trạng Thái Cửa</th>
+                                <th class="text-center pe-3">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in schedules %}
+                            <tr class="{% if row['is_ended_early'] %}row-ended-early{% endif %}">
+                                <td class="ps-3 text-muted">{{ row['id'] }}</td>
+                                <td>
+                                    <span class="badge {% if row['is_ended_early'] %}bg-secondary bg-opacity-25 text-secondary border-secondary{% else %}bg-primary bg-opacity-10 text-primary border-primary{% endif %} border fw-bold px-2 py-1">
+                                        P.{{ row['room'] }}
+                                    </span>
+                                </td>
+                                <td class="text-nowrap">
+                                    <strong>Thứ {{ row['day_of_week'] }}</strong><br>
+                                    <span class="text-muted small">Tiết {{ row['start_period'] }} - {{ row['end_period'] }}</span>
+                                </td>
+                                <td>
+                                    <span class="fw-semibold {% if row['is_ended_early'] %}text-decoration-line-through{% endif %}">{{ row['class_code'] }}</span>
+                                </td>
+                                <td>
+                                    <strong class="{% if row['is_ended_early'] %}text-decoration-line-through text-secondary{% else %}text-dark{% endif %}">{{ row['subject_name'] }}</strong>
+                                    {% if row['is_ended_early'] %}
+                                        <br><span class="text-danger fw-semibold" style="font-size: 0.72rem;">⚠️ GV báo kết thúc môn sớm{% if row['ended_early_date'] %} từ {{ row['ended_early_date'] }}{% endif %}</span>
+                                    {% endif %}
+                                </td>
+                                <td><span class="text-muted">{{ row['department'] }}</span></td>
+                                <td class="text-nowrap">
+                                    {% if row['is_ended_early'] %}
+                                        <div class="fw-semibold text-danger">🛑 {{ row['start_date_str'] }} &rarr; Dừng {{ row['ended_early_date'] or 'sớm' }}</div>
+                                        {% if row['end_date_str'] %}
+                                            <span class="text-muted text-decoration-line-through" style="font-size: 0.72rem;">Dự kiến gốc: {{ row['end_date_str'] }} ({{ row['num_weeks'] }} tuần)</span>
+                                        {% endif %}
+                                    {% elif row['has_valid_date'] %}
+                                        <div class="fw-semibold text-dark">📅 {{ row['start_date_str'] }} &rarr; {{ row['end_date_str'] }}</div>
+                                        <span class="text-muted" style="font-size: 0.72rem;">Cột Giai_Doan: {{ row['start_date_str'] }}</span>
+                                    {% else %}
+                                        <div class="fw-semibold text-dark">📅 {{ row['start_date_str'] }}</div>
+                                        <span class="text-muted" style="font-size: 0.72rem;">Lịch cố định / Đột xuất</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-nowrap">
+                                    {% if row['is_ended_early'] %}
+                                        <span class="badge bg-secondary text-white">Đã dừng ở Tuần {{ row['stopped_week'] }} / {{ row['num_weeks'] }}</span>
+                                    {% elif row['door_status'] == 'upcoming' %}
+                                        <span class="badge bg-warning bg-opacity-25 text-dark border border-warning">Chưa tới đợt (BĐ {{ row['start_date_str'] }})</span>
+                                    {% elif row['door_status'] == 'completed' %}
+                                        <span class="badge bg-secondary bg-opacity-25 text-secondary border">Đã hoàn tất {{ row['num_weeks'] }}/{{ row['num_weeks'] }} tuần</span>
+                                    {% else %}
+                                        <span class="badge {% if row['num_weeks'] != 15 %}bg-warning bg-opacity-25 text-dark border border-warning{% else %}bg-primary bg-opacity-10 text-primary border border-primary-subtle{% endif %} fw-bold">
+                                            Đang ở Tuần {{ row['week_num'] }} / {{ row['num_weeks'] }}
+                                        </span>
+                                    {% endif %}
+                                    <button type="button"
+                                            class="btn btn-sm {% if row['num_weeks'] != 15 %}btn-warning bg-opacity-15 border-warning{% else %}btn-light border{% endif %} py-0 px-2 ms-1 fw-semibold"
+                                            style="font-size: 0.72rem;"
+                                            onclick="openUpdateWeeksModal({{ row['id'] }}, '{{ row['subject_name']|e }}', 'P.{{ row['room'] }}', {{ row['num_weeks'] }}, 'schedules')"
+                                            title="Đổi số tuần lặp cho môn này">
+                                        ↻ {{ row['num_weeks'] }} tuần ✎
+                                    </button>
+                                </td>
+                                <td class="text-nowrap">
+                                    {% if row['is_ended_early'] %}
+                                        <span class="badge rounded-pill bg-danger text-white px-2 py-1 shadow-sm">🔒 Đã KT sớm (Khóa cửa)</span>
+                                    {% elif row['door_open'] %}
+                                        <span class="badge rounded-pill bg-success bg-opacity-10 text-success border border-success px-2 py-1">🔓 Đang học (Mở cửa)</span>
+                                    {% else %}
+                                        <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary border border-secondary px-2 py-1">🔒 Khóa cửa (Ngoài đợt)</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center pe-3 text-nowrap">
+                                    <form action="{{ url_for('toggle_early_end', schedule_id=row['id']) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="return_tab" value="schedules">
+                                        <input type="hidden" name="schedule_filter" value="{{ schedule_filter }}">
+                                        {% if row['is_ended_early'] %}
+                                            <button type="submit" class="btn btn-sm btn-outline-primary fw-semibold me-1 bg-white py-0 px-2" style="font-size: 0.74rem;" title="Khôi phục lại lịch học bình thường">
+                                                ↺ Mở lại lịch
+                                            </button>
+                                        {% else %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger fw-semibold me-1 py-0 px-2" style="font-size: 0.74rem;" onclick="return confirm('Đánh dấu môn {{ row['subject_name']|e }} (P.{{ row['room'] }}) kết thúc sớm? Hệ thống sẽ báo Khóa cửa phòng và giải phóng phòng trống.');" title="Đánh dấu giảng viên kết thúc môn sớm">
+                                                ⏹ Kết thúc sớm
+                                            </button>
+                                        {% endif %}
+                                    </form>
+                                    <form action="{{ url_for('delete_schedule', schedule_id=row['id']) }}" method="POST" class="d-inline" onsubmit="return confirm('Xóa vĩnh viễn lịch học này?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary border-0 text-danger py-0 px-1" title="Xóa lịch"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="10" class="text-center text-muted py-5">
+                                    Không có lịch học nào trong bộ lọc này.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB THỜI KHÓA BIỂU (CHẾ ĐỘ GOOGLE CALENDAR THEO TUẦN) -->
+    <div class="tab-pane fade {% if active_tab == 'timetable' %}show active{% endif %} admin-wrapper-font" id="timetable" role="tabpanel">
+        {% set selected_day = request.args.get('timetable_day', 'all') %}
+        <!-- Thanh công cụ Google Calendar & Chọn phòng -->
+        <div class="gcal-toolbar mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=today_date_str, timetable_day=selected_day) }}" class="btn-gcal">
+                    📅 Hôm nay
+                </a>
+                <div class="d-inline-flex gap-1">
+                    <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=prev_week_date_str, timetable_day=selected_day) }}" class="btn-gcal px-2" title="Tuần trước">◀</a>
+                    <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=next_week_date_str, timetable_day=selected_day) }}" class="btn-gcal px-2" title="Tuần kế tiếp">▶</a>
+                </div>
+                <form action="{{ url_for('admin_panel') }}" method="GET" class="m-0 d-inline-flex align-items-center">
+                    <input type="hidden" name="tab" value="timetable">
+                    <input type="hidden" name="room" value="{{ selected_room }}">
+                    <input type="hidden" name="timetable_day" value="{{ selected_day }}">
+                    <div class="gcal-date-input-wrap">
+                        <span class="text-muted fw-medium">Xem tuần:</span>
+                        <input type="date" name="timetable_date" value="{{ timetable_date_str }}" onchange="this.form.submit()">
+                    </div>
+                </form>
+                <div class="week-range-badge">
+                    🗓 {{ week_range_label }}
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1" style="font-size: 0.73rem;">🔓 Mở phòng (Đang học)</span>
+                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1" style="font-size: 0.73rem;">🔒 Khóa cửa (KT sớm)</span>
+                <form action="{{ url_for('admin_panel') }}" method="GET" class="m-0 d-inline-flex align-items-center gap-1 bg-light px-2 py-1 rounded-pill border">
+                    <input type="hidden" name="tab" value="timetable">
+                    <input type="hidden" name="timetable_date" value="{{ timetable_date_str }}">
+                    <span class="small fw-bold text-primary">📍</span>
+                    <select class="form-select form-select-sm border-0 fw-bold text-primary shadow-none bg-transparent py-0 ps-1 pe-4" name="room" onchange="this.form.submit()" style="cursor: pointer; width: auto; font-size: 0.8rem;">
+                        {% for r in rooms %}
+                            <option value="{{ r }}" {% if selected_room == r %}selected{% endif %}>Phòng {{ r }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="text-muted">|</span>
+                    <select class="form-select form-select-sm border-0 fw-semibold text-dark shadow-none bg-transparent py-0 ps-1 pe-4" name="timetable_day" onchange="this.form.submit()" style="cursor: pointer; width: auto; font-size: 0.8rem;">
+                        <option value="all" {% if selected_day == 'all' %}selected{% endif %}>Cả tuần</option>
+                        <option value="2" {% if selected_day == '2' %}selected{% endif %}>Thứ 2 ({{ day_headers[2]['short_date'] }})</option>
+                        <option value="3" {% if selected_day == '3' %}selected{% endif %}>Thứ 3 ({{ day_headers[3]['short_date'] }})</option>
+                        <option value="4" {% if selected_day == '4' %}selected{% endif %}>Thứ 4 ({{ day_headers[4]['short_date'] }})</option>
+                        <option value="5" {% if selected_day == '5' %}selected{% endif %}>Thứ 5 ({{ day_headers[5]['short_date'] }})</option>
+                        <option value="6" {% if selected_day == '6' %}selected{% endif %}>Thứ 6 ({{ day_headers[6]['short_date'] }})</option>
+                        <option value="7" {% if selected_day == '7' %}selected{% endif %}>Thứ 7 ({{ day_headers[7]['short_date'] }})</option>
+                    </select>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                <table class="table table-bordered mb-0" style="table-layout: fixed; {% if selected_day == 'all' %}min-width: 1080px;{% else %}min-width: 100%;{% endif %}">
+                    <thead class="text-center align-middle" style="background-color: #f8fafc;">
+                        <tr style="height: 60px;">
+                            <th style="width: 68px;" class="text-muted fw-semibold small border-bottom-0">Tiết</th>
+                            {% for d in range(2, 8) %}
+                                {% if selected_day == 'all' or selected_day == d|string %}
+                                {% set dh = day_headers[d] %}
+                                <th class="border-bottom-0" style="{% if dh['is_today'] %}background-color: #eff6ff; border-bottom: 3px solid #0066ff !important;{% endif %}">
+                                    <div class="fw-bold {% if dh['is_today'] %}text-primary{% else %}text-dark{% endif %}">
+                                        Thứ {{ d }}{% if dh['is_today'] %} (Hôm nay){% endif %}
+                                    </div>
+                                    <div class="{% if dh['is_today'] %}text-primary fw-semibold{% else %}text-muted fw-normal{% endif %}" style="font-size: 0.75rem;">
+                                        {{ dh['date_str'] }}
+                                    </div>
+                                </th>
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="p-0 border-end position-relative" style="background-color: #f8fafc;">
+                                <div style="height: 780px; position: relative;">
+                                    {% for tiet in range(1, 11) %}
+                                        <div class="text-center text-muted small fw-semibold" style="position: absolute; top: {{ (tiet-1)*100/10 }}%; width: 100%; border-top: {% if tiet == 6 %}2px solid #cbd5e1{% else %}1px solid #e2e8f0{% endif %}; height: {{ 100/10 }}%; display: flex; align-items: flex-start; justify-content: center; padding-top: 6px;">
+                                            T.{{ tiet }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            
+                            {% for day in range(2, 8) %}
+                                {% if selected_day == 'all' or selected_day == day|string %}
+                                {% set dh = day_headers[day] %}
+                                <td class="p-0 position-relative border-end" style="width: {% if selected_day == 'all' %}calc(100%/6){% else %}100%{% endif %}; {% if dh['is_today'] %}background-color: #f8fbff;{% else %}background-color: #ffffff;{% endif %}">
+                                <div style="height: 780px; position: relative;">
+                                    {% for i in range(10) %}
+                                        <div style="position: absolute; top: {{ i*100/10 }}%; width: 100%; height: 1px; background-color: {% if i == 5 %}#cbd5e1{% else %}#f1f5f9{% endif %};"></div>
+                                    {% endfor %}
+                                    
+                                    {% for block in week_data[day] %}
+                                        {% set mon = block['data'] %}
+                                        {% set card_theme = 'tt-theme-blue' %}
+                                        {% set badge_bg = 'bg-primary' %}
+                                        {% set badge_outline = 'text-primary border-primary' %}
+                                        {% if 'VLKT' in mon['department'] or 'Vật lý' in mon['department'] %}
+                                            {% set card_theme = 'tt-theme-amber' %}
+                                            {% set badge_bg = 'bg-warning text-dark' %}
+                                            {% set badge_outline = 'text-dark border-warning' %}
+                                        {% elif 'Toán' in mon['department'] %}
+                                            {% set card_theme = 'tt-theme-green' %}
+                                            {% set badge_bg = 'bg-success' %}
+                                            {% set badge_outline = 'text-success border-success' %}
+                                        {% endif %}
+                                        
+                                        <div class="p-1" style="position: absolute; top: {{ block['top'] }}%; height: {{ block['height'] }}%; width: 100%; z-index: 2;">
+                                            {% if mon['is_ended_early'] %}
+                                            <div class="tt-course-card tt-theme-ended">
+                                                <div class="d-flex justify-content-between align-items-center gap-1 mb-1">
+                                                    <span class="badge bg-danger text-white" style="font-size: 0.61rem;">🔒 KHÓA CỬA • KT SỚM</span>
+                                                    <span class="badge bg-secondary text-white" style="font-size: 0.61rem;">Dừng T.{{ mon['stopped_week'] }}/{{ mon['num_weeks'] }}</span>
+                                                </div>
+                                                <div class="tt-subject-title text-decoration-line-through text-secondary" title="{{ mon['subject_name'] }} ({{ mon['class_code'] }})">
+                                                    {{ mon['subject_name'] }} {% if mon['class_code'] %}({{ mon['class_code'] }}){% endif %}
+                                                </div>
+                                                <div class="text-secondary" style="font-size: 0.69rem;">
+                                                    T.{{ mon['start_period'] }} - {{ mon['end_period'] }} • BĐ: {{ mon['start_date_str'] }}
+                                                </div>
+                                                {% if block['height'] >= 30 %}
+                                                <div class="p-1 px-2 rounded bg-white border border-danger-subtle mt-1 text-danger" style="font-size: 0.67rem; line-height: 1.3;">
+                                                    🛑 <strong>Đã báo kết thúc sớm</strong>{% if mon['ended_early_date'] %} ({{ mon['ended_early_date'] }}){% endif %}. Không mở cửa phòng.
+                                                </div>
+                                                {% endif %}
+                                                <div class="mt-auto d-flex justify-content-end pt-1">
+                                                    <form action="{{ url_for('toggle_early_end', schedule_id=mon['id']) }}" method="POST" class="m-0">
+                                                        <input type="hidden" name="return_tab" value="timetable">
+                                                        <input type="hidden" name="room" value="{{ selected_room }}">
+                                                        <input type="hidden" name="timetable_date" value="{{ timetable_date_str }}">
+                                                        <input type="hidden" name="timetable_day" value="{{ selected_day }}">
+                                                        <button type="submit" class="tt-mini-btn text-primary border-primary">↺ Khôi phục / Mở lại</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                            {% else %}
+                                            <div class="tt-course-card {{ card_theme }}">
+                                                <div class="d-flex justify-content-between align-items-center gap-1 mb-1">
+                                                    <span class="badge {{ badge_bg }} text-white" style="font-size: 0.62rem;">🔓 MỞ PHÒNG</span>
+                                                    <span class="badge bg-white {{ badge_outline }} border" style="font-size: 0.62rem;">Tuần {{ mon['week_num'] }} / {{ mon['num_weeks'] }}</span>
+                                                </div>
+                                                <div class="tt-subject-title" title="{{ mon['subject_name'] }} ({{ mon['class_code'] }})">
+                                                    {{ mon['subject_name'] }} {% if mon['class_code'] %}({{ mon['class_code'] }}){% endif %}
+                                                </div>
+                                                <div style="font-size: 0.69rem; opacity: 0.9;" class="text-truncate">
+                                                    {{ mon['department'] }} • T.{{ mon['start_period'] }}-{{ mon['end_period'] }} • BĐ: {{ mon['start_date_str'][:5] }}
+                                                </div>
+                                                <div class="mt-auto d-flex justify-content-between align-items-center pt-1 gap-1">
+                                                    <button type="button"
+                                                            class="tt-mini-btn text-dark"
+                                                            onclick="openUpdateWeeksModal({{ mon['id'] }}, '{{ mon['subject_name']|e }}', 'P.{{ mon['room'] }}', {{ mon['num_weeks'] }}, 'timetable')">
+                                                        ↻ {{ mon['num_weeks'] }} tuần ✎
+                                                    </button>
+                                                    <form action="{{ url_for('toggle_early_end', schedule_id=mon['id']) }}" method="POST" class="m-0">
+                                                        <input type="hidden" name="return_tab" value="timetable">
+                                                        <input type="hidden" name="room" value="{{ selected_room }}">
+                                                        <input type="hidden" name="timetable_date" value="{{ timetable_date_str }}">
+                                                        <input type="hidden" name="timetable_day" value="{{ selected_day }}">
+                                                        <button type="submit" class="tt-mini-btn text-danger border-danger" onclick="return confirm('Đánh dấu môn {{ mon['subject_name']|e }} kết thúc sớm? Hệ thống sẽ báo Khóa cửa phòng và giải phóng phòng trống.');">
+                                                            ⏹ KT sớm
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: QUẢN LÝ SỰ CỐ -->
+    <div class="tab-pane fade {% if active_tab == 'issues' %}show active{% endif %}" id="issues" role="tabpanel">
+        <div class="card bg-white shadow-sm border-0 mb-4" style="border-radius: 16px;">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-4" style="color: var(--primary-color);"><i class="bi bi-tools me-2"></i>Danh sách sự cố kỹ thuật</h5>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle border">
+                        <thead class="table-light align-middle">
+                            <tr>
+                                <th>Thời gian</th>
+                                <th>Người báo cáo</th>
+                                <th>Vị trí</th>
+                                <th>Phân loại</th>
+                                <th>Mô tả</th>
+                                <th>Trạng thái</th>
+                                <th class="text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for issue in issues %}
+                            <tr>
+                                <td class="small">{{ issue.created_at }}</td>
+                                <td>
+                                    <strong>{{ issue.reporter_name }}</strong><br>
+                                    <span class="text-muted small">{{ issue.department }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary">P.{{ issue.room }}</span><br>
+                                    <span class="small text-muted">{{ issue.machine_number }}</span>
+                                </td>
+                                <td><span class="badge bg-secondary">{{ issue.issue_category }}</span></td>
+                                <td class="small" style="max-width: 250px;">{{ issue.description }}</td>
+                                <td>
+                                    {% if issue.status == "Processing" %}
+                                        <span class="badge bg-warning bg-opacity-10 text-dark border border-warning"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
+                                    {% elif issue.status == "Resolved" %}
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="bi bi-check-circle me-1"></i>Đã khắc phục</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary"><i class="bi bi-hourglass-split me-1"></i>Chờ xử lý</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center text-nowrap">
+                                    <form action="{{ url_for('update_issue_status', issue_id=issue.id) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="status" value="Processing">
+                                        <button type="submit" class="btn btn-sm {% if issue.status == 'Processing' %}btn-warning fw-bold text-dark shadow-sm{% else %}btn-outline-warning text-dark{% endif %} me-1" title="Đánh dấu Đã tiếp nhận">
+                                            <i class="bi bi-clock-history me-1"></i>Đã tiếp nhận
+                                        </button>
+                                    </form>
+                                    <form action="{{ url_for('update_issue_status', issue_id=issue.id) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="status" value="Resolved">
+                                        <button type="submit" class="btn btn-sm {% if issue.status == 'Resolved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %}" title="Đánh dấu Đã khắc phục">
+                                            <i class="bi bi-check-circle me-1"></i>Đã khắc phục
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">Chưa có báo cáo sự cố nào.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- TAB TÌM PHÒNG TRỐNG -->
+    <div class="tab-pane fade {% if active_tab == 'freerooms' %}show active{% endif %} admin-wrapper-font" id="freerooms" role="tabpanel">
+        <div class="card bg-white shadow-sm border-0 mb-4" style="border-radius: 16px;">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+                    <h5 class="fw-bold mb-0" style="color: var(--primary-color);"><i class="bi bi-search me-2"></i>Tìm phòng trống (>= 2.5 tiết)</h5>
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle px-3 py-2 rounded-pill">
+                        🗓 Đang xem: Thứ {{ filter_day }} ({{ free_target_date_display }})
+                    </span>
+                </div>
+                <form action="{{ url_for('admin_panel') }}" method="GET" class="mb-4 d-flex flex-wrap align-items-center gap-3">
+                    <input type="hidden" name="tab" value="freerooms">
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="fw-medium text-muted text-nowrap">Tuần của ngày:</label>
+                        <input type="date" class="form-control bg-light border-0 w-auto" name="filter_date" value="{{ filter_date_str }}" onchange="this.form.submit()">
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="fw-medium text-muted text-nowrap">Chọn Thứ:</label>
+                        <select class="form-select w-auto bg-light border-0" name="filter_day" onchange="this.form.submit()">
+                            <option value="2" {% if filter_day == 2 %}selected{% endif %}>Thứ 2</option>
+                            <option value="3" {% if filter_day == 3 %}selected{% endif %}>Thứ 3</option>
+                            <option value="4" {% if filter_day == 4 %}selected{% endif %}>Thứ 4</option>
+                            <option value="5" {% if filter_day == 5 %}selected{% endif %}>Thứ 5</option>
+                            <option value="6" {% if filter_day == 6 %}selected{% endif %}>Thứ 6</option>
+                            <option value="7" {% if filter_day == 7 %}selected{% endif %}>Thứ 7</option>
+                        </select>
+                    </div>
+                    <a href="{{ url_for('admin_panel', tab='freerooms', filter_day=filter_day, filter_date=today_date_str) }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                        📅 Về tuần hiện tại
+                    </a>
+                </form>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="p-3 bg-warning bg-opacity-10 rounded-4 h-100">
+                            <h6 class="fw-bold text-warning mb-3"><i class="bi bi-brightness-alt-high-fill me-1"></i>Sáng (Tiết 1-5)</h6>
+                            <ul class="list-unstyled mb-0 ms-2">
+                                {% for room, slots in morning_free.items() %}
+                                    {% if slots %}
+                                        <li class="mb-2"><span class="badge bg-warning text-dark me-2">P.{{ room }}</span> <span class="text-muted">{{ slots | join(', ') }}</span></li>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if not morning_free.values() | map('length') | sum %}
+                                    <li class="text-muted fst-italic"><i class="bi bi-emoji-frown me-1"></i>Không còn phòng trống sáng nay.</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mt-3 mt-md-0">
+                        <div class="p-3 bg-info bg-opacity-10 rounded-4 h-100">
+                            <h6 class="fw-bold text-info mb-3"><i class="bi bi-moon-fill me-1"></i>Chiều (Tiết 6-10)</h6>
+                            <ul class="list-unstyled mb-0 ms-2">
+                                {% for room, slots in afternoon_free.items() %}
+                                    {% if slots %}
+                                        <li class="mb-2"><span class="badge bg-info text-dark me-2">P.{{ room }}</span> <span class="text-muted">{{ slots | join(', ') }}</span></li>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if not afternoon_free.values() | map('length') | sum %}
+                                    <li class="text-muted fst-italic"><i class="bi bi-emoji-frown me-1"></i>Không còn phòng trống chiều nay.</li>
+                                {% endif %}
+                            </ul> 
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 5: BÁO NGHỈ GẤP -->
+    <div class="tab-pane fade {% if active_tab == 'cancellations' %}show active{% endif %}" id="cancellations" role="tabpanel">
+        <div class="mb-4 d-flex justify-content-between align-items-end">
+            <div>
+                <h3 class="fw-bold text-danger mb-1">Thông báo nghỉ gấp</h3>
+                <p class="text-muted mb-0">Danh sách các lớp báo nghỉ đột xuất cần bộ phận kỹ thuật khóa phòng.</p>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 ">
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Giáo viên</th>
+                            <th>Phòng</th>
+                            <th>Ngày nghỉ</th>
+                            <th>Ca/Tiết</th>
+                            <th>Lịch học bù</th>
+                            <th>Trạng thái</th>
+                            <th class="text-center pe-4">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in cancellations %}
+                        <tr>
+                            <td class="ps-4 align-middle"><strong>{{ req['teacher_name'] }}</strong><br><span class="text-muted" style="font-size: 0.7rem;">{{ req['created_at'] }}</span></td>
+                            <td class="align-middle"><span class="badge bg-danger">Phòng {{ req['room'] }}</span></td>
+                            <td class="align-middle fw-bold">{{ req['cancel_date'] }}</td>
+                            <td class="align-middle">{{ req['period'] }}</td>
+                            <td class="align-middle text-muted small">{{ req['reason'] }}</td>
+                            <td class="align-middle">
+                                {% if req['status'] == 'Pending' %}
+                                    <span class="badge bg-warning text-dark">Chờ duyệt</span>
+                                {% else %}
+                                    <span class="badge bg-success">Đã xác nhận</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center pe-4 align-middle">
+                                {% if req['status'] == 'Pending' %}
+                                    <form action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}" method="POST" style="display:inline;">
+
+                                    <button type="submit" class="btn btn-sm btn-outline-success shadow-sm mb-1" title="Xác nhận lưu lịch sử">✅ Đã tiếp nhận</button>
+
+                                </form>
+                                {% else %}
+                                    <span class="text-muted small"><i class="bi bi-check2-all"></i> Đã lưu vào lịch sử (Đợi học bù)</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <i class="bi bi-check-circle fs-1 text-success"></i><br>
+                                Không có thông báo nghỉ gấp nào.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 6: SECURITY -->
+    <div class="tab-pane fade {% if active_tab == 'security' %}show active{% endif %}" id="security" role="tabpanel">
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card shadow-sm border-0 ">
+                    <div class="card-header bg-white border-0 pt-4 pb-0">
+                        <h5 class="fw-bold"><i class="bi bi-shield-lock me-2"></i>Bảo mật (Đổi mật khẩu)</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="alert alert-info border-0 shadow-sm rounded-3">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    Hệ thống hiện đang sử dụng <strong>Ngrok OAuth (Đăng nhập qua Google)</strong>. Việc đổi mật khẩu và quản lý tài khoản được thực hiện trên hệ thống của Google hoặc hệ thống quản lý tài khoản của trường.
+</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div> <!-- Hết Nội dung các Tab -->
+
+
+<!-- ========================================== -->
+<!-- MODAL THÊM LỊCH, IMPORT EXCEL & ĐỔI SỐ TUẦN LẶP -->
+<div class="modal fade admin-wrapper-font" id="addScheduleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold">Thêm Lịch Học Mới</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <form action="{{ url_for('add_schedule') }}" method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">Phòng *</label>
+                            <input type="text" class="form-control border-0" name="room" required placeholder="VD: 5.1">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">Thứ *</label>
+                            <select class="form-select border-0" name="day_of_week" required>
+                                <option value="2">Thứ 2</option>
+                                <option value="3">Thứ 3</option>
+                                <option value="4">Thứ 4</option>
+                                <option value="5">Thứ 5</option>
+                                <option value="6">Thứ 6</option>
+                                <option value="7">Thứ 7</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">Tiết BĐ *</label>
+                            <input type="number" class="form-control border-0" name="start_period" min="1" max="10" step="0.5" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">Tiết KT *</label>
+                            <input type="number" class="form-control border-0" name="end_period" min="1" max="10" step="0.5" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">Tên Môn / Học Phần *</label>
+                        <input type="text" class="form-control border-0" name="subject_name" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">Mã Lớp</label>
+                            <input type="text" class="form-control border-0" name="class_code">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">Đơn vị *</label>
+                            <select class="form-select border-0" name="department" required>
+                                <option value="Toán - Tin học">Toán - Tin học</option>
+                                <option value="Vật lý">Vật lý / VLKT</option>
+                                <option value="CNTT">CNTT</option>
+                                <option value="Khác">Khác</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-4">
+                        <div class="col-md-7 mb-3 mb-md-0">
+                            <label class="form-label text-muted small fw-bold">Giai đoạn (Ngày tuần bắt đầu)</label>
+                            <input type="text" class="form-control border-0" name="study_period" placeholder="VD: 12/10/2026" value="{{ timetable_date_display }}">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label text-muted small fw-bold">Số tuần lặp lại *</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control border-0 fw-bold text-primary" name="num_weeks" value="15" min="1" max="52" required>
+                                <span class="input-group-text border-0 bg-white text-muted small">tuần</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                        <button type="submit" class="btn btn-primary-saas fw-bold">Lưu Lịch</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade admin-wrapper-font" id="importScheduleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold">📁 Import Thời Khóa Biểu từ Excel/CSV</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <form action="{{ url_for('import_schedule') }}" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">1. Chọn File (.xlsx, .csv) *</label>
+                        <input class="form-control border-0 bg-white" type="file" name="file" accept=".xlsx, .xls, .csv" required>
+                    </div>
+                    <div class="mb-3 p-3 rounded-3 bg-white border">
+                        <label class="form-label text-dark small fw-bold mb-2">2. Số tuần lặp lại mặc định cho đợt Import này:</label>
+                        <div class="input-group mb-2" style="max-width: 240px;">
+                            <input type="number" class="form-control fw-bold text-primary border-primary-subtle" name="default_num_weeks" value="15" min="1" max="52" required>
+                            <span class="input-group-text bg-primary bg-opacity-10 text-primary fw-semibold border-primary-subtle">tuần liên tiếp</span>
+                        </div>
+                        <div class="text-muted" style="font-size: 0.78rem;">
+                            Hệ thống sẽ lấy ngày trong cột <code>Giai_Doan</code> làm tuần bắt đầu và tự động lặp lại lịch học theo số tuần trên. Bạn vẫn có thể sửa riêng số tuần cho từng môn sau khi Import.
+                        </div>
+                    </div>
+                    <div class="alert alert-warning border-0 small mb-0">
+                        <strong>Lưu ý:</strong> File cần có tiêu đề các cột: <code>Phong</code>, <code>Thu</code>, <code>Tiet_BD</code>, <code>Tiet_KT</code>, <code>Ma_Lop</code>, <code>Ten_Mon</code>, <code>Khoa</code>, <code>Giai_Doan</code>.
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                        <button type="submit" class="btn btn-success fw-bold px-4">Import Ngay</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL ĐỔI SỐ TUẦN LẶP CHO TỪNG MÔN -->
+<div class="modal fade admin-wrapper-font" id="updateWeeksModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header bg-light border-0 pb-2">
+                <h6 class="modal-title fw-bold text-dark">↻ Đổi số tuần lặp học phần</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <form id="updateWeeksForm" method="POST">
+                    <input type="hidden" name="return_tab" id="uw_return_tab" value="schedules">
+                    <input type="hidden" name="room" value="{{ selected_room }}">
+                    <input type="hidden" name="timetable_date" value="{{ timetable_date_str }}">
+                    <input type="hidden" name="timetable_day" value="{{ request.args.get('timetable_day', 'all') }}">
+                    <input type="hidden" name="schedule_filter" value="{{ schedule_filter }}">
+                    <div class="mb-3">
+                        <div class="small text-muted mb-1" id="uw_course_label">Môn học</div>
+                        <label class="form-label small fw-bold text-dark">Số tuần lặp lại (tính từ tuần Giai_Doan):</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control fw-bold text-primary" name="num_weeks" id="uw_num_weeks" min="1" max="52" required>
+                            <span class="input-group-text bg-light text-muted small">tuần</span>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Hủy</button>
+                        <button type="submit" class="btn btn-sm btn-primary fw-bold px-3">Lưu thay đổi</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openUpdateWeeksModal(scheduleId, subjectName, roomLabel, currentWeeks, returnTab) {
+        const form = document.getElementById('updateWeeksForm');
+        form.action = `/admin/schedule/${scheduleId}/update_weeks`;
+        document.getElementById('uw_course_label').textContent = `${subjectName} (${roomLabel})`;
+        document.getElementById('uw_num_weeks').value = currentWeeks;
+        document.getElementById('uw_return_tab').value = returnTab || 'schedules';
+        const modal = new bootstrap.Modal(document.getElementById('updateWeeksModal'));
+        modal.show();
+    }
+
+    // Activate tab based on URL parameter
+    document.addEventListener("DOMContentLoaded", function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const activeTab = urlParams.get('tab');
+        if (activeTab) {
+            const tabButton = document.querySelector(`button[data-bs-target="#${activeTab}"]`);
+            if (tabButton) {
+                const tab = new bootstrap.Tab(tabButton);
+                tab.show();
+            }
+        }
+    });
+</script>
+{% endblock %}
+

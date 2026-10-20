@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Hệ thống Quản lý Thời Khóa Biểu{% endblock %}</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #1E40AF;
+            --primary-light: #EFF6FF;
+            --accent-color: #0D9488;
+            --bg-color: #F8FAFC;
+            --text-main: #1F2937;
+            --text-muted: #6B7280;
+        }
+        body { 
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color); 
+            color: var(--text-main);
+            padding-top: 70px; /* Space for sticky navbar */
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        /* Navbar Glassmorphism */
+        .navbar-saas {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+        .navbar-saas .navbar-brand {
+            color: var(--primary-color) !important;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .navbar-saas .nav-link {
+            color: var(--text-muted) !important;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .navbar-saas .nav-link:hover, .navbar-saas .nav-link.active {
+            color: var(--primary-color) !important;
+        }
+        .navbar-saas .nav-link::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: 0;
+            left: 50%;
+            background-color: var(--primary-color);
+            transition: all 0.3s ease;
+            transform: translateX(-50%);
+        }
+        .navbar-saas .nav-link:hover::after, .navbar-saas .nav-link.active::after {
+            width: 70%;
+        }
+        .navbar-saas .nav-link.nav-link-pill::after {
+            display: none !important;
+        }
+        
+        /* Shadows & Corners */
+        .card {
+            border-radius: 16px !important;
+            border: 1px solid rgba(0,0,0,0.05) !important;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03) !important;
+        }
+        .btn {
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .btn-primary-saas {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            transition: transform 0.1s;
+        }
+        .btn-primary-saas:hover {
+            background-color: #1e3a8a;
+            color: white;
+            transform: translateY(-1px);
+        }
+        
+        /* Toast Notification Container */
+        .toast-container {
+            z-index: 1060;
+        }
+        
+        /* Nav Pills (Admin) */
+        .nav-pills .nav-link {
+            color: var(--text-muted);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .nav-pills .nav-link:hover {
+            background-color: var(--primary-light);
+            color: var(--primary-color);
+        }
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-light) !important;
+            color: var(--primary-color) !important;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-light navbar-saas fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('home_page') }}">
+                <i class="bi bi-laptop text-primary me-1"></i> HcmusLab
+            </a>
+            
+            <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse justify-content-center" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item mx-2">
+                        <a class="nav-link {% if request.endpoint == 'home_page' %}active{% endif %}" href="{{ url_for('home_page') }}"><i class="bi bi-info-circle me-1"></i>Trang chủ</a>
+                    </li>
+                    <li class="nav-item mx-2">
+                        <a class="nav-link {% if request.endpoint == 'booking_page' %}active{% endif %}" href="{{ url_for('booking_page') }}"><i class="bi bi-pencil-square me-1"></i>Đăng ký</a>
+                    </li>
+                    <li class="nav-item mx-2">
+                        <a class="nav-link {% if request.endpoint == 'cancellation_page' %}active{% endif %}" href="{{ url_for('cancellation_page') }}"><i class="bi bi-exclamation-triangle me-1"></i>Báo Vắng</a>
+                    </li>
+                    <li class="nav-item mx-2">
+                        <a class="nav-link {% if request.endpoint == 'report_page' %}active{% endif %}" href="{{ url_for('report_page') }}"><i class="bi bi-tools me-1"></i>Báo cáo sự cố</a>
+                    </li>
+                    <li class="nav-item mx-2">
+                        <a class="nav-link nav-link-pill {% if request.endpoint == 'my_dashboard' %}active{% endif %} p-1" href="{{ url_for('my_dashboard') }}" title="Theo dõi lịch sử Đăng ký, Báo Vắng & Sự cố của bạn">
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-3 py-2 fw-semibold">
+                                <i class="bi bi-clock-history me-1"></i>Lịch sử của tôi
+                            </span>
+                        </a>
+                    </li>
+                
+                    <!-- Mobile Admin / User Link -->
+                    <li class="nav-item mx-2 d-lg-none mt-2 pt-2 border-top">
+                        {% if current_user_email in ADMIN_EMAILS %}
+                            <a class="nav-link text-primary fw-bold" href="{{ url_for('admin_panel') }}"><i class="bi bi-shield-lock me-1"></i>Admin Dashboard</a>
+                            <a class="nav-link text-danger small" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-1"></i>Đăng xuất ({{ current_user_email }})</a>
+                        {% elif current_user_email %}
+                            <a class="nav-link text-success fw-bold" href="{{ url_for('my_dashboard') }}"><i class="bi bi-clock-history me-1"></i>{{ current_user_name or current_user_email }}</a>
+                            <a class="nav-link text-danger small" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-1"></i>Đăng xuất</a>
+                        {% else %}
+                            <a class="nav-link text-primary fw-bold" href="{{ url_for('login_page') }}"><i class="bi bi-google me-1"></i>Đăng nhập</a>
+                        {% endif %}
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="d-none d-lg-flex align-items-center gap-2">
+                {% if current_user_email in ADMIN_EMAILS %}
+                    <a href="{{ url_for('admin_panel') }}" class="btn btn-outline-primary btn-sm px-3 rounded-pill fw-bold">Admin Dashboard</a>
+                {% endif %}
+                {% if current_user_email %}
+                    <div class="dropdown d-inline-block">
+                        <button class="btn btn-light btn-sm rounded-pill fw-bold text-muted border dropdown-toggle px-3" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle me-1"></i>{{ current_user_name or current_user_email }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2" aria-labelledby="userMenu">
+                            <li class="px-3 py-1 text-muted small border-bottom">{{ current_user_email }}</li>
+                            <li><a class="dropdown-item mt-1" href="{{ url_for('my_dashboard') }}"><i class="bi bi-clock-history me-2 text-primary"></i>Lịch sử hoạt động</a></li>
+                            {% if current_user_email in ADMIN_EMAILS %}
+                            <li><a class="dropdown-item" href="{{ url_for('admin_panel') }}"><i class="bi bi-shield-lock me-2 text-primary"></i>Trang Quản trị</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Đăng xuất</a></li>
+                        </ul>
+                    </div>
+                {% else %}
+                    <a href="{{ url_for('login_page') }}" class="btn btn-outline-primary btn-sm px-3 rounded-pill fw-bold"><i class="bi bi-google me-1"></i>Đăng nhập</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- FLASH MESSAGES (As Toasts) -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="toast show align-items-center text-bg-{{ 'success' if category == 'success' else ('danger' if category in ['error', 'danger'] else 'primary') }} border-0 mb-2 shadow" role="alert" aria-live="assertive" aria-atomic="true">
+                  <div class="d-flex">
+                    <div class="toast-body fw-medium">
+                        {% if category == 'success' %}<i class="bi bi-check-circle me-2"></i>{% endif %}
+                        {{ message }}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                  </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="container my-4 flex-grow-1">
+        {% block content %}{% endblock %}
+    </div>
+    
+    <footer class="text-center py-4 text-muted small mt-auto border-top bg-white">
+        <div class="container">
+            <p class="mb-1">&copy; 2026 Hệ thống Quản lý Phòng Máy Tính CS2.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Secret shortcut: Press Ctrl + Shift + Q to access Admin Panel
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.shiftKey && (event.key === 'q' || event.key === 'Q')) {
+                window.location.href = "{{ url_for('admin_panel') }}";
+            }
+        });
+        
+        // Auto hide toasts after 5s
+        document.addEventListener('DOMContentLoaded', () => {
+            const toasts = document.querySelectorAll('.toast');
+            toasts.forEach(t => {
+                setTimeout(() => {
+                    const bsToast = new bootstrap.Toast(t);
+                    bsToast.hide();
+                }, 5000);
+            });
+        });
+    </script>
+</body>
+</html>

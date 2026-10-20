@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Báo cáo sự cố kỹ thuật - Cơ sở 2{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-2">
+    
+    <!-- THANH THÔNG TIN ĐẦU TRANG: ĐƠN VỊ & TÀI KHOẢN -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill fw-medium">
+                <i class="bi bi-geo-alt-fill me-1"></i> Cơ sở 2 &bull; Tòa B-42
+            </span>
+        </div>
+        <div class="text-muted small">
+            Người báo cáo: <strong class="text-dark">{{ current_user_name }}</strong>
+            {% if current_user_email %}
+                <span>({{ current_user_email }})</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- BỐ CỤC 2 CỘT HIỆN ĐẠI (DESKTOP SPLIT LAYOUT) -->
+    <div class="row g-4">
+        
+        <!-- ======================================================== -->
+        <!-- CỘT TRÁI (FORM BÁO CÁO SỰ CỐ GOM CHUNG 1 CARD - 7/12)     -->
+        <!-- ======================================================== -->
+        <div class="col-lg-7 col-xl-8">
+            <div class="card shadow-sm border-0 rounded-4 bg-white overflow-hidden mb-4">
+                
+                <!-- HERO CARD HEADER ĐỒNG BỘ TRANG CHỦ -->
+                <div class="card-header bg-primary text-white text-center py-4 border-0">
+                    <i class="bi bi-tools display-5 mb-2 d-block"></i>
+                    <h3 class="fw-bold mb-1">Báo Cáo Sự Cố Kỹ Thuật</h3>
+                    <p class="mb-0 opacity-75 small">Hệ thống tiếp nhận thông tin hư hỏng thiết bị, phần mềm và hạ tầng tại Cơ sở 2</p>
+                </div>
+
+                <div class="card-body p-4 p-md-5">
+                    <form action="{{ url_for('submit_issue') }}" method="POST">
+                        
+                        <!-- 1. VỊ TRÍ SỰ CỐ (PHÒNG MÁY & VỊ TRÍ THIẾT BỊ) -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Phòng máy gặp sự cố *</label>
+                                <select class="form-select bg-light border-0 py-2" name="room" required>
+                                    <option value="" disabled selected>Chọn phòng máy...</option>
+                                    {% for r in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6'] %}
+                                        <option value="{{ r }}">Phòng {{ r }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Vị trí máy / Thiết bị lỗi *</label>
+                                <select class="form-select bg-light border-0 py-2" name="machine_number" required>
+                                    <option value="" disabled selected>Chọn vị trí thiết bị...</option>
+                                    <option value="Máy Giáo Viên">Máy Giáo Viên</option>
+                                    <option value="Máy Học Viên">Máy Học Viên (ghi rõ số máy ở mô tả)</option>
+                                    <option value="Khác (Máy chiếu, Điều hòa, Bàn ghế...)">Khác (Điện, Máy chiếu, Máy lạnh, Bàn ghế,...)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 2. PHÂN LOẠI LỖI KỸ THUẬT -->
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Phân loại lỗi kỹ thuật *</label>
+                            <select class="form-select bg-light border-0 py-2" name="issue_category" required>
+                                <option value="" disabled selected>Chọn phân loại lỗi...</option>
+                                <option value="Lỗi Phần cứng (Không lên nguồn, Hư màn hình, Chuột/Phím...)">Lỗi Phần cứng (Không lên nguồn, Hư màn hình, Chuột/Phím...)</option>
+                                <option value="Lỗi Phần mềm (Lỗi Win, Thiếu phần mềm...)">Lỗi Phần mềm (Lỗi Win, Thiếu phần mềm...)</option>
+                                <option value="Lỗi Mạng (Không có Internet, Đứt cáp...)">Lỗi Mạng (Không có Internet, Đứt cáp...)</option>
+                                <option value="Lỗi Hạ tầng (Điện, Điều hòa, Máy chiếu...)">Lỗi Hạ tầng (Điện, Điều hòa, Máy chiếu...)</option>
+                                <option value="Khác">Khác</option>
+                            </select>
+                        </div>
+
+                        <!-- 3. THÔNG TIN NGƯỜI BÁO CÁO -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Họ và tên người báo *</label>
+                                <input type="text" class="form-control bg-light border-0 py-2" name="reporter_name" placeholder="VD: Nguyễn Văn A" required value="{{ current_user_name }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Khoa / Bộ môn công tác *</label>
+                                <input type="text" class="form-control bg-light border-0 py-2" name="department" placeholder="VD: Khoa CNTT" required>
+                            </div>
+                        </div>
+
+                        <!-- 4. MÔ TẢ TÌNH TRẠNG CHI TIẾT -->
+                        <div class="mb-4">
+                            <label class="form-label text-muted small fw-bold">Mô tả tình trạng chi tiết *</label>
+                            <textarea class="form-control bg-light border-0" name="description" rows="3" placeholder="Mô tả rõ số máy bị lỗi (nếu là máy học viên) và biểu hiện của lỗi để kỹ thuật viên dễ dàng chuẩn bị thiết bị thay thế..." required></textarea>
+                            <div class="text-muted small mt-1" style="font-size: 0.78rem;">
+                                * Kỹ thuật viên sẽ kiểm tra trực tiếp và cập nhật tiến độ xử lý trên trang Lịch sử của tôi.
+                            </div>
+                        </div>
+
+                        <!-- NÚT THAO TÁC -->
+                        <div class="d-flex justify-content-end align-items-center gap-2 pt-3 border-top">
+                            <a href="{{ url_for('home_page') }}" class="btn btn-light px-4 rounded-pill">Hủy bỏ</a>
+                            <button type="submit" class="btn btn-primary-saas fw-bold px-4 rounded-pill shadow-sm">
+                                <i class="bi bi-send-fill me-1"></i> Gửi Báo Cáo Sự Cố
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- CỘT PHẢI (SIDEBAR QUY TRÌNH, MẸO & LIÊN HỆ KHẨN CẤP)      -->
+        <!-- ======================================================== -->
+        <div class="col-lg-5 col-xl-4">
+            
+            <!-- WIDGET 1: QUY TRÌNH 2 BƯỚC XỬ LÝ SỰ CỐ -->
+            <div class="card shadow-sm border-0 rounded-4 bg-white p-4 mb-3">
+                <h6 class="fw-bold text-dark mb-3 d-flex align-items-center">
+                    <i class="bi bi-clock-history text-primary me-2 fs-5"></i>Quy Trình Tiếp Nhận & Xử Lý
+                </h6>
+                <div class="d-flex flex-column gap-3 small">
+                    <div class="d-flex align-items-start">
+                        <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 1</span>
+                        <div>
+                            <strong>Đã tiếp nhận (Màu vàng):</strong>
+                            <div class="text-secondary">Ngay sau khi gửi báo cáo, KTV trực ca sẽ nhận được thông báo để kiểm tra và chuẩn bị thiết bị thay thế.</div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start">
+                        <span class="badge bg-success bg-opacity-25 text-success border border-success px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 2</span>
+                        <div>
+                            <strong>Đã khắc phục (Màu xanh lá):</strong>
+                            <div class="text-secondary">Sau khi hoàn tất sửa chữa/thay thế thiết bị tại phòng, trạng thái sẽ tự động đổi sang màu xanh trên trang Lịch sử.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WIDGET 2: KIỂM TRA NHANH TẠI CHỖ -->
+            <div class="card shadow-sm border-0 rounded-4 bg-white p-4 mb-3">
+                <h6 class="fw-bold text-dark mb-3 d-flex align-items-center">
+                    <i class="bi bi-lightbulb-fill text-warning me-2 fs-5"></i>Kiểm Tra Nhanh Tại Chỗ
+                </h6>
+                <ul class="list-unstyled small mb-0 d-flex flex-column gap-2 text-secondary">
+                    <li class="d-flex align-items-start">
+                        <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
+                        <span><strong>Mất mạng LAN:</strong> Kiểm tra lại giắc cắm cáp mạng phía sau thùng máy (đèn xanh nhấp nháy).</span>
+                    </li>
+                    <li class="d-flex align-items-start">
+                        <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
+                        <span><strong>Màn hình tối:</strong> Kiểm tra nút nguồn màn hình hoặc dây cắm nguồn/VGA/HDMI.</span>
+                    </li>
+                    <li class="d-flex align-items-start">
+                        <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
+                        <span><strong>Treo máy:</strong> Nhấn giữ nút nguồn 5 giây để tắt máy và bật lại.</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- WIDGET 3: LIÊN HỆ KHẨN CẤP -->
+            <div class="card shadow-sm border-0 rounded-4 p-4 bg-danger bg-opacity-10">
+                <h6 class="fw-bold text-danger mb-3" style="font-size: 0.95rem;">Liên hệ khẩn cấp:</h6>
+                <div class="text-dark small">
+                    <p class="mb-2"><i class="bi bi-telephone-fill me-2"></i>Trực phòng: <strong>0931437955</strong></p>
+                    <p class="mb-0"><i class="bi bi-telephone-fill me-2"></i>Quản lý: <strong>0899396960</strong></p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+{% endblock %}

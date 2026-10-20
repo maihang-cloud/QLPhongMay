@@ -1,0 +1,896 @@
+{% extends "base.html" %}
+{% block title %}Đăng ký mượn phòng máy - Cơ sở 2{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-2">
+    
+    <!-- THANH THÔNG TIN ĐẦU TRANG: ĐƠN VỊ & TÀI KHOẢN -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill fw-medium">
+                <i class="bi bi-geo-alt-fill me-1"></i> Cơ sở 2 &bull; Tòa B-42
+            </span>
+        </div>
+        <div class="text-muted small">
+            Người đăng ký: <strong class="text-dark">{{ current_user_name }}</strong>
+            {% if current_user_email %}
+                <span>({{ current_user_email }})</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- BỐ CỤC 2 CỘT HIỆN ĐẠI (DESKTOP SPLIT LAYOUT) -->
+    <div class="row g-4">
+        
+        <!-- ======================================================== -->
+        <!-- CỘT TRÁI (FORM ĐĂNG KÝ CHÍNH - CHIẾM 7/12 HOẶC 8/12)       -->
+        <!-- ======================================================== -->
+        <div class="col-lg-7 col-xl-8">
+            <div class="card shadow-sm border-0 rounded-4 bg-white overflow-hidden mb-4">
+                
+                <!-- HERO CARD HEADER ĐỒNG BỘ TRANG CHỦ -->
+                <div class="card-header bg-primary text-white text-center py-4 border-0">
+                    <i class="bi bi-calendar2-check display-5 mb-2 d-block"></i>
+                    <h3 class="fw-bold mb-1">Đăng Ký Mượn Phòng Máy</h3>
+                    <p class="mb-0 opacity-75 small">Hệ thống tiếp nhận và xét duyệt lịch thực hành, giảng dạy tại Cơ sở 2</p>
+                </div>
+
+                <div class="card-body p-4 p-md-5">
+                    
+                    <!-- FORM ĐĂNG KÝ -->
+                    <form id="bookingForm" action="{{ url_for('submit_booking') }}" method="POST">
+                        
+                        <!-- Hidden inputs -->
+                        <input type="hidden" name="requester_name" value="{{ current_user_name }}">
+                        <input type="hidden" name="subject_code" value="">
+                        <input type="hidden" name="study_period" id="study_period">
+
+                        <!-- 1. NGÀY HỌC (LỊCH) - ĐƯA LÊN ĐẦU TIÊN -->
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Ngày học / Sử dụng *</label>
+                            <input type="date" class="form-control bg-light border-0 py-2" name="study_date" id="study_date" required>
+                        </div>
+
+                        <!-- 2. PHÒNG & THỨ (TỰ ĐỘNG NHẬN KHI CHỌN NGÀY) -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Phòng *</label>
+                                <select class="form-select bg-light border-0 py-2" name="room" id="roomSelect" required>
+                                    <option value="Any">Chọn phòng trống (Tùy ý)</option>
+                                    {% for r in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6'] %}
+                                        <option value="{{ r }}">Phòng {{ r }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Thứ (Tự động nhận theo ngày) *</label>
+                                <select class="form-select bg-light border-0 py-2" name="day_of_week" id="day_of_week" required>
+                                    <option value="2">Thứ 2</option>
+                                    <option value="3">Thứ 3</option>
+                                    <option value="4">Thứ 4</option>
+                                    <option value="5">Thứ 5</option>
+                                    <option value="6">Thứ 6</option>
+                                    <option value="7">Thứ 7</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 3. TIẾT BĐ & TIẾT KT -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Tiết BĐ *</label>
+                                <input type="number" class="form-control bg-light border-0 py-2" name="start_period" id="start_period" min="1" max="10" step="0.5" required placeholder="VD: 1 hoặc 6">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Tiết KT *</label>
+                                <input type="number" class="form-control bg-light border-0 py-2" name="end_period" id="end_period" min="1" max="10" step="0.5" required placeholder="VD: 5 hoặc 10">
+                            </div>
+                        </div>
+
+                        <!-- 4. TÊN MÔN / HỌC PHẦN -->
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Tên Môn / Học Phần *</label>
+                            <input type="text" class="form-control bg-light border-0 py-2" name="subject_name" id="subject_name" required placeholder="Nhập tên môn học thực hành...">
+                        </div>
+
+                        <!-- 5. MÃ LỚP & ĐƠN VỊ -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Mã Lớp</label>
+                                <input type="text" class="form-control bg-light border-0 py-2" name="class_code" id="class_code" placeholder="VD: 21CNTT01">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Đơn vị *</label>
+                                <select class="form-select bg-light border-0 py-2" name="department" id="department" required>
+                                    <option value="" disabled selected>Chọn đơn vị...</option>
+                                    <option value="VLKT">VLKT</option>
+                                    <option value="Toán">Toán</option>
+                                    <option value="CNTT">CNTT</option>
+                                    <option value="Hóa học">Hóa học</option>
+                                    <option value="Sinh học">Sinh học</option>
+                                    <option value="Khoa học Vật liệu">Khoa học Vật liệu</option>
+                                    <option value="Môi trường">Môi trường</option>
+                                    <option value="QTTB">Phòng QTTB</option>
+                                    <option value="Khác">Khác</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 6. PHẦN MỀM GIẢNG DẠY (BẮT BUỘC + POP-UP + NHẤN MẠNH LƯU Ý 3 TUẦN) -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-muted small fw-bold mb-0">Phần mềm giảng dạy *</label>
+                                <a href="javascript:void(0)" class="small fw-semibold text-primary text-decoration-underline" data-bs-toggle="modal" data-bs-target="#softwareModal">
+                                    <i class="bi bi-box-seam me-1"></i>Xem danh sách phần mềm có sẵn
+                                </a>
+                            </div>
+                            <input type="text" class="form-control bg-light border-0 py-2" name="software_required" id="software_required" required placeholder="Ghi rõ phần mềm cần dùng (VD: VS Code, SQL Server 2022...)">
+                            <div class="text-muted small mt-1" style="font-size: 0.78rem;">
+                                * Nếu có nhu cầu cài đặt thêm phần mềm nằm ngoài danh sách hiện có, Thầy/Cô vui lòng báo sớm trước ít nhất 3 tuần bắt đầu môn học để việc cài đặt được triển khai kịp thời trên số lượng máy lớn.
+                            </div>
+                        </div>
+
+                        <!-- 7. MỤC ĐÍCH / GHI CHÚ SỬ DỤNG -->
+                        <div class="mb-4">
+                            <label class="form-label text-muted small fw-bold">Mục đích / Ghi chú sử dụng *</label>
+                            <textarea class="form-control bg-light border-0" name="purpose" id="purpose" rows="2" required placeholder="Mục đích mượn phòng, nội dung thực hành hoặc yêu cầu thêm..."></textarea>
+                        </div>
+
+                        <!-- NÚT THAO TÁC (ACTIONS) -->
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-3 border-top">
+                            <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="addToCart()">
+                                <i class="bi bi-plus-circle me-1"></i>Thêm vào danh sách nhiều ca
+                            </button>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('home_page') }}" class="btn btn-light px-4 rounded-pill">Hủy</a>
+                                <button type="submit" class="btn btn-primary-saas fw-bold px-4 rounded-pill shadow-sm">
+                                    Gửi Yêu Cầu
+                                </button>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- CỘT PHẢI (SIDEBAR TIỆN ÍCH TRỰC QUAN - CHIẾM 5/12 HOẶC 4/12)-->
+        <!-- ======================================================== -->
+        <div class="col-lg-5 col-xl-4">
+            
+            <!-- WIDGET 1: GỢI Ý PHÒNG ĐANG TRỐNG THEO NGÀY ĐANG CHỌN -->
+            <div class="card shadow-sm border-0 rounded-4 bg-white p-4 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-dark mb-0 d-flex align-items-center">
+                        <i class="bi bi-lightning-charge-fill text-warning me-2 fs-5"></i>Gợi Ý Phòng Đang Trống
+                    </h6>
+                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 small" id="sidebarDayBadge">
+                        Đang tải...
+                    </span>
+                </div>
+                
+                <p class="text-muted small mb-3">
+                    Các ca máy còn trống trong ngày đang chọn. Bấm để tự động điền nhanh vào form:
+                </p>
+
+                <!-- Vùng hiển thị slots động -->
+                <div id="sidebarSlotsLoading" class="text-center py-3 text-muted small">
+                    <div class="spinner-border spinner-border-sm text-primary me-1" role="status"></div> Đang kiểm tra phòng trống...
+                </div>
+
+                <div class="row g-2 mb-3 d-none" id="sidebarSlotsContainer">
+                    <!-- Javascript sẽ render các slot card vào đây -->
+                </div>
+
+                <div class="text-center pt-2 border-top">
+                    <button type="button" class="btn btn-sm btn-link text-primary text-decoration-none fw-semibold p-0" onclick="openFreeRoomsModal()">
+                        <i class="bi bi-grid-3x3-gap me-1"></i>Tra cứu toàn bộ lịch phòng theo tuần &rarr;
+                    </button>
+                </div>
+            </div>
+
+            <!-- WIDGET 2: QUY ĐỊNH MƯỢN PHÒNG NHANH -->
+            <div class="card shadow-sm border-0 rounded-4 bg-white p-4 mb-3">
+                <h6 class="fw-bold text-dark mb-3 d-flex align-items-center">
+                    <i class="bi bi-shield-check text-primary me-2 fs-5"></i>Quy Định Mượn Phòng Nhanh
+                </h6>
+                <ul class="list-unstyled small mb-0 d-flex flex-column gap-2 text-secondary">
+                    <li class="d-flex align-items-start">
+                        <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
+                        <span>Đăng ký trước <strong>ít nhất 24h</strong> để bộ phận kỹ thuật kiểm tra và chuẩn bị máy móc.</span>
+                    </li>
+                    <li class="d-flex align-items-start">
+                        <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
+                        <span>Yêu cầu cài phần mềm mới ngoài danh mục: vui lòng báo sớm trước <strong>ít nhất 3 tuần</strong> bắt đầu môn học.</span>
+                    </li>
+                    <li class="d-flex align-items-start">
+                        <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
+                        <span>Sau mỗi buổi học, Thầy/Cô vui lòng dùng tính năng <strong>Power Down</strong> trên máy GV để tắt toàn bộ máy HV.</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- WIDGET 3: LIÊN HỆ KHẨN CẤP -->
+            <div class="card shadow-sm border-0 rounded-4 p-4 bg-danger bg-opacity-10">
+                <h6 class="fw-bold text-danger mb-3" style="font-size: 0.95rem;">Liên hệ khẩn cấp:</h6>
+                <div class="text-dark small">
+                    <p class="mb-2"><i class="bi bi-telephone-fill me-2"></i>Trực phòng: <strong>0931437955</strong></p>
+                    <p class="mb-0"><i class="bi bi-telephone-fill me-2"></i>Quản lý: <strong>0899396960</strong></p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 1: DANH SÁCH PHẦN MỀM CÓ SẴN (POP-UP KHÔNG MẤT FORM) -->
+<!-- ======================================================== -->
+<div class="modal fade" id="softwareModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header bg-light border-0 py-3 rounded-top-4">
+        <h5 class="modal-title fw-bold text-dark mb-0">
+          <i class="bi bi-box-seam me-2 text-primary"></i>Hệ Sinh Thái Phần Mềm Có Sẵn Tại Phòng Máy
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="alert alert-warning bg-warning bg-opacity-10 border border-warning border-opacity-50 rounded-3 p-3 mb-3 small text-dark">
+            <i class="bi bi-bell-fill text-warning me-1"></i>
+            <strong>Lưu ý:</strong> Nếu phần mềm môn học của Thầy/Cô chưa có trong danh sách bên dưới, vui lòng gửi source yêu cầu cài đặt <strong>trước ít nhất 3 tuần</strong> để ban kỹ thuật chuẩn bị hệ thống phòng máy.
+        </div>
+        <p class="small text-muted mb-3">Các phòng máy tại Cơ sở 2 đã được cài đặt sẵn danh mục phần mềm sau đây:</p>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle small">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center" style="width: 8%">STT</th>
+                        <th style="width: 32%">Phân loại</th>
+                        <th style="width: 60%">Danh sách phần mềm đã cài đặt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="text-center">1</td>
+                        <td class="fw-bold">Phần mềm cơ bản</td>
+                        <td>
+                            <ul class="mb-0 ps-3">
+                                <li>HĐH Windows 10/11 Pro (64-bit)</li>
+                                <li>Microsoft Office (Word, Excel, PowerPoint)</li>
+                                <li>Google Chrome, Mozilla Firefox</li>
+                                <li>Unikey, Foxit Reader, 7-Zip, WinRAR</li>
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-center">2</td>
+                        <td class="fw-bold">Môi trường Lập trình & IDE</td>
+                        <td>
+                            <ul class="mb-0 ps-3">
+                                <li>Visual Studio 2022</li>
+                                <li>Visual Studio Code (1.81.1)</li>
+                                <li>Python (3.11.4), PyCharm (2024.3), Anaconda</li>
+                                <li>IntelliJ (2023.2), Eclipse (C/C++, Java)</li>
+                                <li>Code Block (20.3), Dev C++ (5.11), Free Pascal (3.2.2)</li>
+                                <li>Arduino IDE (2.1.1), NodeJS (18.7.1)</li>
+                                <li>Open JDK / JDK (21.0.11), GCC/G++ (9.2.0), MSYS</li>
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-center">3</td>
+                        <td class="fw-bold">Hệ quản trị CSDL</td>
+                        <td>
+                            <ul class="mb-0 ps-3">
+                                <li>SQL Server 2022</li>
+                                <li>PostgreSQL (12.2)</li>
+                                <li>Xampp (2.0.3)</li>
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-center">4</td>
+                        <td class="fw-bold">Mạng máy tính & Phần mềm Đồ họa, Thiết kế</td>
+                        <td>
+                            <ul class="mb-0 ps-3">
+                                <li>Wireshark, Cisco Packet Tracer (8.2)</li>
+                                <li>Photoshop (2020), Illustrator (2020), Corel DRAW (2020)</li>
+                                <li>AutoCAD (2021)</li>
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-center">5</td>
+                        <td class="fw-bold">Hệ thống mạng & Quản lý phòng máy</td>
+                        <td>
+                            <ul class="mb-0 ps-3">
+                                <li>Veyon Master (Quản lý và điều khiển lớp học)</li>
+                                <li>Phần mềm sao lưu & phục hồi ổ đĩa</li>
+                            </ul>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+      </div>
+      <div class="modal-footer bg-light border-0 py-2">
+        <button type="button" class="btn btn-primary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Đã hiểu & Tiếp tục</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 2: TRA CỨU MA TRẬN PHÒNG TRỐNG THEO TUẦN            -->
+<!-- ======================================================== -->
+<div class="modal fade" id="freeRoomsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header bg-light border-0 py-3 rounded-top-4 flex-wrap gap-2">
+        <div class="d-flex align-items-center">
+            <div class="bg-primary text-white rounded-circle p-2 me-2 d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                <i class="bi bi-search"></i>
+            </div>
+            <div>
+                <h5 class="modal-title fw-bold text-dark mb-0">Tra Cứu Phòng Máy Trống Theo Tuần</h5>
+                <small class="text-muted">Tự động tính theo chu kỳ tuần học của ngày bạn chọn (hỗ trợ đăng ký sớm Học kỳ 2)</small>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2 ms-auto me-2">
+            <label class="small fw-semibold text-muted mb-0 text-nowrap">Tuần của ngày:</label>
+            <input type="date" id="modalWeekDateInput" class="form-control form-control-sm bg-white border rounded-pill px-3" style="width: auto;" onchange="onModalDateChange(this.value)">
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle px-3 py-2 rounded-pill" id="modalWeekRangeBadge">
+                Đang tải...
+            </span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        
+        <!-- Tab Chọn Thứ 2 - Thứ 7 -->
+        <div class="d-flex flex-wrap justify-content-center gap-2 mb-4 pb-2 border-bottom">
+            {% for d in [2, 3, 4, 5, 6, 7] %}
+                <button type="button" 
+                        class="btn btn-sm {% if d == 2 %}btn-primary active text-white{% else %}btn-outline-primary{% endif %} rounded-pill px-3 modal-day-btn" 
+                        data-day="{{ d }}"
+                        onclick="loadFreeSlotsForModal({{ d }})">
+                    Thứ {{ d }}
+                </button>
+            {% endfor %}
+        </div>
+
+        <div id="modalLoadingSpinner" class="text-center py-5 d-none">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Đang tải...</span>
+            </div>
+            <div class="text-muted small mt-2">Đang truy vấn lịch phòng trống...</div>
+        </div>
+
+        <div id="modalSlotsContent">
+            <!-- Buổi Sáng -->
+            <div class="mb-4">
+                <h6 class="fw-bold text-dark d-flex align-items-center mb-2">
+                    <span class="badge bg-warning bg-opacity-25 text-dark me-2 border border-warning">SÁNG</span>
+                    Ca Sáng (Tiết 1 - 5) <span class="text-muted fw-normal small ms-2" id="modalMorningDateLabel"></span>
+                </h6>
+                <div class="row g-2" id="morningSlotsContainer">
+                    <div class="col-12 text-center text-muted py-2 small">Đang nạp dữ liệu...</div>
+                </div>
+            </div>
+
+            <!-- Buổi Chiều -->
+            <div>
+                <h6 class="fw-bold text-dark d-flex align-items-center mb-2">
+                    <span class="badge bg-info bg-opacity-25 text-dark me-2 border border-info">CHIỀU</span>
+                    Ca Chiều (Tiết 6 - 10)
+                </h6>
+                <div class="row g-2" id="afternoonSlotsContainer">
+                    <div class="col-12 text-center text-muted py-2 small">Đang nạp dữ liệu...</div>
+                </div>
+            </div>
+        </div>
+
+      </div>
+      <div class="modal-footer bg-light border-0 py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Đóng</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 3: DANH SÁCH ĐĂNG KÝ NHIỀU CA (CART MODAL)          -->
+<!-- ======================================================== -->
+<div class="modal fade" id="cartModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header bg-light border-0 py-3 rounded-top-4">
+        <h5 class="modal-title fw-bold text-dark mb-0">
+          <i class="bi bi-cart3 me-2 text-primary"></i>Danh Sách Đăng Ký Nhiều Ca Của Bạn
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover align-middle mb-0" id="cartTable">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 5%">#</th>
+                <th style="width: 20%">Môn / Mã lớp</th>
+                <th style="width: 15%">Phòng</th>
+                <th style="width: 25%">Thời gian</th>
+                <th style="width: 20%">Phần mềm & Mục đích</th>
+                <th style="width: 10%">Trạng thái</th>
+                <th style="width: 5%">Xóa</th>
+              </tr>
+            </thead>
+            <tbody id="cartTableBody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer bg-light border-0 py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Đăng ký thêm ca khác</button>
+        <button type="button" class="btn btn-primary-saas fw-bold px-4 rounded-pill shadow-sm" onclick="submitCart()">Gửi Tất Cả Yêu Cầu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==========================================
+// ĐỒNG BỘ NGÀY HỌC -> THỨ & SIDEBAR SLOTS
+// ==========================================
+const studyDateInput = document.getElementById('study_date');
+const dayOfWeekSelect = document.getElementById('day_of_week');
+const studyPeriodInput = document.getElementById('study_period');
+const sidebarDayBadge = document.getElementById('sidebarDayBadge');
+
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const defaultDate = `${yyyy}-${mm}-${dd}`;
+    
+    if (studyDateInput && !studyDateInput.value) {
+        studyDateInput.value = defaultDate;
+        syncDayFromDate(defaultDate);
+    }
+});
+
+if (studyDateInput) {
+    studyDateInput.addEventListener('change', function() {
+        syncDayFromDate(this.value);
+    });
+}
+
+function syncDayFromDate(dateStr) {
+    if (!dateStr) return;
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return;
+
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const day = parseInt(parts[2]);
+    const dateObj = new Date(year, month, day);
+
+    const dow = dateObj.getDay(); // 0: CN, 1: T2, 2: T3, 3: T4, 4: T5, 5: T6, 6: T7
+    const dayMap = {
+        1: '2',
+        2: '3',
+        3: '4',
+        4: '5',
+        5: '6',
+        6: '7'
+    };
+
+    let selectedDayNum = 2;
+    if (dow === 0) {
+        if (dayOfWeekSelect) dayOfWeekSelect.value = '2';
+        selectedDayNum = 2;
+    } else if (dayMap[dow] && dayOfWeekSelect) {
+        dayOfWeekSelect.value = dayMap[dow];
+        selectedDayNum = parseInt(dayMap[dow]);
+    }
+
+    const formatted = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
+    if (studyPeriodInput) {
+        studyPeriodInput.value = formatted;
+    }
+
+    // Tải phòng trống ở Sidebar theo đúng Thứ và Ngày đang chọn (đồng bộ chu kỳ tuần Học kỳ 1 / Học kỳ 2)
+    loadSidebarQuickSlots(selectedDayNum, dateStr);
+}
+
+if (dayOfWeekSelect) {
+    dayOfWeekSelect.addEventListener('change', function() {
+        const targetDow = parseInt(this.value);
+        const nextDate = getDateInCurrentSelectedWeek(targetDow);
+        if (studyDateInput) {
+            studyDateInput.value = nextDate;
+            syncDayFromDate(nextDate);
+        }
+    });
+}
+
+function getDateInCurrentSelectedWeek(targetDow) {
+    // Giữ nguyên tuần đang chọn ở ô study_date (VD: đang chọn tuần ở Học kỳ 2 thì đổi Thứ vẫn nằm trong tuần đó)
+    let baseDate = new Date();
+    if (studyDateInput && studyDateInput.value) {
+        const parts = studyDateInput.value.split('-');
+        if (parts.length === 3) {
+            baseDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        }
+    }
+    const baseDow = baseDate.getDay(); // 0 (CN) .. 6 (T7)
+    const diffToMonday = baseDow === 0 ? -6 : 1 - baseDow;
+    const monday = new Date(baseDate);
+    monday.setDate(baseDate.getDate() + diffToMonday);
+
+    const targetDate = new Date(monday);
+    targetDate.setDate(monday.getDate() + (targetDow - 2));
+    const yyyy = targetDate.getFullYear();
+    const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(targetDate.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+// ==========================================
+// TÍNH NĂNG LOAD GỢI Ý PHÒNG TRỐNG Ở SIDEBAR
+// ==========================================
+function loadSidebarQuickSlots(day, dateStr) {
+    const activeDate = dateStr || (studyDateInput ? studyDateInput.value : '');
+    if (sidebarDayBadge) {
+        sidebarDayBadge.innerText = `Thứ ${day}`;
+    }
+
+    const loadingEl = document.getElementById('sidebarSlotsLoading');
+    const container = document.getElementById('sidebarSlotsContainer');
+
+    if (loadingEl) loadingEl.classList.remove('d-none');
+    if (container) {
+        container.classList.add('d-none');
+        container.innerHTML = '';
+    }
+
+    fetch(`/api/free-slots?day=${day}&date=${encodeURIComponent(activeDate)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (loadingEl) loadingEl.classList.add('d-none');
+            if (sidebarDayBadge && data.target_date) {
+                sidebarDayBadge.innerText = `Thứ ${day} (${data.target_date})`;
+            }
+            if (!container) return;
+            container.classList.remove('d-none');
+
+            let slots = [];
+            if (data.morning && data.morning.length > 0) {
+                slots.push(...data.morning.slice(0, 2).map(s => ({ ...s, session: 'morning', sessionText: 'Sáng' })));
+            }
+            if (data.afternoon && data.afternoon.length > 0) {
+                slots.push(...data.afternoon.slice(0, 2).map(s => ({ ...s, session: 'afternoon', sessionText: 'Chiều' })));
+            }
+
+            if (slots.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center text-muted small py-2 fst-italic">Ngày này hiện đã kín các phòng chính. Bấm xem ma trận bên dưới.</div>';
+                return;
+            }
+
+            container.innerHTML = slots.map(slot => {
+                const isMorn = slot.session === 'morning';
+                const badgeColor = isMorn ? 'bg-warning bg-opacity-25 text-dark' : 'bg-info bg-opacity-25 text-dark';
+                const sessionColor = isMorn ? 'text-success' : 'text-primary';
+                return `
+                    <div class="col-6">
+                        <div class="card border rounded-3 p-2 text-center bg-light slot-card-item" style="cursor: pointer;" onclick="applySelectedSlot('${slot.room}', ${day}, ${slot.start_period}, ${slot.end_period}, '${data.target_date_iso || activeDate}')">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="badge ${badgeColor} fw-bold">P.${slot.room}</span>
+                                <small class="${sessionColor} fw-bold">${slot.sessionText}</small>
+                            </div>
+                            <div class="small fw-semibold text-secondary">Tiết ${slot.start_period} - ${slot.end_period}</div>
+                            <button type="button" class="btn btn-xs btn-outline-primary w-100 py-0 mt-1" style="font-size: 0.72rem;">Chọn ca này</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        })
+        .catch(err => {
+            console.error('Lỗi khi nạp slots sidebar:', err);
+            if (loadingEl) loadingEl.classList.add('d-none');
+        });
+}
+
+// ==========================================
+// TÍNH NĂNG CHỌN SLOT TỰ ĐỘNG ĐIỀN VÀO FORM
+// ==========================================
+function applySelectedSlot(room, day, start, end, targetDateIso) {
+    const form = document.getElementById('bookingForm');
+    if (!form) return;
+
+    const roomSelect = form.querySelector('select[name="room"]');
+    const daySelect = form.querySelector('select[name="day_of_week"]');
+    const startInput = form.querySelector('input[name="start_period"]');
+    const endInput = form.querySelector('input[name="end_period"]');
+
+    if (roomSelect) roomSelect.value = room;
+    if (daySelect) daySelect.value = String(day);
+    if (startInput) startInput.value = start;
+    if (endInput) endInput.value = end;
+
+    if (targetDateIso && studyDateInput) {
+        studyDateInput.value = targetDateIso;
+        syncDayFromDate(targetDateIso);
+    }
+
+    const modalEl = document.getElementById('freeRoomsModal');
+    if (modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+    }
+
+    [roomSelect, daySelect, startInput, endInput].forEach(el => {
+        if (el) {
+            el.style.transition = 'all 0.3s ease';
+            el.style.backgroundColor = '#d1e7dd';
+            setTimeout(() => {
+                el.style.backgroundColor = '';
+            }, 1200);
+        }
+    });
+
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ==========================================
+// TÍNH NĂNG TRA CỨU PHÒNG TRỐNG (MODAL TOÀN TUẦN)
+// ==========================================
+let currentModalDay = 2;
+
+function openFreeRoomsModal() {
+    let day = dayOfWeekSelect ? parseInt(dayOfWeekSelect.value) : 2;
+    if (!day || day < 2 || day > 7) day = 2;
+
+    const modalDateInput = document.getElementById('modalWeekDateInput');
+    if (modalDateInput && studyDateInput) {
+        modalDateInput.value = studyDateInput.value;
+    }
+
+    const modalEl = document.getElementById('freeRoomsModal');
+    let modal = bootstrap.Modal.getInstance(modalEl);
+    if (!modal) {
+        modal = new bootstrap.Modal(modalEl);
+    }
+    modal.show();
+
+    loadFreeSlotsForModal(day);
+}
+
+function onModalDateChange(newDateStr) {
+    if (!newDateStr) return;
+    if (studyDateInput) {
+        studyDateInput.value = newDateStr;
+        syncDayFromDate(newDateStr);
+    }
+    const parts = newDateStr.split('-');
+    if (parts.length === 3) {
+        const dt = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        const dow = dt.getDay();
+        const mappedDay = dow === 0 ? 2 : dow + 1;
+        loadFreeSlotsForModal(mappedDay);
+    } else {
+        loadFreeSlotsForModal(currentModalDay);
+    }
+}
+
+function loadFreeSlotsForModal(day) {
+    currentModalDay = day;
+    const modalDateInput = document.getElementById('modalWeekDateInput');
+    const activeDate = (modalDateInput && modalDateInput.value) ? modalDateInput.value : (studyDateInput ? studyDateInput.value : '');
+
+    document.querySelectorAll('.modal-day-btn').forEach(btn => {
+        const btnDay = parseInt(btn.getAttribute('data-day'));
+        if (btnDay === day) {
+            btn.className = 'btn btn-sm btn-primary active text-white rounded-pill px-3 modal-day-btn';
+        } else {
+            btn.className = 'btn btn-sm btn-outline-primary rounded-pill px-3 modal-day-btn';
+        }
+    });
+
+    const spinner = document.getElementById('modalLoadingSpinner');
+    const content = document.getElementById('modalSlotsContent');
+    const morningContainer = document.getElementById('morningSlotsContainer');
+    const afternoonContainer = document.getElementById('afternoonSlotsContainer');
+    const weekBadge = document.getElementById('modalWeekRangeBadge');
+    const morningDateLabel = document.getElementById('modalMorningDateLabel');
+
+    if (spinner) spinner.classList.remove('d-none');
+    if (content) content.classList.add('d-none');
+
+    fetch(`/api/free-slots?day=${day}&date=${encodeURIComponent(activeDate)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (weekBadge && data.week_range) {
+                weekBadge.innerText = `🗓 Tuần: ${data.week_range}`;
+            }
+            if (morningDateLabel && data.target_date) {
+                morningDateLabel.innerText = `— Thứ ${day} (${data.target_date})`;
+            }
+            const slotDateIso = data.target_date_iso || activeDate;
+
+            if (data.morning && data.morning.length > 0) {
+                morningContainer.innerHTML = data.morning.map(item => renderSlotCardHtml(item, 'morning', day, slotDateIso)).join('');
+            } else {
+                morningContainer.innerHTML = '<div class="col-12 text-center text-muted py-2 small fst-italic">Hết phòng trống từ 2.5 tiết trong buổi sáng.</div>';
+            }
+
+            if (data.afternoon && data.afternoon.length > 0) {
+                afternoonContainer.innerHTML = data.afternoon.map(item => renderSlotCardHtml(item, 'afternoon', day, slotDateIso)).join('');
+            } else {
+                afternoonContainer.innerHTML = '<div class="col-12 text-center text-muted py-2 small fst-italic">Hết phòng trống từ 2.5 tiết trong buổi chiều.</div>';
+            }
+
+            if (spinner) spinner.classList.add('d-none');
+            if (content) content.classList.remove('d-none');
+        })
+        .catch(err => {
+            console.error('Lỗi khi tải lịch:', err);
+            if (spinner) spinner.classList.add('d-none');
+            if (content) {
+                content.classList.remove('d-none');
+                morningContainer.innerHTML = '<div class="col-12 text-center text-danger py-2 small">Không thể tải dữ liệu. Vui lòng thử lại.</div>';
+                afternoonContainer.innerHTML = '';
+            }
+        });
+}
+
+function renderSlotCardHtml(item, session, day, slotDateIso) {
+    const isMorning = session === 'morning';
+    const badgeBg = isMorning ? 'bg-warning bg-opacity-25 text-dark border border-warning' : 'bg-info bg-opacity-25 text-dark border border-info';
+    
+    return `
+        <div class="col-6 col-md-4 col-lg-3">
+            <div class="card h-100 border rounded-3 p-2 text-center bg-white shadow-sm" 
+                 role="button"
+                 onclick="applySelectedSlot('${item.room}', ${day}, ${item.start_period}, ${item.end_period}, '${slotDateIso || ''}')">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge ${badgeBg} fw-bold">P.${item.room}</span>
+                </div>
+                <div class="fw-semibold text-dark small mb-1">${item.label}</div>
+                <div class="btn btn-sm btn-light border w-100 py-0 text-primary" style="font-size: 0.72rem;">
+                    Chọn ca này
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ==========================================
+// LOGIC GIỎ HÀNG (ĐĂNG KÝ NHIỀU CA)
+// ==========================================
+let bookingCart = [];
+
+function addToCart() {
+    const form = document.getElementById('bookingForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    if (!studyPeriodInput.value && studyDateInput.value) {
+        syncDayFromDate(studyDateInput.value);
+    }
+
+    const item = {
+        requester_name: form.requester_name.value,
+        department: form.department.value,
+        subject_name: form.subject_name.value,
+        subject_code: form.subject_code ? form.subject_code.value : '',
+        class_code: form.class_code.value,
+        room: form.room.value,
+        study_period: studyPeriodInput.value || studyDateInput.value,
+        day_of_week: form.day_of_week.value,
+        day_of_week_text: form.day_of_week.options[form.day_of_week.selectedIndex].text,
+        start_period: form.start_period.value,
+        end_period: form.end_period.value,
+        software_required: form.software_required.value,
+        purpose: form.purpose.value,
+        is_free: true
+    };
+
+    fetch("{{ url_for('check_conflict') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item)
+    })
+    .then(res => res.json())
+    .then(data => {
+        item.is_free = data.is_free;
+        bookingCart.push(item);
+
+        form.subject_name.value = '';
+        form.class_code.value = '';
+        form.start_period.value = '';
+        form.end_period.value = '';
+        form.software_required.value = '';
+        form.purpose.value = '';
+        form.room.value = 'Any';
+
+        renderCart();
+        const modal = new bootstrap.Modal(document.getElementById('cartModal'));
+        modal.show();
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        alert('Có lỗi xảy ra khi kiểm tra trùng lịch.');
+    });
+}
+
+function renderCart() {
+    const tbody = document.getElementById('cartTableBody');
+    tbody.innerHTML = '';
+
+    bookingCart.forEach((item, index) => {
+        let badgeRoom = item.room === 'Any' 
+            ? '<span class="badge bg-secondary">Tùy ý</span>' 
+            : `<span class="badge bg-primary">P.${item.room}</span>`;
+
+        let statusBadge = item.is_free 
+            ? '<span class="badge bg-success bg-opacity-10 text-success border border-success">Hợp lệ</span>'
+            : '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Trùng lịch</span>';
+
+        let timeStr = `${item.study_period ? item.study_period + '<br>' : ''}${item.day_of_week_text} (Tiết ${item.start_period} - ${item.end_period})`;
+        let detailStr = `<strong>Phần mềm:</strong> ${item.software_required || 'Không'}<br><strong>Ghi chú:</strong> ${item.purpose}`;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td><strong>${item.subject_name || 'Không có tên'}</strong><br><small class="text-muted">${item.class_code || ''}</small></td>
+            <td>${badgeRoom}</td>
+            <td class="small">${timeStr}</td>
+            <td class="small" style="max-width: 250px;">${detailStr}</td>
+            <td>${statusBadge}</td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFromCart(${index})" title="Xóa">
+                    Xóa
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function removeFromCart(index) {
+    bookingCart.splice(index, 1);
+    renderCart();
+}
+
+function submitCart() {
+    if (bookingCart.length === 0) {
+        alert("Danh sách trống!");
+        return;
+    }
+
+    fetch("{{ url_for('submit_bulk_booking') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bookingCart)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.href = data.redirect_url;
+        } else {
+            alert("Có lỗi xảy ra: " + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert("Có lỗi xảy ra trong quá trình gửi dữ liệu.");
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+# Không đẩy file Database lên Git để tránh ghi đè mất dữ liệu thực tế trên Server
+lab_schedule.db
+*.db
+*.sqlite3
+
+# Bỏ qua thư mục nháp, log, file nén và file lưu mã bí mật
+test_debug/
+__pycache__/
+*.pyc
+*.log
+*.zip
+*.txt
+!requirements.txt
+.env
