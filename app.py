@@ -895,15 +895,31 @@ def admin_panel():
     else:
         netagent_key = ak_row['value']
 
-    # Đảm bảo đủ 8 phòng trong bảng room_network_status
+    # Đảm bảo đủ 8 phòng trong bảng room_network_status với đúng IP Router mặc định của trường
+    default_router_ips = {
+        '5.1': '10.29.37.53',
+        '5.2': '10.29.37.54',
+        '5.3': '10.29.37.52',
+        '6.1': '10.29.37.60',
+        '6.2': '10.29.37.62',
+        '6.3': '10.29.37.64',
+        '6.5': '10.29.37.63',
+        '6.6': '10.29.37.61',
+    }
     now_str = datetime.datetime.now().strftime('%H:%M:%S %d/%m/%Y')
     for idx, r in enumerate(rooms):
-        existing_net = conn.execute("SELECT room FROM room_network_status WHERE room = ?", (r,)).fetchone()
+        existing_net = conn.execute("SELECT room, target_ip FROM room_network_status WHERE room = ?", (r,)).fetchone()
+        real_ip = default_router_ips.get(r, '8.8.8.8')
         if not existing_net:
-            default_ip = f"192.168.1.{101 + idx}"
             conn.execute(
                 "INSERT INTO room_network_status (room, target_ip, status, ping_ms, updated_at) VALUES (?, ?, 'online', ?, ?)",
-                (r, default_ip, 10 + idx * 2, now_str)
+                (r, real_ip, 46, now_str)
+            )
+        elif existing_net['target_ip'] and existing_net['target_ip'].startswith('192.168.1.'):
+            # Tự động nâng cấp các IP mẫu 192.168.1.10x sang IP Router thực tế 10.29.37.xx
+            conn.execute(
+                "UPDATE room_network_status SET target_ip = ? WHERE room = ?",
+                (real_ip, r)
             )
     conn.commit()
 
