@@ -20,6 +20,19 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '').strip()
 
+# Tự động đọc từ file "gg clent id code.txt" khi chạy thử ở máy cá nhân (file này đã được chặn trong .gitignore)
+_local_secret_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gg clent id code.txt')
+if (not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET) and os.path.exists(_local_secret_file):
+    try:
+        with open(_local_secret_file, 'r', encoding='utf-8') as _f:
+            for _line in _f:
+                if _line.lower().startswith('client id:'):
+                    GOOGLE_CLIENT_ID = _line.split(':', 1)[1].strip()
+                elif _line.lower().startswith('client secret:'):
+                    GOOGLE_CLIENT_SECRET = _line.split(':', 1)[1].strip()
+    except Exception:
+        pass
+
 # Khai báo danh sách Quản trị viên
 ADMIN_EMAILS = [
     "mlhang@hcmus.edu.vn",
@@ -416,6 +429,11 @@ def get_free_slots_for_day(day_of_week, ref_date=None):
 def index():
     """Chuyển hướng đến trang chủ"""
     return redirect(url_for('home_page'))
+
+@app.route('/thong-tin-lien-he')
+def contact_page():
+    """Hiển thị trang Thông tin liên hệ."""
+    return render_template('contact.html')
 
 @app.route('/bao-cao-su-co')
 @login_required
@@ -855,6 +873,207 @@ def admin_panel():
 
     cancellations = conn.execute("SELECT * FROM cancellations ORDER BY created_at DESC").fetchall()
     issues = conn.execute("SELECT * FROM issue_reports ORDER BY created_at DESC").fetchall()
+
+    # 4. Tính toán số liệu thống kê cho Tab 📊 Dashboard & B42Lab NetAgent
+    conn.execute("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)")
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS room_network_status (
+            room TEXT PRIMARY KEY,
+            target_ip TEXT DEFAULT '8.8.8.8',
+            status TEXT DEFAULT 'online',
+            ping_ms INTEGER DEFAULT 12,
+            updated_at TEXT
+        )
+    ''')
+    # Khởi tạo mã khóa bảo mật cho NetAgent nếu chưa có
+    ak_row = conn.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
+    if not ak_row or not ak_row['value']:
+        default_agent_key = "b42lab-secret-2026"
+        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('netagent_key', ?)", (default_agent_key,))
+        conn.commit()
+        netagent_key = default_agent_key
+    else:
+        netagent_key = ak_row['value']
+
+    # Đảm bảo đủ 8 phòng trong bảng room_network_status
+    now_str = datetime.datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+    for idx, r in enumerate(rooms):
+        existing_net = conn.execute("SELECT room FROM room_network_status WHERE room = ?", (r,)).fetchone()
+        if not existing_net:
+            default_ip = f"192.168.1.{101 + idx}"
+            conn.execute(
+                "INSERT INTO room_network_status (room, target_ip, status, ping_ms, updated_at) VALUES (?, ?, 'online', ?, ?)",
+                (r, default_ip, 10 + idx * 2, now_str)
+            )
+    conn.commit()
+
+    net_rows = conn.execute("SELECT * FROM room_network_status").fetchall()
+    net_map = {row['room']: dict(row) for row in net_rows}
+
+    # Đếm số ca học theo từng phòng (trong tuần hiện tại)
+    room_stats = {}
+    max_room_sessions = 1
+    total_periods_used = 0.0
+    day_periods_used = {d: 0.0 for d in range(2, 8)}
+
+    for r in rooms:
+        r_active = [s for s in all_enriched_schedules if s['room'] == r and s['door_open']]
+        r_locked = [s for s in all_enriched_schedules if s['room'] == r and not s['door_open']]
+        r_total = len(r_active) + len(r_locked)
+        if r_total > max_room_sessions:
+            max_room_sessions = r_total
+        for s in r_active:
+            dur = max(0.0, float(s['end_period']) - float(s['start_period']) + 1.0)
+            total_periods_used += dur
+            dow = int(s['day_of_week'])
+            if dow in day_periods_used:
+                day_periods_used[dow] += dur
+        room_stats[r] = {
+            'active': len(r_active),
+            'locked': len(r_locked),
+            'total': r_total
+        }
+
+    for r in rooms:
+        room_stats[r]['height_pct'] = int(round((room_stats[r]['total'] / max_room_sessions) * 85)) if room_stats[r]['total'] > 0 else 8
+
+    # Công suất lấp đầy (8 phòng x 6 ngày x 10 tiết = 480 tiết/tuần)
+    utilization_pct = min(100, int(round((total_periods_used / 480.0) * 100))) if total_periods_used > 0 else 0
+    peak_dow = max(day_periods_used, key=day_periods_used.get) if total_periods_used > 0 else 2
+    peak_dow_pct = min(100, int(round((day_periods_used[peak_dow] / 80.0) * 100))) if total_periods_used > 0 else 0
+
+    # Phân bổ theo Khoa / Đơn vị
+    dept_counts = {'Toán - Tin': 0, 'CNTT': 0, 'Vật lý / VLKT': 0, 'Khác': 0}
+    for s in all_enriched_schedules:
+        dept_str = (s.get('department') or '').strip()
+        if 'Toán' in dept_str:
+            dept_counts['Toán - Tin'] += 1
+        elif 'CNTT' in dept_str or 'Công nghệ thông tin' in dept_str:
+            dept_counts['CNTT'] += 1
+        elif 'VLKT' in dept_str or 'Vật lý' in dept_str:
+            dept_counts['Vật lý / VLKT'] += 1
+        else:
+            dept_counts['Khác'] += 1
+
+    total_sched = max(1, len(all_enriched_schedules))
+    dept_pcts = {k: int(round((v / total_sched) * 100)) for k, v in dept_counts.items()}
+    d1 = dept_pcts['Toán - Tin'] * 3.6
+    d2 = d1 + dept_pcts['CNTT'] * 3.6
+    d3 = d2 + dept_pcts['Vật lý / VLKT'] * 3.6
+    donut_gradient = f"conic-gradient(#2563eb 0deg {d1:.1f}deg, #10b981 {d1:.1f}deg {d2:.1f}deg, #f59e0b {d2:.1f}deg {d3:.1f}deg, #94a3b8 {d3:.1f}deg 360deg)"
+
+    # Trạng thái trực tiếp 8 phòng hôm nay & Lịch Mở/Khóa cửa hôm nay
+    today_dow = today.weekday() + 2  # Thứ 2 = 2 .. Chủ nhật = 8
+    display_dow = today_dow if 2 <= today_dow <= 7 else 2
+    today_str_dmy = today.strftime('%d/%m/%Y')
+    today_str_iso = today.strftime('%Y-%m-%d')
+
+    # Kiểm tra các phòng có báo nghỉ hôm nay
+    cancelled_rooms_today = set()
+    for c in cancellations:
+        c_date = (c['cancel_date'] or '').strip()
+        if c_date in (today_str_dmy, today_str_iso):
+            cancelled_rooms_today.add(str(c['room']).replace('Phòng ', '').replace('P.', '').strip())
+
+    pending_issues_by_room = {r: 0 for r in rooms}
+    for iss in issues:
+        if iss['status'] != 'Resolved':
+            r_code = str(iss['room']).strip()
+            if r_code in pending_issues_by_room:
+                pending_issues_by_room[r_code] += 1
+
+    room_live_cards = []
+    morning_open, morning_locked, morning_free_rooms = [], [], []
+    afternoon_open, afternoon_locked, afternoon_free_rooms = [], [], []
+    online_rooms_count = 0
+    offline_rooms_list = []
+    last_net_update = ''
+
+    for r in rooms:
+        r_today_classes = [s for s in all_enriched_schedules if s['room'] == r and int(s['day_of_week']) == display_dow and s['is_in_selected_week']]
+        m_classes = [s for s in r_today_classes if float(s['start_period']) <= 5]
+        a_classes = [s for s in r_today_classes if float(s['end_period']) >= 6]
+
+        # Ca sáng
+        if any(s['door_open'] for s in m_classes) and r not in cancelled_rooms_today:
+            morning_open.append(f"P.{r}")
+        elif m_classes or r in cancelled_rooms_today:
+            morning_locked.append(f"P.{r}")
+        else:
+            morning_free_rooms.append(f"P.{r}")
+
+        # Ca chiều
+        if any(s['door_open'] for s in a_classes) and r not in cancelled_rooms_today:
+            afternoon_open.append(f"P.{r}")
+        elif a_classes or r in cancelled_rooms_today:
+            afternoon_locked.append(f"P.{r}")
+        else:
+            afternoon_free_rooms.append(f"P.{r}")
+
+        # Nhãn hoạt động trên thẻ Live Status 8 phòng (luôn ưu tiên hiển thị lịch học/trạng thái cửa)
+        open_today = [s for s in r_today_classes if s['door_open']]
+        ended_today = [s for s in r_today_classes if not s['door_open']]
+        if r in cancelled_rooms_today:
+            activity_label = "🔒 Khóa cửa (Lớp báo nghỉ)"
+            activity_class = "text-danger fw-semibold"
+        elif open_today:
+            first_c = open_today[0]
+            subj = first_c['subject_name']
+            if len(subj) > 20:
+                subj = subj[:19] + "…"
+            activity_label = f"🔓 T.{first_c['start_period']:g}-{first_c['end_period']:g}: {subj}"
+            activity_class = "text-primary fw-semibold"
+        elif ended_today:
+            activity_label = "🔒 Khóa cửa (Đã KT sớm)"
+            activity_class = "text-secondary"
+        else:
+            activity_label = f"⚪ Trống lịch Thứ {display_dow}"
+            activity_class = "text-muted"
+
+        net_info = net_map.get(r, {'target_ip': '8.8.8.8', 'status': 'online', 'ping_ms': 12, 'updated_at': ''})
+        net_status = net_info.get('status') or 'online'
+        net_ping = net_info.get('ping_ms')
+        if net_info.get('updated_at'):
+            last_net_update = net_info['updated_at']
+
+        if net_status == 'online':
+            online_rooms_count += 1
+        else:
+            offline_rooms_list.append(f"P.{r}")
+
+        room_live_cards.append({
+            'room': r,
+            'activity_label': activity_label,
+            'activity_class': activity_class,
+            'issue_count': pending_issues_by_room.get(r, 0),
+            'target_ip': net_info.get('target_ip') or '8.8.8.8',
+            'net_status': net_status,
+            'ping_ms': net_ping,
+            'updated_at': net_info.get('updated_at') or ''
+        })
+
+    dashboard_stats = {
+        'room_stats': room_stats,
+        'utilization_pct': utilization_pct,
+        'peak_dow': peak_dow,
+        'peak_dow_pct': peak_dow_pct,
+        'dept_counts': dept_counts,
+        'dept_pcts': dept_pcts,
+        'donut_gradient': donut_gradient,
+        'room_live_cards': room_live_cards,
+        'display_dow': display_dow,
+        'morning_open': morning_open,
+        'morning_locked': morning_locked,
+        'morning_free_rooms': morning_free_rooms,
+        'afternoon_open': afternoon_open,
+        'afternoon_locked': afternoon_locked,
+        'afternoon_free_rooms': afternoon_free_rooms,
+        'online_rooms_count': online_rooms_count,
+        'offline_rooms_list': offline_rooms_list,
+        'last_net_update': last_net_update,
+        'netagent_key': netagent_key
+    }
+
     conn.close()
     return render_template(
         'admin_panel.html',
@@ -878,8 +1097,180 @@ def admin_panel():
         free_target_date_display=free_target_date_display,
         morning_free=admin_morning_free,
         afternoon_free=admin_afternoon_free,
-        issues=issues
+        issues=issues,
+        dashboard_stats=dashboard_stats
     )
+
+def measure_host_ping_ms(target_ip):
+    """Đo ping (ms) tới 1 địa chỉ IP/Host trên cả Windows và Linux."""
+    import subprocess
+    import platform
+    import time
+    import re
+
+    target_ip = (target_ip or '').strip()
+    if not target_ip:
+        return False, None
+
+    is_win = platform.system().lower().startswith('win')
+    cmd = ['ping', '-n', '1', '-w', '1000', target_ip] if is_win else ['ping', '-c', '1', '-W', '1', target_ip]
+    try:
+        t0 = time.time()
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=2.5)
+        elapsed_ms = max(1, int(round((time.time() - t0) * 1000)))
+        if res.returncode == 0:
+            m = re.search(r'(?:time|thời gian)[=<](\d+)\s*ms', res.stdout, re.IGNORECASE)
+            ping_val = int(m.group(1)) if m else elapsed_ms
+            return True, ping_val
+        return False, None
+    except Exception:
+        return False, None
+
+@app.route('/api/network-heartbeat', methods=['POST'])
+def api_network_heartbeat():
+    """API nhận tín hiệu Heartbeat Push từ B42Lab NetAgent chạy tại phòng máy."""
+    data = request.get_json(silent=True) or {}
+    provided_key = (data.get('agent_key') or request.headers.get('X-Agent-Key') or '').strip()
+
+    conn = get_db_connection()
+    conn.execute("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)")
+    ak_row = conn.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
+    expected_key = ak_row['value'] if ak_row and ak_row['value'] else 'b42lab-secret-2026'
+
+    if provided_key != expected_key:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Invalid agent_key'}), 403
+
+    now_str = datetime.datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+    results = data.get('rooms', {})
+    # Hỗ trợ cả trường hợp gửi lẻ 1 phòng: {"room": "5.1", "status": "online", "ping_ms": 11}
+    if not results and data.get('room'):
+        results = {str(data['room']): {'status': data.get('status', 'online'), 'ping_ms': data.get('ping_ms')}}
+
+    for r_code, r_info in results.items():
+        if r_code in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']:
+            st = 'online' if r_info.get('status') in ('online', 1, True, '1') else 'offline'
+            p_ms = r_info.get('ping_ms')
+            conn.execute('''
+                UPDATE room_network_status
+                SET status = ?, ping_ms = ?, updated_at = ?
+                WHERE room = ?
+            ''', (st, p_ms, now_str, r_code))
+
+    conn.commit()
+    rows = conn.execute("SELECT room, target_ip FROM room_network_status").fetchall()
+    targets = {row['room']: row['target_ip'] for row in rows}
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'updated_at': now_str,
+        'targets': targets
+    })
+
+@app.route('/api/network-status')
+@admin_required
+def api_network_status():
+    """API trả về trạng thái mạng 8 phòng máy theo thời gian thực cho Dashboard."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT room, target_ip, status, ping_ms, updated_at FROM room_network_status").fetchall()
+    conn.close()
+
+    room_map = {}
+    online_count = 0
+    offline_rooms = []
+    last_update = ''
+
+    for row in rows:
+        r = row['room']
+        st = row['status'] or 'online'
+        if st == 'online':
+            online_count += 1
+        else:
+            offline_rooms.append(f"P.{r}")
+        if row['updated_at']:
+            last_update = row['updated_at']
+        room_map[r] = {
+            'room': r,
+            'target_ip': row['target_ip'],
+            'status': st,
+            'ping_ms': row['ping_ms'],
+            'updated_at': row['updated_at'] or ''
+        }
+
+    return jsonify({
+        'success': True,
+        'online_count': online_count,
+        'total_rooms': len(rows),
+        'offline_rooms': offline_rooms,
+        'last_update': last_update,
+        'room_map': room_map
+    })
+
+@app.route('/admin/network-config', methods=['POST'])
+@admin_required
+def save_network_config():
+    """Lưu cấu hình IP của 8 phòng máy từ giao diện Admin."""
+    conn = get_db_connection()
+    for r in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']:
+        ip_val = (request.form.get(f"ip_{r}") or '8.8.8.8').strip()
+        conn.execute("UPDATE room_network_status SET target_ip = ? WHERE room = ?", (ip_val, r))
+    conn.commit()
+    conn.close()
+    flash("✅ Đã lưu danh sách địa chỉ IP Router cho 8 phòng máy!", "success")
+    return redirect(url_for('admin_panel', tab='dashboard'))
+
+@app.route('/admin/network-ping-now', methods=['POST'])
+@admin_required
+def admin_network_ping_now():
+    """Thực hiện Ping kiểm tra ngay lập tức tới 8 phòng máy."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT room, target_ip FROM room_network_status").fetchall()
+    now_str = datetime.datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+
+    for row in rows:
+        r = row['room']
+        ip_addr = row['target_ip'] or '8.8.8.8'
+        is_up, ping_ms = measure_host_ping_ms(ip_addr)
+        st = 'online' if is_up else 'offline'
+        conn.execute(
+            "UPDATE room_network_status SET status = ?, ping_ms = ?, updated_at = ? WHERE room = ?",
+            (st, ping_ms, now_str, r)
+        )
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'updated_at': now_str})
+
+@app.route('/admin/download-netagent')
+@admin_required
+def download_netagent_script():
+    """Tải trực tiếp file script b42_network_agent.py đã điền sẵn 8 IP Router, URL và khóa bảo mật (trên RAM để không kích hoạt Flask reload)."""
+    from flask import Response
+    import re
+    conn = get_db_connection()
+    rows = conn.execute("SELECT room, target_ip FROM room_network_status").fetchall()
+    conn.close()
+    ip_dict = {row['room']: row['target_ip'] for row in rows}
+
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    agent_path = os.path.join(app_dir, 'b42_network_agent.py')
+    if os.path.exists(agent_path):
+        with open(agent_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        lines = ["ROOM_TARGETS = {"]
+        for r in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']:
+            lines.append(f'    "{r}": "{ip_dict.get(r, "8.8.8.8")}",')
+        lines.append("}")
+        new_block = "\n".join(lines)
+        content = re.sub(r'ROOM_TARGETS\s*=\s*\{[^}]*\}', new_block, content)
+        current_server_url = request.host_url.rstrip('/')
+        content = content.replace('DEFAULT_SERVER_URL = "http://127.0.0.1:5000"', f'DEFAULT_SERVER_URL = "{current_server_url}"')
+        return Response(
+            content,
+            mimetype='application/octet-stream',
+            headers={'Content-Disposition': 'attachment; filename="b42_network_agent.py"'}
+        )
+    return "File b42_network_agent.py not found", 404
 
 @app.route('/admin/approve-cancellation/<int:cancellation_id>', methods=['POST'])
 @admin_required

@@ -2,62 +2,160 @@
 {% block title %}Bảng Điều Khiển Admin{% endblock %}
 
 {% block content %}
-<div class="mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2 admin-wrapper-font">
+<div class="admin-header-bar mb-3 d-flex justify-content-between align-items-center gap-2 admin-wrapper-font bg-white p-3 rounded-4 shadow-sm border">
     <div>
-        <h3 class="fw-bold mb-1" style="color: var(--text-main);">Quản Trị Hệ Thống</h3>
-        <p class="text-muted mb-0">Hệ thống quản lý phòng máy Cơ sở 2</p>
+        <div class="d-flex align-items-center gap-2">
+            <h4 class="fw-bold mb-0 text-primary" style="font-size: clamp(1.05rem, 2.5vw, 1.35rem);">⚙️ Quản Trị Hệ Thống</h4>
+            <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill d-none d-md-inline-flex align-items-center px-2 py-1" style="font-size: 0.75rem;">
+                🟢 {{ current_user_email or "Admin" }}
+            </span>
+        </div>
+        <div class="text-muted d-md-none mt-1" style="font-size: 0.75rem;">
+            🟢 {{ current_user_email or "Admin" }}
+        </div>
+        <p class="text-muted small mb-0 d-none d-md-block mt-1">Hệ thống quản lý phòng máy Cơ sở 2</p>
     </div>
-    <div class="d-flex flex-wrap align-items-center gap-2">
-        <span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 rounded-pill"><i class="bi bi-person-circle me-1"></i>{{ request.headers.get("Ngrok-Auth-User-Email", "Admin") }}</span>
-        <a href="{{ url_for('home_page') }}" class="btn btn-outline-primary btn-sm fw-bold rounded-pill px-3"><i class="bi bi-house-door me-1"></i>Về Trang Chủ</a>
-    </div>
+    <a href="{{ url_for('home_page') }}" class="btn btn-outline-secondary btn-sm fw-bold rounded-3 px-3 py-2 text-nowrap shadow-sm">
+        🏠 <span class="d-none d-sm-inline">Về </span>Trang chủ
+    </a>
 </div>
 
 <!-- ========================================== -->
-<!-- THANH ĐIỀU HƯỚNG CÁC TAB & CSS ĐỒNG BỘ DESKTOP/MOBILE -->
+<!-- THANH ĐIỀU HƯỚNG CÁC TAB (LƯỚI 2 DÒNG × 4 CỘT) & CSS ĐỒNG BỘ DESKTOP/MOBILE -->
 <style>
     .admin-wrapper-font {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         letter-spacing: -0.01em;
     }
-    #adminTabs {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        gap: 4px;
+    #adminTabs.admin-grid-nav {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        background: #ffffff;
+        padding: 10px;
+        border-radius: 16px;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+        border: 1px solid #e2e8f0;
+        list-style: none;
     }
-    #adminTabs::-webkit-scrollbar {
-        display: none;
+    #adminTabs.admin-grid-nav .nav-item {
+        margin: 0;
+        width: 100%;
     }
-    #adminTabs .nav-link {
+    #adminTabs.admin-grid-nav .nav-link {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
         font-size: 0.85rem;
-        padding: 0.55rem 0.85rem;
-        color: #475569;
-        border-radius: 8px;
+        font-weight: 600;
+        padding: 0.65rem 0.5rem;
+        color: #334155;
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
         transition: all 0.18s ease;
-        white-space: nowrap;
+        text-align: center;
+        line-height: 1.2;
     }
-    #adminTabs .nav-link:hover:not(.active) {
+    #adminTabs.admin-grid-nav .nav-link .tab-icon {
+        font-size: 1.15rem;
+        line-height: 1;
+    }
+    #adminTabs.admin-grid-nav .nav-link .badge-dot {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: #dc3545;
+        color: #fff;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+        z-index: 2;
+    }
+    #adminTabs.admin-grid-nav .nav-link:hover:not(.active) {
         background-color: #f1f5f9;
+        border-color: #cbd5e1;
         color: #0f172a;
     }
-    #adminTabs .nav-link.active {
-        background-color: var(--primary-color, #0066ff);
-        color: #fff;
-        box-shadow: 0 4px 10px rgba(0, 102, 255, 0.22);
+    #adminTabs.admin-grid-nav .nav-link.active {
+        background-color: #0d6efd !important;
+        border-color: #0d6efd !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.25);
+    }
+
+    /* Thẻ duyệt nhanh trên Mobile (Yêu cầu, Sự cố, Báo nghỉ) */
+    .mobile-action-card {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 14px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+        margin-bottom: 12px;
+    }
+    .mobile-action-meta {
+        font-size: 0.82rem;
+        color: #475569;
+        margin-bottom: 5px;
+    }
+
+    /* Dãy nút chọn nhanh Thứ trên Tab Thời khóa biểu */
+    .tt-day-pills {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 5px;
+    }
+    .tt-day-pill {
+        text-align: center;
+        padding: 6px 2px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        border-radius: 8px;
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid #cbd5e1;
+        text-decoration: none;
+        transition: all 0.15s ease;
+    }
+    .tt-day-pill:hover {
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+    .tt-day-pill.active {
+        background: #1a73e8;
+        color: #ffffff;
+        border-color: #1a73e8;
+        box-shadow: 0 2px 6px rgba(26, 115, 232, 0.28);
+    }
+
+    /* Cố định cột Tiết khi cuộn ngang trên bảng Thời khóa biểu */
+    .tt-sticky-col {
+        position: sticky;
+        left: 0;
+        z-index: 6;
+        background-color: #f8fafc !important;
+        box-shadow: 2px 0 5px rgba(15, 23, 42, 0.04);
     }
 
     /* Bộ lọc nhanh trên Tab Lịch học */
     .schedule-filter-pill {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 4px;
         font-size: 0.76rem;
-        padding: 4px 11px;
-        border-radius: 999px;
+        padding: 5px 11px;
+        border-radius: 8px;
         font-weight: 600;
         text-decoration: none;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #cbd5e1;
         background: #f8fafc;
         color: #475569;
         transition: all 0.15s ease;
@@ -68,19 +166,19 @@
         color: #0f172a;
     }
     .schedule-filter-pill.active-all {
-        background: #eff6ff;
-        color: #1d4ed8;
-        border-color: #bfdbfe;
+        background: #0d6efd;
+        color: #ffffff;
+        border-color: #0d6efd;
     }
     .schedule-filter-pill.active-open {
-        background: #ecfdf5;
-        color: #047857;
-        border-color: #a7f3d0;
+        background: #059669;
+        color: #ffffff;
+        border-color: #059669;
     }
     .schedule-filter-pill.active-locked {
-        background: #fef2f2;
-        color: #b91c1c;
-        border-color: #fecaca;
+        background: #dc2626;
+        color: #ffffff;
+        border-color: #dc2626;
     }
 
     /* Bảng Lịch học */
@@ -110,7 +208,7 @@
     .gcal-toolbar {
         background: #ffffff;
         border-radius: 14px;
-        padding: 10px 14px;
+        padding: 12px 14px;
         box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
         border: 1px solid #e2e8f0;
     }
@@ -232,14 +330,24 @@
         box-shadow: 0 1px 4px rgba(0,0,0,0.1);
     }
 
-    @media (max-width: 768px) {
-        .gcal-toolbar {
-            padding: 10px 12px;
+    @media (max-width: 767.98px) {
+        #adminTabs.admin-grid-nav {
+            gap: 6px;
+            padding: 8px;
         }
-        .week-range-badge {
-            width: 100%;
-            text-align: center;
-            font-size: 0.75rem;
+        #adminTabs.admin-grid-nav .nav-link {
+            flex-direction: column;
+            gap: 3px;
+            padding: 8px 4px;
+            font-size: 0.72rem;
+            border-radius: 10px;
+        }
+        #adminTabs.admin-grid-nav .nav-link .tab-icon {
+            font-size: 1.15rem;
+            margin-bottom: 1px;
+        }
+        .gcal-toolbar {
+            padding: 10px;
         }
         .schedule-mgmt-table th,
         .schedule-mgmt-table td {
@@ -247,58 +355,195 @@
             padding: 8px 6px;
         }
     }
+
+    /* CSS cho Tab 📊 Dashboard Mới */
+    .dash-kpi-card {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 14px 16px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+        height: 100%;
+    }
+    .dash-kpi-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #64748b;
+        letter-spacing: 0.02em;
+    }
+    .dash-kpi-val {
+        font-size: 1.65rem;
+        font-weight: 800;
+        line-height: 1.2;
+        margin: 4px 0;
+    }
+    .dash-kpi-sub {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+    .dash-section-card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 16px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
+    .room-status-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+    }
+    @media (max-width: 767.98px) {
+        .room-status-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        .dash-kpi-card {
+            padding: 10px 12px;
+        }
+        .dash-kpi-val {
+            font-size: 1.35rem;
+        }
+    }
+    .room-node {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border-left: 4px solid #10b981;
+        transition: all 0.2s ease;
+    }
+    .room-node.status-online {
+        border-left-color: #10b981;
+        background: #f8fafc;
+    }
+    .room-node.status-warn {
+        border-left-color: #f59e0b;
+        background: #fffbeb;
+    }
+    .room-node.status-offline {
+        border-left-color: #ef4444;
+        background: #fef2f2;
+    }
+    .ping-pill {
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        white-space: nowrap;
+    }
+    .ping-ok { background: #d1fae5; color: #065f46; }
+    .ping-warn { background: #fef3c7; color: #92400e; }
+    .ping-err { background: #fee2e2; color: #991b1b; }
+    .ping-wait { background: #e2e8f0; color: #475569; }
+
+    .dash-bar-chart {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        height: 150px;
+        padding: 18px 8px 0 8px;
+        border-bottom: 1px solid #cbd5e1;
+        gap: 8px;
+    }
+    .dash-bar-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100%;
+        justify-content: flex-end;
+    }
+    .dash-bar-fill {
+        width: 100%;
+        max-width: 36px;
+        border-radius: 6px 6px 0 0;
+        background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+        transition: height 0.3s ease;
+    }
+    .dash-donut-ring {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+    }
+    .dash-donut-hole {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 0.95rem;
+        line-height: 1.1;
+    }
 </style>
 {% set active_tab = request.args.get('tab', 'dashboard') %}
-<ul class="nav nav-pills mb-4 bg-white p-2 rounded-3 shadow-sm border d-flex justify-content-between flex-nowrap admin-wrapper-font" id="adminTabs" role="tablist" style="white-space: nowrap;">
+{% set pending_issues = issues|selectattr("status", "equalto", "Pending")|list %}
+{% set pending_cancellations = cancellations|selectattr("status", "equalto", "Pending")|list %}
+<ul class="nav nav-pills mb-3 admin-grid-nav admin-wrapper-font" id="adminTabs" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab == 'dashboard' %}active{% endif %} fw-bold" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard" type="button" role="tab" >
-            <i class="bi bi-speedometer2 me-1"></i> Trang chủ
+        <button class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard" type="button" role="tab">
+            <span class="tab-icon">📊</span>
+            <span>Dashboard</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab == 'requests' %}active{% endif %} fw-bold" id="requests-tab" data-bs-toggle="tab" data-bs-target="#requests" type="button" role="tab" >
-            <i class="bi bi-bell me-1"></i> Yêu cầu
+        <button class="nav-link {% if active_tab == 'requests' %}active{% endif %}" id="requests-tab" data-bs-toggle="tab" data-bs-target="#requests" type="button" role="tab">
             {% if pending_requests|length > 0 %}
-                <span class="badge bg-danger ms-1">{{ pending_requests|length }}</span>
+                <span class="badge-dot">{{ pending_requests|length }}</span>
             {% endif %}
+            <span class="tab-icon">📩</span>
+            <span>Yêu cầu</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab == 'schedules' %}active{% endif %} fw-bold" id="schedules-tab" data-bs-toggle="tab" data-bs-target="#schedules" type="button" role="tab" >
-            <i class="bi bi-journal-text me-1"></i> Lịch học
+        <button class="nav-link {% if active_tab == 'schedules' %}active{% endif %}" id="schedules-tab" data-bs-toggle="tab" data-bs-target="#schedules" type="button" role="tab">
+            <span class="tab-icon">📅</span>
+            <span>Lịch học</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab == 'timetable' %}active{% endif %} fw-bold" id="timetable-tab" data-bs-toggle="tab" data-bs-target="#timetable" type="button" role="tab" >
-            <i class="bi bi-calendar3 me-1"></i> Thời khóa biểu
+        <button class="nav-link {% if active_tab == 'timetable' %}active{% endif %}" id="timetable-tab" data-bs-toggle="tab" data-bs-target="#timetable" type="button" role="tab">
+            <span class="tab-icon">🗓️</span>
+            <span>TKB Tuần</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab == 'issues' %}active{% endif %} fw-bold" id="issues-tab" data-bs-toggle="tab" data-bs-target="#issues" type="button" role="tab" >
-            <i class="bi bi-tools me-1"></i> Quản lý sự cố
-            {% set pending_issues = issues|selectattr("status", "equalto", "Pending")|list %}
+        <button class="nav-link {% if active_tab == 'issues' %}active{% endif %}" id="issues-tab" data-bs-toggle="tab" data-bs-target="#issues" type="button" role="tab">
             {% if pending_issues|length > 0 %}
-                <span class="badge bg-danger ms-1">{{ pending_issues|length }}</span>
+                <span class="badge-dot">{{ pending_issues|length }}</span>
             {% endif %}
+            <span class="tab-icon">🛠️</span>
+            <span>Sự cố</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab == 'freerooms' %}active{% endif %} fw-bold" id="freerooms-tab" data-bs-toggle="tab" data-bs-target="#freerooms" type="button" role="tab" >
-            <i class="bi bi-search me-1"></i> Tìm phòng trống
+        <button class="nav-link {% if active_tab == 'freerooms' %}active{% endif %}" id="freerooms-tab" data-bs-toggle="tab" data-bs-target="#freerooms" type="button" role="tab">
+            <span class="tab-icon">🔍</span>
+            <span>Phòng trống</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab == 'cancellations' %}active{% endif %} fw-bold text-danger" id="cancellations-tab" data-bs-toggle="tab" data-bs-target="#cancellations" type="button" role="tab" >
-            <i class="bi bi-exclamation-triangle me-1"></i> Báo nghỉ gấp
-            {%- set pending_cancellations = cancellations|selectattr("status", "equalto", "Pending")|list %}
+        <button class="nav-link {% if active_tab == 'cancellations' %}active{% endif %}" id="cancellations-tab" data-bs-toggle="tab" data-bs-target="#cancellations" type="button" role="tab">
             {% if pending_cancellations|length > 0 %}
-                <span class="badge bg-danger ms-1">{{ pending_cancellations|length }}</span>
+                <span class="badge-dot">{{ pending_cancellations|length }}</span>
             {% endif %}
+            <span class="tab-icon">🏃</span>
+            <span>Báo nghỉ</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link {% if active_tab == 'security' %}active{% endif %} fw-bold" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab" >
-            <i class="bi bi-shield-lock me-1"></i> Security
+        <button class="nav-link {% if active_tab == 'security' %}active{% endif %}" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab">
+            <span class="tab-icon">🛡️</span>
+            <span>Bảo mật</span>
         </button>
     </li>
 </ul>
@@ -307,30 +552,199 @@
 <!-- NỘI DUNG CÁC TAB -->
 <div class="tab-content" id="adminTabsContent">
     
-    <!-- TAB 1: DASHBOARD (Trang chủ) -->
-    <div class="tab-pane fade {% if active_tab == 'dashboard' %}show active{% endif %}" id="dashboard" role="tabpanel">
-        <div class="row">
-            <div class="col-md-4 mb-3">
-                <div class="card bg-white shadow-sm border-0 h-100 border-start border-primary border-4">
-                    <div class="card-body p-4">
-                        <h6 class="card-title text-muted fw-bold small">TỔNG SỐ LỊCH HỌC</h6>
-                        <h2 class="display-5 fw-bold mb-0 text-dark">{{ schedule_counts['all'] }}</h2>
+    <!-- TAB 1: 📊 DASHBOARD TỔNG QUAN & LIVE STATUS PAGE -->
+    <div class="tab-pane fade {% if active_tab == 'dashboard' %}show active{% endif %} admin-wrapper-font" id="dashboard" role="tabpanel">
+        {% set total_pending_tasks = (pending_requests|length) + (pending_issues|length) + (pending_cancellations|length) %}
+
+        <!-- HÀNG 1: 4 THẺ CHỈ SỐ KPI (2x2 trên Mobile, 1x4 trên Desktop) -->
+        <div class="row g-2 g-md-3 mb-3">
+            <div class="col-6 col-lg-3">
+                <div class="dash-kpi-card" style="border-left: 4px solid #2563eb;">
+                    <div class="dash-kpi-title">📅 TỔNG CA HỌC TUẦN NÀY</div>
+                    <div class="dash-kpi-val text-primary">{{ schedule_counts['all'] }} <span class="fs-6 fw-semibold text-muted">ca</span></div>
+                    <div class="dash-kpi-sub">🔓 {{ schedule_counts['active'] }} đang mở • 🔒 {{ schedule_counts['locked'] }} khóa/KT</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="dash-kpi-card" style="border-left: 4px solid #10b981;">
+                    <div class="dash-kpi-title">⚡ CÔNG SUẤT PHÒNG MÁY</div>
+                    <div class="dash-kpi-val text-success">{{ dashboard_stats['utilization_pct'] }}%</div>
+                    <div class="dash-kpi-sub">Cao điểm: Thứ {{ dashboard_stats['peak_dow'] }} ({{ dashboard_stats['peak_dow_pct'] }}%)</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="dash-kpi-card" style="border-left: 4px solid #f59e0b;">
+                    <div class="dash-kpi-title">🔔 CẦN XỬ LÝ NGAY</div>
+                    <div class="dash-kpi-val text-warning">{{ total_pending_tasks }} <span class="fs-6 fw-semibold text-dark">mục</span></div>
+                    <div class="dash-kpi-sub">{{ pending_requests|length }} mượn • {{ pending_issues|length }} sự cố • {{ pending_cancellations|length }} nghỉ</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="dash-kpi-card" style="border-left: 4px solid #06b6d4;">
+                    <div class="dash-kpi-title">🌐 INTERNET / NETWORK</div>
+                    <div class="dash-kpi-val text-info" id="kpiNetworkVal">
+                        {{ dashboard_stats['online_rooms_count'] }}/8
+                        <span class="fs-6 fw-semibold {% if dashboard_stats['offline_rooms_list'] %}text-danger{% else %}text-success{% endif %}">Online</span>
+                    </div>
+                    <div class="dash-kpi-sub" id="kpiNetworkSub">
+                        {% if dashboard_stats['offline_rooms_list'] %}
+                            <span class="text-danger fw-bold">⚠️ {{ dashboard_stats['offline_rooms_list']|join(', ') }} mất kết nối</span>
+                        {% else %}
+                            <span class="text-success fw-semibold">✅ Tất cả phòng kết nối ổn định</span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-            <div class="col-md-4 mb-3">
-                <div class="card bg-white shadow-sm border-0 h-100 border-start border-warning border-4">
-                    <div class="card-body p-4">
-                        <h6 class="card-title text-muted fw-bold small">YÊU CẦU CHỜ DUYỆT</h6>
-                        <h2 class="display-5 fw-bold mb-0 text-dark">{{ pending_requests|length }}</h2>
+        </div>
+
+        <!-- HÀNG 2: LIVE STATUS PAGE — TÌNH TRẠNG INTERNET (B42LAB NETAGENT) & HOẠT ĐỘNG 8 PHÒNG -->
+        <div class="dash-section-card mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h6 class="fw-bold mb-0 text-dark">🌐 Live Status Page — Tình trạng Internet & Hoạt động 8 Phòng máy</h6>
+                    <div class="text-muted" style="font-size: 0.74rem;" id="netSyncStatusText">
+                        🔄 Cơ chế: <strong>B42Lab NetAgent (Heartbeat Push)</strong> • Cập nhật lúc: <span id="lastNetUpdateLabel" class="fw-semibold text-primary">{{ dashboard_stats['last_net_update'] or 'Vừa xong' }}</span>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-success fw-bold py-1 px-2" style="font-size: 0.75rem;" id="btnPingNow" onclick="triggerPingNow()">
+                        ⚡ Ping kiểm tra ngay
+                    </button>
+                    <button type="button" class="btn btn-sm btn-primary fw-bold py-1 px-3" style="font-size: 0.75rem;" data-bs-toggle="modal" data-bs-target="#netAgentModal">
+                        ⚙️ Cấu hình IP & NetAgent
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lưới 8 Phòng máy (4 cột trên Desktop, 2 cột trên Mobile) -->
+            <div class="room-status-grid" id="roomStatusGrid">
+                {% for rc in dashboard_stats['room_live_cards'] %}
+                {% set is_off = (rc['net_status'] == 'offline') %}
+                {% set is_high_ping = (rc['net_status'] == 'online' and rc['ping_ms'] and rc['ping_ms'] > 150) %}
+                <div class="room-node {% if is_off %}status-offline{% elif is_high_ping %}status-warn{% else %}status-online{% endif %}" id="room-node-{{ rc['room']|replace('.', '_') }}" data-room="{{ rc['room'] }}">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div>
+                            <strong style="font-size: 0.86rem;">Phòng {{ rc['room'] }}</strong>
+                            <span class="text-muted d-none d-xl-inline ms-1" style="font-size: 0.65rem;" id="room-ip-{{ rc['room']|replace('.', '_') }}">({{ rc['target_ip'] }})</span>
+                        </div>
+                        {% if is_off %}
+                            <span class="ping-pill ping-err" id="room-ping-{{ rc['room']|replace('.', '_') }}">🔴 Offline</span>
+                        {% elif is_high_ping %}
+                            <span class="ping-pill ping-warn" id="room-ping-{{ rc['room']|replace('.', '_') }}">🟡 {{ rc['ping_ms'] }}ms</span>
+                        {% else %}
+                            <span class="ping-pill ping-ok" id="room-ping-{{ rc['room']|replace('.', '_') }}">🟢 {{ rc['ping_ms'] or 12 }}ms</span>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center gap-1">
+                        <div class="{{ rc['activity_class'] }} text-truncate" style="font-size: 0.73rem;" title="{{ rc['activity_label'] }}">
+                            {{ rc['activity_label'] }}
+                        </div>
+                        {% if rc['issue_count'] > 0 %}
+                        <a href="{{ url_for('admin_panel', tab='issues') }}" class="badge bg-warning bg-opacity-25 text-dark border border-warning text-decoration-none" style="font-size: 0.62rem;" title="Phòng này đang có {{ rc['issue_count'] }} báo cáo sự cố thiết bị chưa đóng ở Tab Sự cố">
+                            🛠️ {{ rc['issue_count'] }}
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- HÀNG 3: BIỂU ĐỒ PHÂN BỔ CA HỌC & LỊCH TRỰC MỞ/KHÓA CỬA HÔM NAY -->
+        <div class="row g-3">
+            <!-- Biểu đồ 1: So sánh số ca học giữa 8 phòng -->
+            <div class="col-12 col-lg-5">
+                <div class="dash-section-card h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold text-dark" style="font-size: 0.9rem;">📊 Tỷ lệ phân bổ ca học theo Phòng</span>
+                        <span class="text-muted" style="font-size: 0.72rem;">Số ca / tuần</span>
+                    </div>
+                    <div class="dash-bar-chart">
+                        {% for r in rooms %}
+                        {% set r_stat = dashboard_stats['room_stats'][r] %}
+                        <div class="dash-bar-col">
+                            <span class="fw-bold text-dark mb-1" style="font-size: 0.72rem;">{{ r_stat['total'] }}</span>
+                            <div class="dash-bar-fill" style="height: {{ r_stat['height_pct'] }}%;" title="Phòng {{ r }}: {{ r_stat['active'] }} ca mở, {{ r_stat['locked'] }} ca khóa"></div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex justify-content-between px-2 pt-2">
+                        {% for r in rooms %}
+                        <span class="fw-bold text-secondary" style="font-size: 0.74rem; flex: 1; text-align: center;">{{ r }}</span>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
-            <div class="col-md-4 mb-3">
-                <div class="card bg-white shadow-sm border-0 h-100 border-start border-success border-4">
-                    <div class="card-body p-4">
-                        <h6 class="card-title text-muted fw-bold small">TỔNG SỐ PHÒNG MÁY</h6>
-                        <h2 class="display-5 fw-bold mb-0 text-dark">8</h2>
+
+            <!-- Biểu đồ 2: Tỷ lệ theo Khoa / Đơn vị -->
+            <div class="col-12 col-md-5 col-lg-3">
+                <div class="dash-section-card h-100">
+                    <div class="fw-bold text-dark mb-2" style="font-size: 0.9rem;">🍩 Tỷ lệ theo Đơn vị</div>
+                    <div class="dash-donut-ring my-2" style="background: {{ dashboard_stats['donut_gradient'] }};">
+                        <div class="dash-donut-hole">
+                            <span>{{ schedule_counts['all'] }}</span>
+                            <small class="text-muted fw-normal" style="font-size: 0.65rem;">ca học</small>
+                        </div>
+                    </div>
+                    <div class="mt-2" style="font-size: 0.76rem;">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>🔵 Toán - Tin</span>
+                            <strong>{{ dashboard_stats['dept_pcts']['Toán - Tin'] }}% ({{ dashboard_stats['dept_counts']['Toán - Tin'] }})</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>🟢 CNTT</span>
+                            <strong>{{ dashboard_stats['dept_pcts']['CNTT'] }}% ({{ dashboard_stats['dept_counts']['CNTT'] }})</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>🟡 Vật lý / VLKT</span>
+                            <strong>{{ dashboard_stats['dept_pcts']['Vật lý / VLKT'] }}% ({{ dashboard_stats['dept_counts']['Vật lý / VLKT'] }})</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>⚪ Khác</span>
+                            <strong>{{ dashboard_stats['dept_pcts']['Khác'] }}% ({{ dashboard_stats['dept_counts']['Khác'] }})</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Widget 3: Trực Mở / Khóa Cửa Hôm Nay -->
+            <div class="col-12 col-md-7 col-lg-4">
+                <div class="dash-section-card h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold text-dark" style="font-size: 0.9rem;">🔑 Trực Mở / Khóa Cửa Hôm Nay</span>
+                        <span class="badge bg-primary rounded-pill">Thứ {{ dashboard_stats['display_dow'] }}</span>
+                    </div>
+                    <div class="p-2 px-3 rounded-3 bg-light border mb-2" style="font-size: 0.78rem;">
+                        <div class="fw-bold text-warning-emphasis mb-1">☀️ Ca Sáng (Tiết 1 - 5):</div>
+                        <div class="mb-1">
+                            <span class="badge bg-success me-1">🔓 Mở</span>
+                            <strong>{{ dashboard_stats['morning_open']|join(', ') if dashboard_stats['morning_open'] else 'Không có' }}</strong>
+                        </div>
+                        {% if dashboard_stats['morning_locked'] %}
+                        <div class="mb-1">
+                            <span class="badge bg-danger me-1">🔒 Khóa</span>
+                            <strong>{{ dashboard_stats['morning_locked']|join(', ') }}</strong> <span class="text-muted">(Nghỉ/KT sớm)</span>
+                        </div>
+                        {% endif %}
+                        <div class="text-muted" style="font-size: 0.72rem;">
+                            ⚪ Trống: {{ dashboard_stats['morning_free_rooms']|join(', ') if dashboard_stats['morning_free_rooms'] else 'Hết phòng' }}
+                        </div>
+                    </div>
+                    <div class="p-2 px-3 rounded-3 bg-light border" style="font-size: 0.78rem;">
+                        <div class="fw-bold text-info-emphasis mb-1">🌙 Ca Chiều (Tiết 6 - 10):</div>
+                        <div class="mb-1">
+                            <span class="badge bg-success me-1">🔓 Mở</span>
+                            <strong>{{ dashboard_stats['afternoon_open']|join(', ') if dashboard_stats['afternoon_open'] else 'Không có' }}</strong>
+                        </div>
+                        {% if dashboard_stats['afternoon_locked'] %}
+                        <div class="mb-1">
+                            <span class="badge bg-danger me-1">🔒 Khóa</span>
+                            <strong>{{ dashboard_stats['afternoon_locked']|join(', ') }}</strong> <span class="text-muted">(Nghỉ/KT sớm)</span>
+                        </div>
+                        {% endif %}
+                        <div class="text-muted" style="font-size: 0.72rem;">
+                            ⚪ Trống: {{ dashboard_stats['afternoon_free_rooms']|join(', ') if dashboard_stats['afternoon_free_rooms'] else 'Hết phòng' }}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -338,9 +752,65 @@
     </div>
 
     <!-- TAB 2: XỬ LÝ YÊU CẦU -->
-    <div class="tab-pane fade {% if active_tab == 'requests' %}show active{% endif %}" id="requests" role="tabpanel">
-        <div class="card shadow-sm border-0 ">
-            <div class="card-body p-0">
+    <div class="tab-pane fade {% if active_tab == 'requests' %}show active{% endif %} admin-wrapper-font" id="requests" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+            <span class="fw-bold text-dark">📩 Yêu cầu mượn phòng / dạy bù</span>
+            <span class="badge bg-danger rounded-pill">{{ pending_requests|length }} chờ duyệt</span>
+        </div>
+
+        <!-- Giao diện Thẻ (Card) trên Mobile (< 768px) -->
+        <div class="d-md-none">
+            {% for req in pending_requests %}
+            <div class="mobile-action-card" style="border-left: 4px solid #f59e0b;">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div>
+                        <span class="badge bg-primary me-1">P.{{ req['room'] }}</span>
+                        <strong style="font-size: 0.9rem;">Thứ {{ req['day_of_week'] }} • Tiết {{ req['start_period'] }} - {{ req['end_period'] }}</strong>
+                    </div>
+                    <span class="badge bg-warning text-dark" style="font-size: 0.72rem;">⏳ Chờ duyệt</span>
+                </div>
+                <div class="mobile-action-meta">
+                    👨‍🏫 <strong>{{ req['requester_name'] }}</strong> <span class="text-muted">({{ req['department'] }})</span>
+                </div>
+                {% if req['subject_name'] or req['class_code'] or req['subject_code'] %}
+                <div class="mobile-action-meta">
+                    📘 <strong>{{ req['subject_name'] or 'Môn học' }}</strong>
+                    {% if req['class_code'] %} • <span class="text-primary fw-semibold">Lớp {{ req['class_code'] }}</span>{% endif %}
+                </div>
+                {% endif %}
+                <div class="mobile-action-meta bg-light p-2 rounded-3 mb-2" style="font-size: 0.78rem;">
+                    📝 <em>{{ req['purpose'] }}</em>
+                    {% if req['software_required'] %}
+                        <div class="text-danger fw-semibold mt-1">💻 Phần mềm: {{ req['software_required'] }}</div>
+                    {% endif %}
+                    {% if req['created_at'] %}
+                        <div class="text-muted mt-1" style="font-size: 0.7rem;"><i class="bi bi-clock me-1"></i>Gửi lúc: {{ req['created_at'] }}</div>
+                    {% endif %}
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <form action="{{ url_for('approve_request', request_id=req['id']) }}" method="POST" class="m-0">
+                            <button type="submit" class="btn btn-success btn-sm w-100 fw-bold py-2 shadow-sm">✅ Duyệt ngay</button>
+                        </form>
+                    </div>
+                    <div class="col-6">
+                        <form action="{{ url_for('reject_request', request_id=req['id']) }}" method="POST" class="m-0" onsubmit="let reason = prompt('Bạn có chắc chắn muốn từ chối yêu cầu này? Vui lòng nhập lý do (tùy chọn):'); if(reason === null) return false; this.insertAdjacentHTML('beforeend', '<input type=\'hidden\' name=\'admin_note\' value=\'' + reason + '\'>'); return true;">
+                            <button type="submit" class="btn btn-outline-danger btn-sm w-100 fw-bold py-2">❌ Từ chối</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card border-0 shadow-sm rounded-4 p-4 text-center text-muted">
+                <i class="bi bi-inbox fs-1 text-secondary opacity-50"></i>
+                <div class="mt-2">Không có yêu cầu nào đang chờ xử lý.</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Giao diện Bảng trên Desktop (>= 768px) -->
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden d-none d-md-block">
+            <div class="card-body p-0 table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
@@ -404,31 +874,75 @@
     <!-- TAB 3: QUẢN LÝ DANH SÁCH MÔN HỌC (LỊCH HỌC) -->
     <div class="tab-pane fade {% if active_tab == 'schedules' %}show active{% endif %} admin-wrapper-font" id="schedules" role="tabpanel">
         <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
-            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2 py-3 px-4 border-bottom">
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <span class="fw-bold text-dark fs-6 me-1"><i class="bi bi-journal-bookmark-fill text-primary me-1"></i>Dữ liệu thời khóa biểu hiện hành</span>
-                    <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='all') }}" class="schedule-filter-pill {% if schedule_filter == 'all' %}active-all{% endif %}">
-                        Tất cả ({{ schedule_counts['all'] }})
-                    </a>
-                    <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='active') }}" class="schedule-filter-pill {% if schedule_filter == 'active' %}active-open{% else %}text-success border-success-subtle{% endif %}">
-                        🔓 Đang học / Mở cửa ({{ schedule_counts['active'] }})
-                    </a>
-                    <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='locked') }}" class="schedule-filter-pill {% if schedule_filter == 'locked' %}active-locked{% else %}text-danger border-danger-subtle{% endif %}">
-                        🔒 Đã KT sớm / Khóa cửa ({{ schedule_counts['locked'] }})
-                    </a>
+            <div class="card-header bg-white py-3 px-3 px-md-4 border-bottom">
+                <!-- Giao diện Thanh công cụ trên Mobile: 2 hàng × 3 cột cân đối -->
+                <div class="d-md-none">
+                    <div class="fw-bold text-dark mb-2" style="font-size: 0.9rem;">📅 Quản lý Lịch học Chính khóa</div>
+                    <div class="row g-1 mb-2">
+                        <div class="col-4">
+                            <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='all') }}" class="schedule-filter-pill w-100 {% if schedule_filter == 'all' %}active-all{% endif %}" style="font-size: 0.72rem; padding: 6px 4px;">
+                                Tất cả ({{ schedule_counts['all'] }})
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='active') }}" class="schedule-filter-pill w-100 {% if schedule_filter == 'active' %}active-open{% else %}text-success border-success-subtle{% endif %}" style="font-size: 0.72rem; padding: 6px 4px;">
+                                🔓 Mở ({{ schedule_counts['active'] }})
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='locked') }}" class="schedule-filter-pill w-100 {% if schedule_filter == 'locked' %}active-locked{% else %}text-danger border-danger-subtle{% endif %}" style="font-size: 0.72rem; padding: 6px 4px;">
+                                🔒 Khóa ({{ schedule_counts['locked'] }})
+                            </a>
+                        </div>
+                    </div>
+                    <div class="row g-1">
+                        <div class="col-4">
+                            <button type="button" class="btn btn-sm btn-primary w-100 fw-bold py-1" style="font-size: 0.74rem;" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
+                                + Thêm Lịch
+                            </button>
+                        </div>
+                        <div class="col-4">
+                            <button type="button" class="btn btn-sm btn-success w-100 fw-bold py-1" style="font-size: 0.74rem;" data-bs-toggle="modal" data-bs-target="#importScheduleModal">
+                                📥 Import
+                            </button>
+                        </div>
+                        <div class="col-4">
+                            <form action="{{ url_for('delete_all_schedules') }}" method="POST" class="m-0" onsubmit="return confirm('⚠️ Xóa TOÀN BỘ lịch học? Không thể hoàn tác!');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger w-100 fw-bold py-1" style="font-size: 0.74rem;">
+                                    🗑️ Xóa hết
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <form action="{{ url_for('delete_all_schedules') }}" method="POST" class="d-inline" onsubmit="return confirm('⚠️ Xóa TOÀN BỘ lịch học? Không thể hoàn tác!');">
-                        <button type="submit" class="btn btn-sm btn-danger fw-bold shadow-sm px-2" style="font-size: 0.78rem;">
-                            <i class="bi bi-trash me-1"></i>Xóa Tất Cả
+
+                <!-- Giao diện Thanh công cụ trên Desktop -->
+                <div class="d-none d-md-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="fw-bold text-dark fs-6 me-1">📅 Quản lý Lịch học Chính khóa</span>
+                        <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='all') }}" class="schedule-filter-pill {% if schedule_filter == 'all' %}active-all{% endif %}">
+                            Tất cả ({{ schedule_counts['all'] }})
+                        </a>
+                        <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='active') }}" class="schedule-filter-pill {% if schedule_filter == 'active' %}active-open{% else %}text-success border-success-subtle{% endif %}">
+                            🔓 Đang học / Mở cửa ({{ schedule_counts['active'] }})
+                        </a>
+                        <a href="{{ url_for('admin_panel', tab='schedules', schedule_filter='locked') }}" class="schedule-filter-pill {% if schedule_filter == 'locked' %}active-locked{% else %}text-danger border-danger-subtle{% endif %}">
+                            🔒 Đã KT sớm / Khóa cửa ({{ schedule_counts['locked'] }})
+                        </a>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-primary-saas fw-bold shadow-sm px-3" style="font-size: 0.78rem;" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
+                            + Thêm Lịch
                         </button>
-                    </form>
-                    <button type="button" class="btn btn-sm btn-success fw-bold shadow-sm px-2" style="font-size: 0.78rem;" data-bs-toggle="modal" data-bs-target="#importScheduleModal">
-                        <i class="bi bi-file-earmark-excel me-1"></i>Import Excel (15 tuần)
-                    </button>
-                    <button type="button" class="btn btn-sm btn-primary-saas fw-bold shadow-sm px-2" style="font-size: 0.78rem;" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
-                        <i class="bi bi-plus-lg me-1"></i>Thêm Lịch
-                    </button>
+                        <button type="button" class="btn btn-sm btn-success fw-bold shadow-sm px-3" style="font-size: 0.78rem;" data-bs-toggle="modal" data-bs-target="#importScheduleModal">
+                            📥 Import Excel (15 tuần)
+                        </button>
+                        <form action="{{ url_for('delete_all_schedules') }}" method="POST" class="d-inline" onsubmit="return confirm('⚠️ Xóa TOÀN BỘ lịch học? Không thể hoàn tác!');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger fw-bold shadow-sm px-3" style="font-size: 0.78rem;">
+                                🗑️ Xóa hết
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -436,7 +950,7 @@
                     <table class="table table-hover schedule-mgmt-table mb-0">
                         <thead style="position: sticky; top: 0; z-index: 5;">
                             <tr>
-                                <th class="ps-3">ID</th>
+                                <th class="ps-3 d-none d-md-table-cell">ID</th>
                                 <th>Phòng</th>
                                 <th>Thứ / Tiết</th>
                                 <th>Mã Lớp</th>
@@ -451,7 +965,7 @@
                         <tbody>
                             {% for row in schedules %}
                             <tr class="{% if row['is_ended_early'] %}row-ended-early{% endif %}">
-                                <td class="ps-3 text-muted">{{ row['id'] }}</td>
+                                <td class="ps-3 text-muted d-none d-md-table-cell">{{ row['id'] }}</td>
                                 <td>
                                     <span class="badge {% if row['is_ended_early'] %}bg-secondary bg-opacity-25 text-secondary border-secondary{% else %}bg-primary bg-opacity-10 text-primary border-primary{% endif %} border fw-bold px-2 py-1">
                                         P.{{ row['room'] }}
@@ -551,52 +1065,60 @@
     <div class="tab-pane fade {% if active_tab == 'timetable' %}show active{% endif %} admin-wrapper-font" id="timetable" role="tabpanel">
         {% set selected_day = request.args.get('timetable_day', 'all') %}
         <!-- Thanh công cụ Google Calendar & Chọn phòng -->
-        <div class="gcal-toolbar mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=today_date_str, timetable_day=selected_day) }}" class="btn-gcal">
-                    📅 Hôm nay
-                </a>
-                <div class="d-inline-flex gap-1">
-                    <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=prev_week_date_str, timetable_day=selected_day) }}" class="btn-gcal px-2" title="Tuần trước">◀</a>
-                    <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=next_week_date_str, timetable_day=selected_day) }}" class="btn-gcal px-2" title="Tuần kế tiếp">▶</a>
+        <div class="gcal-toolbar mb-3">
+            <!-- Hàng 1: Nút Hôm nay, < >, và Nhãn Tuần -->
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <div class="d-flex align-items-center gap-1">
+                    <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=today_date_str, timetable_day=selected_day) }}" class="btn-gcal">
+                        Hôm nay
+                    </a>
+                    <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=prev_week_date_str, timetable_day=selected_day) }}" class="btn-gcal px-2" title="Tuần trước">‹</a>
+                    <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=next_week_date_str, timetable_day=selected_day) }}" class="btn-gcal px-2" title="Tuần kế tiếp">›</a>
                 </div>
-                <form action="{{ url_for('admin_panel') }}" method="GET" class="m-0 d-inline-flex align-items-center">
-                    <input type="hidden" name="tab" value="timetable">
-                    <input type="hidden" name="room" value="{{ selected_room }}">
-                    <input type="hidden" name="timetable_day" value="{{ selected_day }}">
-                    <div class="gcal-date-input-wrap">
-                        <span class="text-muted fw-medium">Xem tuần:</span>
-                        <input type="date" name="timetable_date" value="{{ timetable_date_str }}" onchange="this.form.submit()">
-                    </div>
-                </form>
                 <div class="week-range-badge">
                     🗓 {{ week_range_label }}
                 </div>
             </div>
 
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1" style="font-size: 0.73rem;">🔓 Mở phòng (Đang học)</span>
-                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1" style="font-size: 0.73rem;">🔒 Khóa cửa (KT sớm)</span>
-                <form action="{{ url_for('admin_panel') }}" method="GET" class="m-0 d-inline-flex align-items-center gap-1 bg-light px-2 py-1 rounded-pill border">
-                    <input type="hidden" name="tab" value="timetable">
-                    <input type="hidden" name="timetable_date" value="{{ timetable_date_str }}">
-                    <span class="small fw-bold text-primary">📍</span>
-                    <select class="form-select form-select-sm border-0 fw-bold text-primary shadow-none bg-transparent py-0 ps-1 pe-4" name="room" onchange="this.form.submit()" style="cursor: pointer; width: auto; font-size: 0.8rem;">
+            <!-- Hàng 2: Lưới 50% - 50% Chọn Phòng & Chọn Ngày -->
+            <form action="{{ url_for('admin_panel') }}" method="GET" class="row g-2 mb-2">
+                <input type="hidden" name="tab" value="timetable">
+                <input type="hidden" name="timetable_day" value="{{ selected_day }}">
+                <div class="col-6 col-md-4">
+                    <select class="form-select form-select-sm fw-bold text-primary border-secondary-subtle shadow-none" name="room" onchange="this.form.submit()" style="font-size: 0.82rem;">
                         {% for r in rooms %}
-                            <option value="{{ r }}" {% if selected_room == r %}selected{% endif %}>Phòng {{ r }}</option>
+                            <option value="{{ r }}" {% if selected_room == r %}selected{% endif %}>🏫 Phòng {{ r }}</option>
                         {% endfor %}
                     </select>
-                    <span class="text-muted">|</span>
-                    <select class="form-select form-select-sm border-0 fw-semibold text-dark shadow-none bg-transparent py-0 ps-1 pe-4" name="timetable_day" onchange="this.form.submit()" style="cursor: pointer; width: auto; font-size: 0.8rem;">
-                        <option value="all" {% if selected_day == 'all' %}selected{% endif %}>Cả tuần</option>
-                        <option value="2" {% if selected_day == '2' %}selected{% endif %}>Thứ 2 ({{ day_headers[2]['short_date'] }})</option>
-                        <option value="3" {% if selected_day == '3' %}selected{% endif %}>Thứ 3 ({{ day_headers[3]['short_date'] }})</option>
-                        <option value="4" {% if selected_day == '4' %}selected{% endif %}>Thứ 4 ({{ day_headers[4]['short_date'] }})</option>
-                        <option value="5" {% if selected_day == '5' %}selected{% endif %}>Thứ 5 ({{ day_headers[5]['short_date'] }})</option>
-                        <option value="6" {% if selected_day == '6' %}selected{% endif %}>Thứ 6 ({{ day_headers[6]['short_date'] }})</option>
-                        <option value="7" {% if selected_day == '7' %}selected{% endif %}>Thứ 7 ({{ day_headers[7]['short_date'] }})</option>
-                    </select>
-                </form>
+                </div>
+                <div class="col-6 col-md-4">
+                    <input type="date" class="form-control form-control-sm fw-semibold border-secondary-subtle shadow-none" name="timetable_date" value="{{ timetable_date_str }}" onchange="this.form.submit()" style="font-size: 0.82rem;">
+                </div>
+                <div class="col-12 col-md-4 d-none d-md-flex align-items-center justify-content-end gap-2">
+                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1" style="font-size: 0.72rem;">🔓 Đang mở cửa</span>
+                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1" style="font-size: 0.72rem;">🔒 Đang khóa (KT sớm)</span>
+                </div>
+            </form>
+
+            <!-- Hàng 3: Dãy nút chọn nhanh Thứ (T2 - T7 & Tuần) -->
+            <div class="tt-day-pills mb-2 mb-md-0">
+                {% for d in range(2, 8) %}
+                    <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=timetable_date_str, timetable_day=d) }}"
+                       class="tt-day-pill {% if selected_day == d|string %}active{% endif %}">
+                        T{{ d }}
+                    </a>
+                {% endfor %}
+                <a href="{{ url_for('admin_panel', tab='timetable', room=selected_room, timetable_date=timetable_date_str, timetable_day='all') }}"
+                   class="tt-day-pill {% if selected_day == 'all' %}active{% endif %}">
+                    Tuần
+                </a>
+            </div>
+
+            <!-- Hàng chú thích gọn trên Mobile -->
+            <div class="d-flex d-md-none justify-content-between align-items-center pt-2 border-top text-muted" style="font-size: 0.72rem;">
+                <span><span class="badge bg-success">🔓</span> Đang mở cửa</span>
+                <span><span class="badge bg-danger">🔒</span> Đang khóa</span>
+                <span>Chạm nút trên môn để đổi</span>
             </div>
         </div>
 
@@ -606,7 +1128,7 @@
                 <table class="table table-bordered mb-0" style="table-layout: fixed; {% if selected_day == 'all' %}min-width: 1080px;{% else %}min-width: 100%;{% endif %}">
                     <thead class="text-center align-middle" style="background-color: #f8fafc;">
                         <tr style="height: 60px;">
-                            <th style="width: 68px;" class="text-muted fw-semibold small border-bottom-0">Tiết</th>
+                            <th style="width: 68px;" class="text-muted fw-semibold small border-bottom-0 tt-sticky-col">Tiết</th>
                             {% for d in range(2, 8) %}
                                 {% if selected_day == 'all' or selected_day == d|string %}
                                 {% set dh = day_headers[d] %}
@@ -624,7 +1146,7 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="p-0 border-end position-relative" style="background-color: #f8fafc;">
+                            <td class="p-0 border-end position-relative tt-sticky-col" style="background-color: #f8fafc;">
                                 <div style="height: 780px; position: relative;">
                                     {% for tiet in range(1, 11) %}
                                         <div class="text-center text-muted small fw-semibold" style="position: absolute; top: {{ (tiet-1)*100/10 }}%; width: 100%; border-top: {% if tiet == 6 %}2px solid #cbd5e1{% else %}1px solid #e2e8f0{% endif %}; height: {{ 100/10 }}%; display: flex; align-items: flex-start; justify-content: center; padding-top: 6px;">
@@ -731,13 +1253,68 @@
     </div>
 
     <!-- TAB 4: QUẢN LÝ SỰ CỐ -->
-    <div class="tab-pane fade {% if active_tab == 'issues' %}show active{% endif %}" id="issues" role="tabpanel">
-        <div class="card bg-white shadow-sm border-0 mb-4" style="border-radius: 16px;">
+    <div class="tab-pane fade {% if active_tab == 'issues' %}show active{% endif %} admin-wrapper-font" id="issues" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+            <span class="fw-bold text-dark">🛠️ Danh sách sự cố kỹ thuật</span>
+            {% set pending_issues_count = issues|selectattr("status", "equalto", "Pending")|list|length %}
+            <span class="badge {% if pending_issues_count > 0 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">{{ pending_issues_count }} chờ xử lý</span>
+        </div>
+
+        <!-- Giao diện Thẻ (Card) trên Mobile (< 768px) -->
+        <div class="d-md-none">
+            {% for issue in issues %}
+            <div class="mobile-action-card" style="border-left: 4px solid {% if issue.status == 'Resolved' %}#10b981{% elif issue.status == 'Processing' %}#f59e0b{% else %}#dc3545{% endif %};">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div>
+                        <span class="badge bg-dark me-1">P.{{ issue.room }} - {{ issue.machine_number }}</span>
+                        <span class="text-muted" style="font-size: 0.72rem;">{{ issue.created_at }}</span>
+                    </div>
+                    {% if issue.status == "Processing" %}
+                        <span class="badge bg-warning text-dark" style="font-size: 0.7rem;">👀 Đã tiếp nhận</span>
+                    {% elif issue.status == "Resolved" %}
+                        <span class="badge bg-success" style="font-size: 0.7rem;">✅ Đã khắc phục</span>
+                    {% else %}
+                        <span class="badge bg-danger" style="font-size: 0.7rem;">Chờ xử lý</span>
+                    {% endif %}
+                </div>
+                <div class="mobile-action-meta">
+                    👤 <strong>{{ issue.reporter_name }}</strong> <span class="text-muted">({{ issue.department }})</span>
+                </div>
+                <div class="mobile-action-meta">
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary border me-1">{{ issue.issue_category }}</span>
+                    <span class="text-danger fw-semibold">⚠️ {{ issue.description }}</span>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-6">
+                        <form action="{{ url_for('update_issue_status', issue_id=issue.id) }}" method="POST" class="m-0">
+                            <input type="hidden" name="status" value="Processing">
+                            <button type="submit" class="btn btn-sm {% if issue.status == 'Processing' %}btn-warning fw-bold text-dark shadow-sm{% else %}btn-outline-warning text-dark fw-semibold{% endif %} w-100 py-2">
+                                👀 Đã tiếp nhận
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-6">
+                        <form action="{{ url_for('update_issue_status', issue_id=issue.id) }}" method="POST" class="m-0">
+                            <input type="hidden" name="status" value="Resolved">
+                            <button type="submit" class="btn btn-sm {% if issue.status == 'Resolved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success fw-semibold{% endif %} w-100 py-2">
+                                🛠️ Đã khắc phục
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card border-0 shadow-sm rounded-4 p-4 text-center text-muted">
+                Chưa có báo cáo sự cố nào.
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Giao diện Bảng trên Desktop (>= 768px) -->
+        <div class="card bg-white shadow-sm border-0 mb-4 d-none d-md-block" style="border-radius: 16px;">
             <div class="card-body p-4">
-                <h5 class="fw-bold mb-4" style="color: var(--primary-color);"><i class="bi bi-tools me-2"></i>Danh sách sự cố kỹ thuật</h5>
-                
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle border">
+                    <table class="table table-hover align-middle border mb-0">
                         <thead class="table-light align-middle">
                             <tr>
                                 <th>Thời gian</th>
@@ -799,26 +1376,25 @@
         </div>
     </div>
 
-    
     <!-- TAB TÌM PHÒNG TRỐNG -->
     <div class="tab-pane fade {% if active_tab == 'freerooms' %}show active{% endif %} admin-wrapper-font" id="freerooms" role="tabpanel">
         <div class="card bg-white shadow-sm border-0 mb-4" style="border-radius: 16px;">
-            <div class="card-body p-4">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-                    <h5 class="fw-bold mb-0" style="color: var(--primary-color);"><i class="bi bi-search me-2"></i>Tìm phòng trống (>= 2.5 tiết)</h5>
-                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle px-3 py-2 rounded-pill">
-                        🗓 Đang xem: Thứ {{ filter_day }} ({{ free_target_date_display }})
-                    </span>
+            <div class="card-body p-3 p-md-4">
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                    <h5 class="fw-bold mb-0 text-success" style="font-size: 1rem;">🔍 Tra cứu Phòng trống (>= 2.5 tiết)</h5>
+                    <a href="{{ url_for('admin_panel', tab='freerooms', filter_day=filter_day, filter_date=today_date_str) }}" class="btn btn-sm btn-outline-secondary rounded-3 px-2 py-1 text-nowrap" style="font-size: 0.76rem;">
+                        🔄 Tuần hiện tại
+                    </a>
                 </div>
-                <form action="{{ url_for('admin_panel') }}" method="GET" class="mb-4 d-flex flex-wrap align-items-center gap-3">
+                <form action="{{ url_for('admin_panel') }}" method="GET" class="row g-2 mb-3">
                     <input type="hidden" name="tab" value="freerooms">
-                    <div class="d-flex align-items-center gap-2">
-                        <label class="fw-medium text-muted text-nowrap">Tuần của ngày:</label>
-                        <input type="date" class="form-control bg-light border-0 w-auto" name="filter_date" value="{{ filter_date_str }}" onchange="this.form.submit()">
+                    <div class="col-6 col-md-4">
+                        <label class="text-muted fw-bold mb-1" style="font-size: 0.75rem;">📅 Tuần của ngày:</label>
+                        <input type="date" class="form-control form-control-sm border-success-subtle" name="filter_date" value="{{ filter_date_str }}" onchange="this.form.submit()">
                     </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <label class="fw-medium text-muted text-nowrap">Chọn Thứ:</label>
-                        <select class="form-select w-auto bg-light border-0" name="filter_day" onchange="this.form.submit()">
+                    <div class="col-6 col-md-4">
+                        <label class="text-muted fw-bold mb-1" style="font-size: 0.75rem;">🗓️ Chọn Thứ:</label>
+                        <select class="form-select form-select-sm border-success-subtle fw-bold text-success" name="filter_day" onchange="this.form.submit()">
                             <option value="2" {% if filter_day == 2 %}selected{% endif %}>Thứ 2</option>
                             <option value="3" {% if filter_day == 3 %}selected{% endif %}>Thứ 3</option>
                             <option value="4" {% if filter_day == 4 %}selected{% endif %}>Thứ 4</option>
@@ -827,19 +1403,24 @@
                             <option value="7" {% if filter_day == 7 %}selected{% endif %}>Thứ 7</option>
                         </select>
                     </div>
-                    <a href="{{ url_for('admin_panel', tab='freerooms', filter_day=filter_day, filter_date=today_date_str) }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
-                        📅 Về tuần hiện tại
-                    </a>
+                    <div class="col-12 col-md-4 d-flex align-items-end">
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle px-3 py-2 rounded-3 w-100 text-center">
+                            🗓 Đang xem: Thứ {{ filter_day }} ({{ free_target_date_display }})
+                        </span>
+                    </div>
                 </form>
                 
-                <div class="row">
+                <div class="row g-3">
                     <div class="col-md-6">
-                        <div class="p-3 bg-warning bg-opacity-10 rounded-4 h-100">
-                            <h6 class="fw-bold text-warning mb-3"><i class="bi bi-brightness-alt-high-fill me-1"></i>Sáng (Tiết 1-5)</h6>
-                            <ul class="list-unstyled mb-0 ms-2">
+                        <div class="p-3 bg-warning bg-opacity-10 rounded-4 h-100 border border-warning-subtle">
+                            <h6 class="fw-bold text-warning-emphasis mb-3"><i class="bi bi-brightness-alt-high-fill me-1"></i>Ca Sáng (Tiết 1-5)</h6>
+                            <ul class="list-unstyled mb-0">
                                 {% for room, slots in morning_free.items() %}
                                     {% if slots %}
-                                        <li class="mb-2"><span class="badge bg-warning text-dark me-2">P.{{ room }}</span> <span class="text-muted">{{ slots | join(', ') }}</span></li>
+                                        <li class="mb-2 d-flex align-items-center justify-content-between bg-white p-2 rounded-3 border">
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success">✅ P.{{ room }}</span>
+                                            <span class="text-dark fw-medium small">{{ slots | join(', ') }}</span>
+                                        </li>
                                     {% endif %}
                                 {% endfor %}
                                 {% if not morning_free.values() | map('length') | sum %}
@@ -848,13 +1429,16 @@
                             </ul>
                         </div>
                     </div>
-                    <div class="col-md-6 mt-3 mt-md-0">
-                        <div class="p-3 bg-info bg-opacity-10 rounded-4 h-100">
-                            <h6 class="fw-bold text-info mb-3"><i class="bi bi-moon-fill me-1"></i>Chiều (Tiết 6-10)</h6>
-                            <ul class="list-unstyled mb-0 ms-2">
+                    <div class="col-md-6">
+                        <div class="p-3 bg-info bg-opacity-10 rounded-4 h-100 border border-info-subtle">
+                            <h6 class="fw-bold text-info-emphasis mb-3"><i class="bi bi-moon-fill me-1"></i>Ca Chiều (Tiết 6-10)</h6>
+                            <ul class="list-unstyled mb-0">
                                 {% for room, slots in afternoon_free.items() %}
                                     {% if slots %}
-                                        <li class="mb-2"><span class="badge bg-info text-dark me-2">P.{{ room }}</span> <span class="text-muted">{{ slots | join(', ') }}</span></li>
+                                        <li class="mb-2 d-flex align-items-center justify-content-between bg-white p-2 rounded-3 border">
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success">✅ P.{{ room }}</span>
+                                            <span class="text-dark fw-medium small">{{ slots | join(', ') }}</span>
+                                        </li>
                                     {% endif %}
                                 {% endfor %}
                                 {% if not afternoon_free.values() | map('length') | sum %}
@@ -869,16 +1453,56 @@
     </div>
 
     <!-- TAB 5: BÁO NGHỈ GẤP -->
-    <div class="tab-pane fade {% if active_tab == 'cancellations' %}show active{% endif %}" id="cancellations" role="tabpanel">
-        <div class="mb-4 d-flex justify-content-between align-items-end">
+    <div class="tab-pane fade {% if active_tab == 'cancellations' %}show active{% endif %} admin-wrapper-font" id="cancellations" role="tabpanel">
+        <div class="mb-3 d-flex justify-content-between align-items-center px-1">
             <div>
-                <h3 class="fw-bold text-danger mb-1">Thông báo nghỉ gấp</h3>
-                <p class="text-muted mb-0">Danh sách các lớp báo nghỉ đột xuất cần bộ phận kỹ thuật khóa phòng.</p>
+                <h5 class="fw-bold text-danger mb-0">🏃 Thông báo nghỉ gấp</h5>
+                <p class="text-muted small mb-0">Danh sách các lớp báo nghỉ đột xuất cần khóa phòng</p>
             </div>
         </div>
 
-        <div class="card shadow-sm border-0 ">
-            <div class="card-body p-0">
+        <!-- Giao diện Thẻ (Card) trên Mobile (< 768px) -->
+        <div class="d-md-none">
+            {% for req in cancellations %}
+            <div class="mobile-action-card" style="border-left: 4px solid {% if req['status'] == 'Pending' %}#dc3545{% else %}#10b981{% endif %};">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div>
+                        <span class="badge bg-danger me-1">Phòng {{ req['room'] }}</span>
+                        <strong style="font-size: 0.88rem;">{{ req['cancel_date'] }} • {{ req['period'] }}</strong>
+                    </div>
+                    {% if req['status'] == 'Pending' %}
+                        <span class="badge bg-warning text-dark" style="font-size: 0.7rem;">⏳ Chờ duyệt</span>
+                    {% else %}
+                        <span class="badge bg-success" style="font-size: 0.7rem;">✅ Đã xác nhận</span>
+                    {% endif %}
+                </div>
+                <div class="mobile-action-meta">
+                    👨‍🏫 <strong>{{ req['teacher_name'] }}</strong> <span class="text-muted" style="font-size: 0.72rem;">({{ req['created_at'] }})</span>
+                </div>
+                {% if req['reason'] %}
+                <div class="mobile-action-meta bg-light p-2 rounded-3 mb-2" style="font-size: 0.78rem;">
+                    📝 Lịch học bù / Lý do: <em>{{ req['reason'] }}</em>
+                </div>
+                {% endif %}
+                {% if req['status'] == 'Pending' %}
+                <form action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}" method="POST" class="m-0">
+                    <button type="submit" class="btn btn-success btn-sm w-100 fw-bold py-2 shadow-sm">✅ Xác nhận đã tiếp nhận</button>
+                </form>
+                {% else %}
+                <div class="text-muted small text-center pt-1 border-top"><i class="bi bi-check2-all text-success"></i> Đã lưu vào lịch sử (Đợi học bù)</div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="card border-0 shadow-sm rounded-4 p-4 text-center text-muted">
+                <i class="bi bi-check-circle fs-1 text-success"></i>
+                <div class="mt-2">Không có thông báo nghỉ gấp nào.</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Giao diện Bảng trên Desktop (>= 768px) -->
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden d-none d-md-block">
+            <div class="card-body p-0 table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
@@ -909,10 +1533,8 @@
                             <td class="text-center pe-4 align-middle">
                                 {% if req['status'] == 'Pending' %}
                                     <form action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}" method="POST" style="display:inline;">
-
-                                    <button type="submit" class="btn btn-sm btn-outline-success shadow-sm mb-1" title="Xác nhận lưu lịch sử">✅ Đã tiếp nhận</button>
-
-                                </form>
+                                        <button type="submit" class="btn btn-sm btn-outline-success shadow-sm mb-1" title="Xác nhận lưu lịch sử">✅ Đã tiếp nhận</button>
+                                    </form>
                                 {% else %}
                                     <span class="text-muted small"><i class="bi bi-check2-all"></i> Đã lưu vào lịch sử (Đợi học bù)</span>
                                 {% endif %}
@@ -943,7 +1565,7 @@
                     <div class="card-body p-4">
                         <div class="alert alert-info border-0 shadow-sm rounded-3">
     <i class="bi bi-info-circle-fill me-2"></i>
-    Hệ thống hiện đang sử dụng <strong>Ngrok OAuth (Đăng nhập qua Google)</strong>. Việc đổi mật khẩu và quản lý tài khoản được thực hiện trên hệ thống của Google hoặc hệ thống quản lý tài khoản của trường.
+    Hệ thống hiện đang sử dụng <strong>Google OAuth 2.0 (Đăng nhập qua Google)</strong>. Việc đổi mật khẩu và quản lý tài khoản được thực hiện trên hệ thống của Google hoặc hệ thống quản lý tài khoản của trường.
 </div>
                     </div>
                 </div>
@@ -1103,6 +1725,56 @@
     </div>
 </div>
 
+<!-- MODAL CẤU HÌNH ĐỊA CHỈ IP 8 PHÒNG & TẢI B42LAB NETAGENT -->
+<div class="modal fade admin-wrapper-font" id="netAgentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold">🌐 Cấu hình Giám sát Mạng 8 Phòng (B42Lab NetAgent)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <form action="{{ url_for('save_network_config') }}" method="POST">
+                    <div class="p-3 rounded-3 bg-white border mb-3">
+                        <div class="fw-bold text-dark small mb-2">1. Địa chỉ IP thiết bị đại diện của từng Phòng máy (Router / Switch / Máy giáo viên):</div>
+                        <div class="row g-2">
+                            {% for rc in dashboard_stats['room_live_cards'] %}
+                            <div class="col-6 col-md-3">
+                                <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.74rem;">Phòng {{ rc['room'] }}</label>
+                                <input type="text" class="form-control form-control-sm fw-semibold text-primary" name="ip_{{ rc['room'] }}" value="{{ rc['target_ip'] }}" placeholder="VD: 192.168.1.101">
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="text-muted mt-2" style="font-size: 0.74rem;">
+                            💡 Khi bạn đổi IP ở đây và bấm Lưu, script <code>b42_network_agent.py</code> đang chạy ở trường sẽ tự động cập nhật danh sách IP mới này!
+                        </div>
+                    </div>
+
+                    <div class="p-3 rounded-3 bg-white border mb-3">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <span class="fw-bold text-primary small">2. Chạy ngầm tự động đẩy trạng thái mạng từ Trường lên Web (PythonAnywhere):</span>
+                            <a href="{{ url_for('download_netagent_script') }}" class="btn btn-sm btn-success fw-bold py-1 px-3" style="font-size: 0.75rem;">
+                                📥 Tải file b42_network_agent.py
+                            </a>
+                        </div>
+                        <div class="text-muted mb-2" style="font-size: 0.78rem;">
+                            Chạy lệnh sau trên 1 máy tính ở phòng máy/phòng kỹ thuật (không cần cài thêm thư viện, tự động đẩy Ping ms lên Web mỗi 30 giây):
+                        </div>
+                        <div class="p-2 rounded bg-dark text-light font-monospace" style="font-size: 0.75rem; overflow-x: auto;">
+                            python b42_network_agent.py --server {{ request.host_url.rstrip('/') }} --key {{ dashboard_stats['netagent_key'] }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                        <button type="submit" class="btn btn-primary fw-bold px-4">💾 Lưu cấu hình IP</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     function openUpdateWeeksModal(scheduleId, subjectName, roomLabel, currentWeeks, returnTab) {
         const form = document.getElementById('updateWeeksForm');
@@ -1114,7 +1786,96 @@
         modal.show();
     }
 
-    // Activate tab based on URL parameter
+    // Cập nhật giao diện 8 ô Phòng máy từ API B42Lab NetAgent
+    function applyNetworkStatusData(data) {
+        if (!data || !data.room_map) return;
+        const roomsList = ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6'];
+
+        roomsList.forEach(r => {
+            const safeId = r.replace('.', '_');
+            const nodeEl = document.getElementById(`room-node-${safeId}`);
+            const pingEl = document.getElementById(`room-ping-${safeId}`);
+            const ipEl = document.getElementById(`room-ip-${safeId}`);
+            const info = data.room_map[r];
+            if (!info || !nodeEl || !pingEl) return;
+
+            if (ipEl && info.target_ip) {
+                ipEl.textContent = `(${info.target_ip})`;
+            }
+
+            nodeEl.classList.remove('status-online', 'status-warn', 'status-offline');
+            pingEl.classList.remove('ping-ok', 'ping-warn', 'ping-err', 'ping-wait');
+
+            if (info.status === 'online') {
+                const pingVal = info.ping_ms != null ? `${Math.round(info.ping_ms)}ms` : 'Online';
+                if (info.ping_ms != null && info.ping_ms > 150) {
+                    nodeEl.classList.add('status-warn');
+                    pingEl.classList.add('ping-warn');
+                    pingEl.textContent = `🟡 ${pingVal}`;
+                } else {
+                    nodeEl.classList.add('status-online');
+                    pingEl.classList.add('ping-ok');
+                    pingEl.textContent = `🟢 ${pingVal}`;
+                }
+            } else {
+                nodeEl.classList.add('status-offline');
+                pingEl.classList.add('ping-err');
+                pingEl.textContent = '🔴 Offline';
+            }
+        });
+
+        const kpiVal = document.getElementById('kpiNetworkVal');
+        const kpiSub = document.getElementById('kpiNetworkSub');
+        const lastLbl = document.getElementById('lastNetUpdateLabel');
+
+        if (lastLbl && data.last_update) {
+            lastLbl.textContent = data.last_update;
+        }
+        if (kpiVal) {
+            const hasOff = (data.offline_rooms && data.offline_rooms.length > 0);
+            kpiVal.innerHTML = `${data.online_count}/${data.total_rooms || 8} <span class="fs-6 fw-semibold ${hasOff ? 'text-danger' : 'text-success'}">Online</span>`;
+        }
+        if (kpiSub) {
+            if (data.offline_rooms && data.offline_rooms.length > 0) {
+                kpiSub.innerHTML = `<span class="text-danger fw-bold">⚠️ ${data.offline_rooms.join(', ')} mất kết nối</span>`;
+            } else {
+                kpiSub.innerHTML = `<span class="text-success fw-semibold">✅ Tất cả phòng kết nối ổn định</span>`;
+            }
+        }
+    }
+
+    async function syncNetworkStatus() {
+        try {
+            const res = await fetch('/api/network-status');
+            const data = await res.json();
+            if (data && data.success) {
+                applyNetworkStatusData(data);
+            }
+        } catch (err) {
+            console.warn('Network status sync error:', err);
+        }
+    }
+
+    async function triggerPingNow() {
+        const btn = document.getElementById('btnPingNow');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '⏳ Đang đo Ping 8 phòng...';
+        }
+        try {
+            await fetch('/admin/network-ping-now', { method: 'POST' });
+            await syncNetworkStatus();
+        } catch (err) {
+            console.error(err);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '⚡ Ping kiểm tra ngay';
+            }
+        }
+    }
+
+    // Activate tab based on URL parameter & start auto-sync
     document.addEventListener("DOMContentLoaded", function() {
         const urlParams = new URLSearchParams(window.location.search);
         const activeTab = urlParams.get('tab');
@@ -1125,6 +1886,7 @@
                 tab.show();
             }
         }
+        setInterval(syncNetworkStatus, 15000);
     });
 </script>
 {% endblock %}

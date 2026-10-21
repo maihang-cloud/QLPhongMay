@@ -158,6 +158,23 @@ def init_db():
     cursor.execute("UPDATE schedules SET is_ended_early = 0 WHERE is_ended_early IS NULL")
     cursor.execute("UPDATE schedules SET study_period = '28/09/2026' WHERE study_period LIKE '2026-09-28%'")
 
+    # 6. Bảng lưu cấu hình hệ thống & Trạng thái mạng 8 phòng máy (B42Lab NetAgent)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS room_network_status (
+            room TEXT PRIMARY KEY,
+            target_ip TEXT DEFAULT '8.8.8.8',
+            status TEXT DEFAULT 'online',
+            ping_ms INTEGER DEFAULT 12,
+            updated_at TEXT
+        )
+    ''')
+
     # Nếu là lần đầu chạy và tạo db, ta insert 1 dòng dữ liệu mẫu để test giao diện
     if not db_exists:
         cursor.execute("""
