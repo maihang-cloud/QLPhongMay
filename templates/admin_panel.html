@@ -91,6 +91,34 @@
         box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
     }
 
+    /* Badge tự động làm mới sau 10s cho các tab xử lý gấp */
+    .auto-reload-badge {
+        background-color: #F0FDFA;
+        border: 1px solid #99F6E4;
+        color: #0D9488;
+        font-size: 0.76rem;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.2s ease;
+    }
+    .auto-reload-badge:hover {
+        background-color: #CCFBF1;
+        border-color: #5EEAD4;
+    }
+    .auto-reload-badge.paused {
+        background-color: #FFFBEB !important;
+        border-color: #FDE68A !important;
+        color: #92400E !important;
+    }
+    @keyframes spin-reload {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .spin-reload-active {
+        animation: spin-reload 1s linear infinite;
+        display: inline-block;
+    }
+
     /* Thẻ duyệt nhanh trên Mobile (Yêu cầu, Sự cố, Báo nghỉ) */
     .mobile-action-card {
         background: #ffffff;
@@ -765,6 +793,11 @@
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="fw-bold text-dark fs-6 me-1">📩 Yêu cầu mượn phòng / dạy bù</span>
+                        <span class="auto-reload-badge badge rounded-pill px-2.5 py-1 text-muted d-inline-flex align-items-center" 
+                              title="Tự động cập nhật sau 10s. Bấm để tạm dừng hoặc tiếp tục." 
+                              onclick="toggleAutoReload()">
+                            <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">10s</strong>
+                        </span>
                         <button type="button" class="schedule-filter-pill active-all" data-tab-filter="requests" data-status="all" onclick="filterAdminList('requests', 'all', this)">
                             Tất cả ({{ req_all_count }})
                         </button>
@@ -1394,6 +1427,11 @@
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="fw-bold text-dark fs-6 me-1">🛠️ Danh sách sự cố kỹ thuật</span>
+                        <span class="auto-reload-badge badge rounded-pill px-2.5 py-1 text-muted d-inline-flex align-items-center" 
+                              title="Tự động cập nhật sau 10s. Bấm để tạm dừng hoặc tiếp tục." 
+                              onclick="toggleAutoReload()">
+                            <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">10s</strong>
+                        </span>
                         <button type="button" class="schedule-filter-pill active-all" data-tab-filter="issues" data-status="all" onclick="filterAdminList('issues', 'all', this)">
                             Tất cả ({{ iss_all_count }})
                         </button>
@@ -1670,6 +1708,11 @@
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="fw-bold text-danger fs-6 me-1">🏃 Thông báo nghỉ gấp</span>
+                        <span class="auto-reload-badge badge rounded-pill px-2.5 py-1 text-muted d-inline-flex align-items-center" 
+                              title="Tự động cập nhật sau 10s. Bấm để tạm dừng hoặc tiếp tục." 
+                              onclick="toggleAutoReload()">
+                            <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">10s</strong>
+                        </span>
                         <button type="button" class="schedule-filter-pill active-all" data-tab-filter="cancellations" data-status="all" onclick="filterAdminList('cancellations', 'all', this)">
                             Tất cả ({{ can_all_count }})
                         </button>
@@ -2795,8 +2838,117 @@
             eInput.addEventListener('change', calcOtHours);
         }
 
+        // Lắng nghe sự kiện chuyển Tab để cập nhật URL và reset lại bộ đếm reload 10s
+        const tabBtns = document.querySelectorAll('#adminTabs button[data-bs-toggle="tab"]');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('shown.bs.tab', function(e) {
+                const targetId = (e.target.getAttribute('data-bs-target') || '').replace('#', '');
+                const url = new URL(window.location.href);
+                url.searchParams.set('tab', targetId);
+                history.replaceState(null, '', url.toString());
+                
+                autoReloadSeconds = 10;
+                updateAutoReloadUI();
+            });
+        });
+
+        startAutoReloadWatcher();
         setInterval(syncNetworkStatus, 15000);
     });
+
+    // ==========================================
+    // AUTO-RELOAD SAU 10S CHO CÁC TAB XỬ LÝ GẤP
+    // (Yêu cầu, Báo vắng/nghỉ, Sự cố)
+    // ==========================================
+    let autoReloadTimer = null;
+    let autoReloadSeconds = 10;
+    let isAutoReloadPaused = false;
+    const URGENT_TABS = ['requests', 'cancellations', 'issues'];
+
+    function getActiveAdminTab() {
+        const activeTabEl = document.querySelector('#adminTabs .nav-link.active');
+        if (activeTabEl) {
+            const target = activeTabEl.getAttribute('data-bs-target') || '';
+            return target.replace('#', '');
+        }
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('tab') || 'dashboard';
+    }
+
+    function updateAutoReloadUI() {
+        const badges = document.querySelectorAll('.auto-reload-badge');
+        badges.forEach(b => {
+            const secSpan = b.querySelector('.auto-reload-sec');
+            const icon = b.querySelector('.auto-reload-icon');
+            if (isAutoReloadPaused) {
+                b.classList.add('paused');
+                b.setAttribute('title', 'Tự động làm mới đang TẠM DỪNG. Bấm để bật lại.');
+                if (secSpan) secSpan.textContent = 'Đã tạm dừng';
+                if (icon) icon.className = 'bi bi-pause-circle text-warning me-1 auto-reload-icon';
+            } else {
+                b.classList.remove('paused');
+                b.setAttribute('title', 'Tự động cập nhật sau mỗi 10s. Bấm để tạm dừng.');
+                if (secSpan) secSpan.textContent = autoReloadSeconds + 's';
+                if (icon) {
+                    const isSpinning = autoReloadSeconds <= 2 ? ' spin-reload-active' : '';
+                    icon.className = 'bi bi-arrow-repeat text-primary me-1 auto-reload-icon' + isSpinning;
+                }
+            }
+        });
+    }
+
+    function toggleAutoReload() {
+        isAutoReloadPaused = !isAutoReloadPaused;
+        if (!isAutoReloadPaused) {
+            autoReloadSeconds = 10;
+        }
+        updateAutoReloadUI();
+    }
+
+    function startAutoReloadWatcher() {
+        if (autoReloadTimer) clearInterval(autoReloadTimer);
+        autoReloadSeconds = 10;
+        updateAutoReloadUI();
+
+        autoReloadTimer = setInterval(() => {
+            const currentTab = getActiveAdminTab();
+            if (!URGENT_TABS.includes(currentTab)) {
+                return; // Chỉ đếm ngược khi đang ở các tab xử lý gấp
+            }
+
+            if (isAutoReloadPaused) {
+                return;
+            }
+
+            // Kiểm tra an toàn: Nếu admin đang thao tác (mở modal, nhập text, chọn checkbox xóa hàng loạt)
+            const isModalOpen = document.querySelector('.modal.show');
+            const activeEl = document.activeElement;
+            const isInputFocused = activeEl && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeEl.tagName);
+            const hasCheckedItem = document.querySelector('.item-check-requests:checked, .item-check-cancellations:checked, .item-check-issues:checked');
+
+            // Kiểm tra xem có từ khóa tìm kiếm đang gõ hay không
+            const searchInput = document.getElementById(`searchInput-${currentTab}`);
+            const hasSearchText = searchInput && searchInput.value.trim().length > 0;
+
+            if (isModalOpen || isInputFocused || hasCheckedItem || hasSearchText) {
+                // Đang bận thao tác, tạm hoãn và giữ ở mức 5s để không gây gián đoạn công việc
+                autoReloadSeconds = 5;
+                updateAutoReloadUI();
+                return;
+            }
+
+            autoReloadSeconds--;
+            if (autoReloadSeconds <= 0) {
+                autoReloadSeconds = 10;
+                // Giữ nguyên tab hiện tại khi tải lại
+                const url = new URL(window.location.href);
+                url.searchParams.set('tab', currentTab);
+                window.location.href = url.toString();
+            } else {
+                updateAutoReloadUI();
+            }
+        }, 1000);
+    }
 </script>
 {% endblock %}
 
