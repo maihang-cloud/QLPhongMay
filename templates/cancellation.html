@@ -28,8 +28,8 @@
         <div class="col-lg-7 col-xl-8">
             <div class="card shadow-sm border-0 rounded-4 bg-white overflow-hidden mb-2 mb-lg-4">
                 
-                <!-- HERO CARD HEADER (TÔNG ĐỎ KHẨN CẤP / BÁO VẮNG) -->
-                <div class="card-header bg-danger text-white text-center py-3 py-md-4 border-0">
+                <!-- HERO CARD HEADER ĐỒNG BỘ CONCEPT 2 -->
+                <div class="card-header bg-primary text-white text-center py-3 py-md-4 border-0">
                     <i class="bi bi-calendar-x display-5 mb-1 mb-md-2 d-block"></i>
                     <h3 class="fw-bold mb-1">Báo Vắng</h3>
                     <p class="mb-0 opacity-90 small">Tiếp nhận thông tin báo vắng để kịp thời niêm phong, khóa cửa và bảo quản thiết bị phòng máy</p>
@@ -68,13 +68,13 @@
 
                         <!-- 4. LÝ DO VẮNG & KẾ HOẠCH HỌC BÙ -->
                         <div class="mb-4">
-                            <label class="form-label text-muted small fw-bold">Lý do vắng & Kế hoạch học bù (nếu có)</label>
-                            <textarea class="form-control bg-light border-0" name="reason" rows="3" placeholder="Ghi rõ lý do vắng và dự kiến thời gian dạy bù (nếu có) để phòng máy hỗ trợ sắp xếp..."></textarea>
+                            <label class="form-label text-muted small fw-bold">Lý do vắng *</label>
+                            <textarea class="form-control bg-light border-0" name="reason" rows="3" placeholder="Ghi rõ lý do vắng và quay lại trang Đăng ký học bù vào cuối học phần(nếu có) để phòng máy hỗ trợ sắp xếp..."></textarea>
                         </div>
 
                         <!-- NÚT THAO TÁC -->
                         <div class="d-grid gap-2 d-sm-flex justify-content-sm-end align-items-sm-center pt-3 border-top">
-                            <button type="submit" class="btn btn-danger fw-bold px-4 py-2 rounded-pill shadow-sm order-1 order-sm-2">
+                            <button type="submit" class="btn btn-primary fw-bold px-4 py-2 rounded-pill shadow-sm order-1 order-sm-2">
                                 <i class="bi bi-send-fill me-1"></i> Gửi Thông Báo Ngay
                             </button>
                             <a href="{{ url_for('home_page') }}" class="btn btn-light px-4 py-2 rounded-pill order-2 order-sm-1">Hủy bỏ</a>
@@ -92,13 +92,14 @@
             
             <!-- WIDGET 1: MỤC ĐÍCH & QUY TRÌNH XỬ LÝ -->
             <div class="card shadow-sm border-0 rounded-4 bg-white p-4 mb-3">
-                <h6 class="fw-bold text-danger mb-3 d-flex align-items-center">
+                <h6 class="fw-bold text-primary mb-3 d-flex align-items-center">
                     <i class="bi bi-shield-exclamation me-2 fs-5"></i>Mục Đích Báo Vắng
                 </h6>
+                <p class="text-muted small mb-2">Theo dõi cập nhật từ Admin tại Tab <Strong> Lịch sử của tôi </Strong></p>
                 <ul class="list-unstyled small mb-0 d-flex flex-column gap-3 text-secondary">
                     <li class="d-flex align-items-start">
-                        <i class="bi bi-lock-fill text-danger me-2 mt-1 flex-shrink-0"></i>
-                        <span><strong>Khóa phòng bảo vệ tài sản:</strong> Bộ phận QTTB sẽ kịp thời đến đóng và khóa cửa phòng máy, tránh tình trạng phòng trống không ai trông coi dẫn đến mất mát tài sản (chuột, phím, thiết bị...).</span>
+                        <i class="bi bi-lock-fill text-primary me-2 mt-1 flex-shrink-0"></i>
+                        <span><strong>Khóa phòng bảo vệ tài sản:</strong> Bộ phận Trực phòng sẽ kịp thời đến đóng và khóa cửa phòng máy, tránh tình trạng phòng trống không ai trông coi dẫn đến mất mát tài sản (chuột, phím, thiết bị...).</span>
                     </li>
                     <li class="d-flex align-items-start">
                         <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
@@ -106,7 +107,7 @@
                     </li>
                     <li class="d-flex align-items-start">
                         <i class="bi bi-info-circle-fill text-primary me-2 mt-1 flex-shrink-0"></i>
-                        <span><strong>Hỗ trợ thông báo cho SV:</strong> Ngay khi nhận được thông báo, Bộ phận Trực phòng sẽ lập tức kiểm tra, đóng cửa và hỗ trợ thông tin cho sinh viên.</span>
+                        <span><strong>Ghi chú lại các môn học bù</strong> Sau khi tiếp nhận thông tin vắng từ Thầy/Cô, Quản lí phòng sẽ ghi chú lại để làm cơ sở khi Thầy/Cô đăng ký dạy bổ sung</span>
                     </li>
                 </ul>
             </div>

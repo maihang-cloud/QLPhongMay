@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Đăng ký mượn phòng máy - Cơ sở 2{% endblock %}
 
 {% block content %}
@@ -31,7 +31,7 @@
                 <!-- HERO CARD HEADER ĐỒNG BỘ TRANG CHỦ -->
                 <div class="card-header bg-primary text-white text-center py-3 py-md-4 border-0">
                     <i class="bi bi-calendar2-check display-5 mb-2 d-none d-md-block"></i>
-                    <h4 class="fw-bold mb-1 d-md-none"><i class="bi bi-calendar2-check me-1"></i>2. Thông Tin Đăng Ký Mượn Phòng</h4>
+                    <h4 class="fw-bold mb-1 d-md-none"><i class="bi bi-calendar2-check me-1"></i>Thông Tin Đăng Ký Mượn Phòng</h4>
                     <h3 class="fw-bold mb-1 d-none d-md-block">Đăng Ký Mượn Phòng Máy</h3>
                     <p class="mb-0 opacity-75 small d-none d-md-block">Hệ thống tiếp nhận và xét duyệt lịch thực hành, giảng dạy tại Cơ sở 2</p>
                 </div>
@@ -80,11 +80,11 @@
                         <div class="row g-2 g-md-3">
                             <div class="col-6 mb-3">
                                 <label class="form-label text-muted small fw-bold">Tiết BĐ *</label>
-                                <input type="number" class="form-control bg-light border-0 py-2" name="start_period" id="start_period" min="1" max="10" step="0.5" required placeholder="VD: 1 hoặc 6">
+                                <input type="number" class="form-control bg-light border-0 py-2" name="start_period" id="start_period" min="1" max="10" step="0.5" required placeholder="VD: 1 hoặc 3,5">
                             </div>
                             <div class="col-6 mb-3">
                                 <label class="form-label text-muted small fw-bold">Tiết KT *</label>
-                                <input type="number" class="form-control bg-light border-0 py-2" name="end_period" id="end_period" min="1" max="10" step="0.5" required placeholder="VD: 5 hoặc 10">
+                                <input type="number" class="form-control bg-light border-0 py-2" name="end_period" id="end_period" min="1" max="10" step="0.5" required placeholder="VD: 6 hoặc 8,5">
                             </div>
                         </div>
 
@@ -98,20 +98,22 @@
                         <div class="row g-2 g-md-3">
                             <div class="col-6 mb-3">
                                 <label class="form-label text-muted small fw-bold">Mã Lớp</label>
-                                <input type="text" class="form-control bg-light border-0 py-2" name="class_code" id="class_code" placeholder="VD: 21CNTT01">
+                                <input type="text" class="form-control bg-light border-0 py-2" name="class_code" id="class_code" placeholder="Mã lớp...">
                             </div>
                             <div class="col-6 mb-3">
                                 <label class="form-label text-muted small fw-bold">Đơn vị *</label>
                                 <select class="form-select bg-light border-0 py-2" name="department" id="department" required>
                                     <option value="" disabled selected>Chọn đơn vị...</option>
-                                    <option value="VLKT">VLKT</option>
-                                    <option value="Toán">Toán</option>
-                                    <option value="CNTT">CNTT</option>
-                                    <option value="Hóa học">Hóa học</option>
-                                    <option value="Sinh học">Sinh học</option>
-                                    <option value="Khoa học Vật liệu">Khoa học Vật liệu</option>
-                                    <option value="Môi trường">Môi trường</option>
-                                    <option value="QTTB">Phòng QTTB</option>
+                                    <option value="Khoa Vật lý">Khoa Vật lý</option>
+                                    <option value="Khoa Toán">Khoa Toán</option>
+                                    <option value="Khoa Công nghệ Thông tin">Khoa Công nghệ Thông tin</option>
+                                    <option value="Khoa Hóa">Khoa Hóa</option>
+                                    <option value="Khoa Sinh">Khoa Sinh</option>
+                                    <option value="Khoa Vật liệu">Khoa Vật liệu</option>
+                                    <option value="Khoa Môi trường">Khoa Môi trường</option>
+                                    <option value="Khoa Địa chất">Khoa Địa chất</option>
+                                    <option value="Khoa Liên ngành">Khoa Liên ngành</option>
+                                    <option value="Khoa Điện tử Viễn thông">Khoa Điện tử Viễn thông</option>
                                     <option value="Khác">Khác</option>
                                 </select>
                             </div>
@@ -126,15 +128,12 @@
                                 </a>
                             </div>
                             <input type="text" class="form-control bg-light border-0 py-2" name="software_required" id="software_required" required placeholder="Ghi rõ phần mềm cần dùng (VD: VS Code, SQL Server 2022...)">
-                            <div class="text-muted small mt-1" style="font-size: 0.78rem;">
-                                * Nếu có nhu cầu cài đặt thêm phần mềm nằm ngoài danh sách hiện có, Thầy/Cô vui lòng báo sớm trước ít nhất 3 tuần bắt đầu môn học.
-                            </div>
                         </div>
 
                         <!-- 7. MỤC ĐÍCH / GHI CHÚ SỬ DỤNG -->
                         <div class="mb-4">
                             <label class="form-label text-muted small fw-bold">Mục đích / Ghi chú sử dụng *</label>
-                            <textarea class="form-control bg-light border-0" name="purpose" id="purpose" rows="2" required placeholder="Mục đích mượn phòng, nội dung thực hành hoặc yêu cầu thêm..."></textarea>
+                            <textarea class="form-control bg-light border-0" name="purpose" id="purpose" rows="2" required placeholder="Thi, Giảng dạy, Học bù,..."></textarea>
                         </div>
 
                         <!-- NÚT THAO TÁC (ACTIONS) -->
@@ -162,8 +161,8 @@
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="fw-bold text-dark mb-0 d-flex align-items-center">
                         <i class="bi bi-lightning-charge-fill text-warning me-2 fs-5"></i>
-                        <span class="d-lg-none">1. Chọn ngày & Phòng đang trống</span>
-                        <span class="d-none d-lg-inline">Gợi Ý Phòng Đang Trống</span>
+                        <span class="d-lg-none">Gợi Ý Phòng Trống </span>
+                        <span class="d-none d-lg-inline">Gợi Ý Phòng Trống</span>
                     </h6>
                     <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 small" id="sidebarDayBadge">
                         Đang tải...
@@ -174,6 +173,8 @@
                 <div class="mb-2 d-lg-none">
                     <input type="date" id="mobile_study_date" class="form-control bg-light border-0 py-2 fw-semibold">
                 </div>
+
+                <p class="text-muted small mb-2">Theo dõi cập nhật từ Admin tại Tab <Strong> Lịch sử của tôi </Strong></p>
                 
                 <p class="text-muted small mb-2">
                     Chạm vào phòng trống bên dưới để tự động điền nhanh vào phiếu:
@@ -195,12 +196,12 @@
                 </div>
             </div>
 
-            <!-- WIDGET 2: QUY ĐỊNH MƯỢN PHÒNG NHANH (HIỂN THỊ Ở CỘT PHẢI TRÊN DESKTOP) -->
+            <!-- WIDGET 2: QUY ĐỊNH MƯỢN PHÒNG & CÀI ĐẶT PHẦN MỀM (HIỂN THỊ Ở CỘT PHẢI TRÊN DESKTOP) -->
             <div class="card shadow-sm border-0 rounded-4 bg-white p-4 mb-3 d-none d-lg-block">
                 <h6 class="fw-bold text-dark mb-3 d-flex align-items-center">
-                    <i class="bi bi-shield-check text-primary me-2 fs-5"></i>Quy Định Mượn Phòng Nhanh
+                    <i class="bi bi-shield-check text-primary me-2 fs-5"></i>Quy Định Mượn Phòng
                 </h6>
-                <ul class="list-unstyled small mb-0 d-flex flex-column gap-2 text-secondary">
+                <ul class="list-unstyled small mb-3 d-flex flex-column gap-2 text-secondary">
                     <li class="d-flex align-items-start">
                         <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
                         <span>Đăng ký trước <strong>ít nhất 24h</strong> để bộ phận kỹ thuật kiểm tra và chuẩn bị máy móc.</span>
@@ -211,20 +212,19 @@
                     </li>
                     <li class="d-flex align-items-start">
                         <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
-                        <span>Sau mỗi buổi học, Thầy/Cô vui lòng dùng tính năng <strong>Power Down</strong> trên máy GV để tắt toàn bộ máy HV.</span>
+                        <span>Đi đúng giờ, ca học đã đăng ký.</span>
                     </li>
                 </ul>
             </div>
-
         </div>
 
         <!-- WIDGET 2 (BẢN MOBILE): NẰM DƯỚI CÙNG SAU FORM ĐĂNG KÝ -->
         <div class="col-12 order-3 d-lg-none">
             <div class="card shadow-sm border-0 rounded-4 bg-white p-3 mb-3">
                 <h6 class="fw-bold text-dark mb-2 d-flex align-items-center">
-                    <i class="bi bi-shield-check text-primary me-2 fs-5"></i>Quy Định Mượn Phòng Nhanh
+                    <i class="bi bi-shield-check text-primary me-2 fs-5"></i>Quy Định Mượn Phòng
                 </h6>
-                <ul class="list-unstyled small mb-0 d-flex flex-column gap-2 text-secondary">
+                <ul class="list-unstyled small mb-3 d-flex flex-column gap-2 text-secondary">
                     <li class="d-flex align-items-start">
                         <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
                         <span>Đăng ký trước <strong>ít nhất 24h</strong> để bộ phận kỹ thuật kiểm tra máy móc.</span>
@@ -235,12 +235,12 @@
                     </li>
                     <li class="d-flex align-items-start">
                         <i class="bi bi-check-circle-fill text-success me-2 mt-1 flex-shrink-0"></i>
-                        <span>Cuối buổi học, dùng <strong>Power Down</strong> trên máy GV để tắt máy HV.</span>
+                        <span>Đi đúng giờ, ca học đã đăng ký.</span>
                     </li>
                 </ul>
+
             </div>
         </div>
-
     </div>
 </div>
 
@@ -259,9 +259,9 @@
       <div class="modal-body p-4">
         <div class="alert alert-warning bg-warning bg-opacity-10 border border-warning border-opacity-50 rounded-3 p-3 mb-3 small text-dark">
             <i class="bi bi-bell-fill text-warning me-1"></i>
-            <strong>Lưu ý:</strong> Nếu phần mềm môn học của Thầy/Cô chưa có trong danh sách bên dưới, vui lòng gửi source yêu cầu cài đặt <strong>trước ít nhất 3 tuần</strong> để ban kỹ thuật chuẩn bị hệ thống phòng máy.
+            <strong>Lưu ý:</strong> Nếu phần mềm môn học của Thầy/Cô chưa có trong danh sách bên dưới, vui lòng gửi source yêu cầu cài đặt <strong>trước ít nhất 3 tuần</strong> qua email/google drive cho Admin để chuẩn bị hệ thống phòng máy.
         </div>
-        <p class="small text-muted mb-3">Các phòng máy tại Cơ sở 2 đã được cài đặt sẵn danh mục phần mềm sau đây:</p>
+        <p class="small text-muted mb-3">Các phòng máy tại tòa nhà B4.2 Cơ sở 2 đã được cài đặt sẵn danh mục phần mềm sau đây:</p>
         <div class="table-responsive">
             <table class="table table-bordered table-hover align-middle small">
                 <thead class="table-light">
@@ -366,7 +366,7 @@
             </div>
             <div>
                 <h5 class="modal-title fw-bold text-dark mb-0">Tra Cứu Phòng Máy Trống Theo Tuần</h5>
-                <small class="text-muted">Tự động tính theo chu kỳ tuần học của ngày bạn chọn (hỗ trợ đăng ký sớm Học kỳ 2)</small>
+                <small class="text-muted">Tự động tính theo chu kỳ tuần học của ngày bạn chọn</small>
             </div>
         </div>
         <div class="d-flex align-items-center gap-2 ms-auto me-2">

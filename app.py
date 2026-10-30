@@ -1,6 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, abort
+﻿from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import get_db_connection, init_db
+from report_exporter import (
+    get_schedule_ca_slots,
+    build_semester_report_excel,
+    summarize_available_semesters,
+    filter_schedules_for_report
+)
 from functools import wraps
 import urllib.request
 import urllib.parse
@@ -36,11 +42,12 @@ if (not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET) and os.path.exists(_local_
 # Khai báo danh sách Quản trị viên
 ADMIN_EMAILS = [
     "mlhang@hcmus.edu.vn",
-    "tthan@hcmus.edu.vn"
+    "tthan@hcmus.edu.vn",
+    "nvtinh@hcmus.edu.vn"
 ]
 
 # Tùy chọn: Giới hạn tên miền email được phép đăng nhập (Để danh sách rỗng [] nếu cho phép mọi tài khoản Google)
-ALLOWED_EMAIL_DOMAINS = []  # Ví dụ: ["hcmus.edu.vn", "student.hcmus.edu.vn"]
+ALLOWED_EMAIL_DOMAINS = ["hcmus.edu.vn"]  # Ví dụ: ["hcmus.edu.vn", "student.hcmus.edu.vn"]
 
 
 def get_current_user_email():
@@ -430,11 +437,6 @@ def index():
     """Chuyển hướng đến trang chủ"""
     return redirect(url_for('home_page'))
 
-@app.route('/thong-tin-lien-he')
-def contact_page():
-    """Hiển thị trang Thông tin liên hệ."""
-    return render_template('contact.html')
-
 @app.route('/bao-cao-su-co')
 @login_required
 def report_page():
@@ -781,8 +783,12 @@ def admin_panel():
     conn = get_db_connection()
     today = datetime.date.today()
 
-    # 1. Lấy danh sách yêu cầu mượn phòng đang chờ duyệt (Pending)
-    pending_requests = conn.execute("SELECT * FROM booking_requests WHERE status = 'Pending'").fetchall()
+    # 1. Lấy toàn bộ danh sách yêu cầu mượn phòng (ưu tiên Chờ xử lý lên đầu, lưu vết các yêu cầu đã xử lý)
+    booking_requests = conn.execute("""
+        SELECT * FROM booking_requests
+        ORDER BY CASE status WHEN 'Pending' THEN 0 WHEN 'Processing' THEN 1 WHEN 'Approved' THEN 2 ELSE 3 END, id DESC
+    """).fetchall()
+    pending_requests = [r for r in booking_requests if r['status'] == 'Pending']
 
     # 2. Lấy danh sách lịch học hiện tại (để hiển thị trong bảng quản lý) và bổ sung thông tin chu kỳ tuần
     raw_schedules = conn.execute("SELECT * FROM schedules ORDER BY room ASC, day_of_week ASC, start_period ASC").fetchall()
@@ -926,57 +932,102 @@ def admin_panel():
     net_rows = conn.execute("SELECT * FROM room_network_status").fetchall()
     net_map = {row['room']: dict(row) for row in net_rows}
 
-    # Đếm số ca học theo từng phòng (trong tuần hiện tại)
+    # Đếm số ca học theo từng phòng (theo chuẩn 1 ca = 2.5 tiết, tối đa 24 ca/tuần/phòng, 192 ca/tuần toàn hệ thống)
     room_stats = {}
-    max_room_sessions = 1
-    total_periods_used = 0.0
-    day_periods_used = {d: 0.0 for d in range(2, 8)}
+    max_room_sessions = 24
+    total_ca_used = 0
+    day_ca_used = {d: 0 for d in range(2, 8)}
 
     for r in rooms:
         r_active = [s for s in all_enriched_schedules if s['room'] == r and s['door_open']]
         r_locked = [s for s in all_enriched_schedules if s['room'] == r and not s['door_open']]
-        r_total = len(r_active) + len(r_locked)
-        if r_total > max_room_sessions:
-            max_room_sessions = r_total
-        for s in r_active:
-            dur = max(0.0, float(s['end_period']) - float(s['start_period']) + 1.0)
-            total_periods_used += dur
+        r_active_ca = sum(len(get_schedule_ca_slots(s['start_period'], s['end_period'])) for s in r_active)
+        r_locked_ca = sum(len(get_schedule_ca_slots(s['start_period'], s['end_period'])) for s in r_locked)
+        r_total_ca = r_active_ca + r_locked_ca
+        if r_total_ca > max_room_sessions:
+            max_room_sessions = r_total_ca
+        for s in (r_active + r_locked):
+            num_ca = len(get_schedule_ca_slots(s['start_period'], s['end_period']))
+            total_ca_used += num_ca
             dow = int(s['day_of_week'])
-            if dow in day_periods_used:
-                day_periods_used[dow] += dur
+            if dow in day_ca_used:
+                day_ca_used[dow] += num_ca
         room_stats[r] = {
-            'active': len(r_active),
-            'locked': len(r_locked),
-            'total': r_total
+            'active': r_active_ca,
+            'locked': r_locked_ca,
+            'total': r_total_ca
         }
 
     for r in rooms:
         room_stats[r]['height_pct'] = int(round((room_stats[r]['total'] / max_room_sessions) * 85)) if room_stats[r]['total'] > 0 else 8
 
-    # Công suất lấp đầy (8 phòng x 6 ngày x 10 tiết = 480 tiết/tuần)
-    utilization_pct = min(100, int(round((total_periods_used / 480.0) * 100))) if total_periods_used > 0 else 0
-    peak_dow = max(day_periods_used, key=day_periods_used.get) if total_periods_used > 0 else 2
-    peak_dow_pct = min(100, int(round((day_periods_used[peak_dow] / 80.0) * 100))) if total_periods_used > 0 else 0
+    # Công suất lấp đầy chuẩn (8 phòng x 24 ca/tuần = 192 ca/tuần; 1 ngày = 32 ca/toàn trường)
+    utilization_pct = round((total_ca_used / 192.0) * 100, 2) if total_ca_used > 0 else 0
+    peak_dow = max(day_ca_used, key=day_ca_used.get) if total_ca_used > 0 else 2
+    peak_dow_pct = min(100, int(round((day_ca_used[peak_dow] / 32.0) * 100))) if total_ca_used > 0 else 0
 
-    # Phân bổ theo Khoa / Đơn vị
-    dept_counts = {'Toán - Tin': 0, 'CNTT': 0, 'Vật lý / VLKT': 0, 'Khác': 0}
+    # Phân bổ theo Khoa / Đơn vị (Tự động nhận diện động & tính theo Số ca chuẩn 2.5 tiết)
+    dept_groups = {}
     for s in all_enriched_schedules:
-        dept_str = (s.get('department') or '').strip()
-        if 'Toán' in dept_str:
-            dept_counts['Toán - Tin'] += 1
-        elif 'CNTT' in dept_str or 'Công nghệ thông tin' in dept_str:
-            dept_counts['CNTT'] += 1
-        elif 'VLKT' in dept_str or 'Vật lý' in dept_str:
-            dept_counts['Vật lý / VLKT'] += 1
+        raw_dept = (s.get('department') or '').strip()
+        if not raw_dept:
+            clean_dept = 'Khác'
         else:
-            dept_counts['Khác'] += 1
+            # Bỏ tiền tố "Khoa " ở đầu (không phân biệt hoa thường) để đồng nhất tên đơn vị
+            clean_dept = re.sub(r'^[Kk]hoa\s+', '', raw_dept).strip()
+            if not clean_dept:
+                clean_dept = raw_dept
+        norm_key = re.sub(r'[\s\-–—/]+', ' ', clean_dept.lower()).strip()
+        num_ca = len(get_schedule_ca_slots(s['start_period'], s['end_period']))
+        if norm_key not in dept_groups:
+            dept_groups[norm_key] = {'labels': {}, 'total': 0}
+        dept_groups[norm_key]['total'] += num_ca
+        dept_groups[norm_key]['labels'][clean_dept] = dept_groups[norm_key]['labels'].get(clean_dept, 0) + num_ca
 
-    total_sched = max(1, len(all_enriched_schedules))
-    dept_pcts = {k: int(round((v / total_sched) * 100)) for k, v in dept_counts.items()}
-    d1 = dept_pcts['Toán - Tin'] * 3.6
-    d2 = d1 + dept_pcts['CNTT'] * 3.6
-    d3 = d2 + dept_pcts['Vật lý / VLKT'] * 3.6
-    donut_gradient = f"conic-gradient(#2563eb 0deg {d1:.1f}deg, #10b981 {d1:.1f}deg {d2:.1f}deg, #f59e0b {d2:.1f}deg {d3:.1f}deg, #94a3b8 {d3:.1f}deg 360deg)"
+    sorted_depts = []
+    for norm_key, info in dept_groups.items():
+        best_label = max(info['labels'].items(), key=lambda x: (x[1], '-' in x[0], len(x[0])))[0]
+        sorted_depts.append((best_label, info['total']))
+    sorted_depts.sort(key=lambda x: (-x[1], x[0]))
+
+    total_sched_ca = max(1, total_ca_used)
+    palette = [
+        '#2563eb',  # Xanh dương
+        '#10b981',  # Xanh lá
+        '#f59e0b',  # Cam vàng
+        '#8b5cf6',  # Tím
+        '#06b6d4',  # Xanh ngọc
+        '#ec4899',  # Hồng
+        '#f97316',  # Cam đậm
+        '#14b8a6',  # Teal
+        '#ef4444',  # Đỏ
+        '#64748b',  # Xám xanh
+    ]
+
+    dept_items = []
+    dept_counts = {}
+    dept_pcts = {}
+    gradient_stops = []
+    current_deg = 0.0
+
+    for idx, (label, count) in enumerate(sorted_depts):
+        color = palette[idx % len(palette)]
+        pct = max(1, int(round((count / total_sched_ca) * 100))) if count > 0 else 0
+        deg_span = (count / total_sched_ca) * 360.0
+        next_deg = 360.0 if idx == len(sorted_depts) - 1 else (current_deg + deg_span)
+        gradient_stops.append(f"{color} {current_deg:.1f}deg {next_deg:.1f}deg")
+        current_deg = next_deg
+
+        dept_counts[label] = count
+        dept_pcts[label] = pct
+        dept_items.append({
+            'name': label,
+            'count': count,
+            'pct': pct,
+            'color': color
+        })
+
+    donut_gradient = f"conic-gradient({', '.join(gradient_stops)})" if gradient_stops else "conic-gradient(#e2e8f0 0deg 360deg)"
 
     # Trạng thái trực tiếp 8 phòng hôm nay & Lịch Mở/Khóa cửa hôm nay
     today_dow = today.weekday() + 2  # Thứ 2 = 2 .. Chủ nhật = 8
@@ -1070,11 +1121,14 @@ def admin_panel():
 
     dashboard_stats = {
         'room_stats': room_stats,
+        'total_ca_used': total_ca_used,
+        'total_ca_free': max(0, 192 - total_ca_used),
         'utilization_pct': utilization_pct,
         'peak_dow': peak_dow,
         'peak_dow_pct': peak_dow_pct,
         'dept_counts': dept_counts,
         'dept_pcts': dept_pcts,
+        'dept_items': dept_items,
         'donut_gradient': donut_gradient,
         'room_live_cards': room_live_cards,
         'display_dow': display_dow,
@@ -1090,9 +1144,71 @@ def admin_panel():
         'netagent_key': netagent_key
     }
 
+    semester_summary = summarize_available_semesters(raw_schedules)
+
+    # 5. Dữ liệu Quản lý Lịch trình & Chấm công Tăng ca (OT)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS overtime_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ot_date TEXT NOT NULL,
+            staff_name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            start_time TEXT,
+            end_time TEXT,
+            hours REAL NOT NULL,
+            purpose TEXT,
+            status TEXT DEFAULT 'Pending',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    ot_month = request.args.get('ot_month', 'all').strip()
+    ot_filter_status = request.args.get('ot_status', 'all').strip()
+
+    month_query = conn.execute("SELECT DISTINCT substr(ot_date, 1, 7) as m FROM overtime_records WHERE ot_date IS NOT NULL AND length(ot_date) >= 7 ORDER BY m DESC").fetchall()
+    available_ot_months = [row['m'] for row in month_query if row['m']]
+    current_month_str = today.strftime('%Y-%m')
+    if current_month_str not in available_ot_months:
+        available_ot_months.append(current_month_str)
+        available_ot_months.sort(reverse=True)
+
+    if not ot_month:
+        ot_month = 'all'
+
+    if ot_month == 'all':
+        all_ot_rows = conn.execute("SELECT * FROM overtime_records ORDER BY ot_date DESC, id DESC").fetchall()
+    else:
+        all_ot_rows = conn.execute("SELECT * FROM overtime_records WHERE ot_date LIKE ? ORDER BY ot_date DESC, id DESC", (f"{ot_month}%",)).fetchall()
+
+    ot_total_hours = sum(float(r['hours'] or 0) for r in all_ot_rows)
+    ot_completed_hours = sum(float(r['hours'] or 0) for r in all_ot_rows if r['status'] == 'Completed')
+    ot_completed_count = sum(1 for r in all_ot_rows if r['status'] == 'Completed')
+    ot_pending_count = sum(1 for r in all_ot_rows if r['status'] == 'Pending')
+    ot_staff_set = set(r['staff_name'] for r in all_ot_rows if r['staff_name'])
+
+    if ot_filter_status == 'Completed':
+        display_ot_rows = [r for r in all_ot_rows if r['status'] == 'Completed']
+    elif ot_filter_status == 'Pending':
+        display_ot_rows = [r for r in all_ot_rows if r['status'] == 'Pending']
+    else:
+        display_ot_rows = all_ot_rows
+
+    ot_data = {
+        'records': display_ot_rows,
+        'selected_month': ot_month,
+        'selected_status': ot_filter_status,
+        'available_months': available_ot_months,
+        'total_hours': round(ot_total_hours, 1),
+        'completed_hours': round(ot_completed_hours, 1),
+        'completed_count': ot_completed_count,
+        'pending_count': ot_pending_count,
+        'staff_count': len(ot_staff_set)
+    }
+
     conn.close()
     return render_template(
         'admin_panel.html',
+        booking_requests=booking_requests,
         pending_requests=pending_requests,
         schedules=current_schedules,
         schedule_counts=schedule_counts,
@@ -1114,7 +1230,9 @@ def admin_panel():
         morning_free=admin_morning_free,
         afternoon_free=admin_afternoon_free,
         issues=issues,
-        dashboard_stats=dashboard_stats
+        dashboard_stats=dashboard_stats,
+        semester_summary=semester_summary,
+        ot_data=ot_data
     )
 
 def measure_host_ping_ms(target_ip):
@@ -1122,7 +1240,6 @@ def measure_host_ping_ms(target_ip):
     import subprocess
     import platform
     import time
-    import re
 
     target_ip = (target_ip or '').strip()
     if not target_ip:
@@ -1261,8 +1378,6 @@ def admin_network_ping_now():
 @admin_required
 def download_netagent_script():
     """Tải trực tiếp file script b42_network_agent.py đã điền sẵn 8 IP Router, URL và khóa bảo mật (trên RAM để không kích hoạt Flask reload)."""
-    from flask import Response
-    import re
     conn = get_db_connection()
     rows = conn.execute("SELECT room, target_ip FROM room_network_status").fetchall()
     conn.close()
@@ -1288,35 +1403,339 @@ def download_netagent_script():
         )
     return "File b42_network_agent.py not found", 404
 
+
+@app.route('/admin/export-semester-report')
+@admin_required
+def export_semester_report():
+    """Xuất file Excel (.xlsx) Báo cáo Tần suất Khai thác Phòng máy tính Học kỳ (4 Sheet chuẩn QTTB)."""
+    semester_mode = request.args.get('semester', 'hk1').strip().lower()
+    academic_year = request.args.get('academic_year', '').strip()
+    from_date = request.args.get('from_date', '').strip()
+    to_date = request.args.get('to_date', '').strip()
+
+    conn = get_db_connection()
+    schedules_rows = conn.execute("SELECT * FROM schedules ORDER BY room ASC, day_of_week ASC, start_period ASC").fetchall()
+    issues_rows = conn.execute("SELECT * FROM issue_reports ORDER BY created_at DESC").fetchall()
+    bookings_rows = conn.execute("SELECT * FROM booking_requests ORDER BY id DESC").fetchall()
+    try:
+        net_rows = conn.execute("SELECT * FROM room_network_status").fetchall()
+    except Exception:
+        net_rows = []
+    conn.close()
+
+    filter_res = filter_schedules_for_report(
+        all_schedules=schedules_rows,
+        semester_mode=semester_mode,
+        academic_year=academic_year,
+        from_date_str=from_date,
+        to_date_str=to_date
+    )
+
+    if len(filter_res['rows']) == 0:
+        flash(
+            f"⚠️ Không tìm thấy dữ liệu môn học nào thuộc {filter_res['semester_short']} ({filter_res['academic_year']}) "
+            f"trong Thời khóa biểu hiện tại! Vui lòng kiểm tra lại thời gian Bắt đầu – Kết thúc (Giai đoạn) của các môn học "
+            f"hoặc Import lịch học cho kỳ này trước khi xuất báo cáo.",
+            "warning"
+        )
+        return redirect(url_for('admin_panel', tab='schedules'))
+
+    excel_buffer, filename = build_semester_report_excel(
+        all_schedules=schedules_rows,
+        issues_list=issues_rows,
+        bookings_list=bookings_rows,
+        net_status_list=net_rows,
+        semester_mode=semester_mode,
+        academic_year=academic_year,
+        from_date_str=from_date,
+        to_date_str=to_date
+    )
+
+    return send_file(
+        excel_buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+
+def build_overtime_report_excel(ot_rows, month_str):
+    """Xuất file Excel bảng chấm công và theo dõi tăng ca (OT)."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bang Cham Cong OT"
+    ws.views.sheetView[0].showGridLines = True
+
+    font_title = Font(name="Calibri", size=14, bold=True, color="0F2942")
+    font_subtitle = Font(name="Calibri", size=10, italic=True, color="475569")
+    font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    fill_header = PatternFill("solid", fgColor="0F2942")
+    fill_summary = PatternFill("solid", fgColor="F0FDFA")
+    font_summary = Font(name="Calibri", size=11, bold=True, color="0D9488")
+    font_body = Font(name="Calibri", size=10, color="1F2937")
+    font_bold = Font(name="Calibri", size=10, bold=True, color="1F2937")
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+    align_right = Alignment(horizontal="right", vertical="center")
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+
+    ws.merge_cells("A1:G1")
+    ws["A1"] = "BẢNG TỔNG HỢP THEO DÕI VÀ CHẤM CÔNG TĂNG CA (OT)"
+    ws["A1"].font = font_title
+    ws["A1"].alignment = align_center
+
+    ws.merge_cells("A2:G2")
+    display_period = f"Tháng {month_str}" if month_str != 'all' else "Toàn bộ thời gian"
+    ws["A2"] = f"Hệ thống Phòng máy tính Tòa B4.2 (Cơ sở 2) • Ký theo dõi: {display_period}"
+    ws["A2"].font = font_subtitle
+    ws["A2"].alignment = align_center
+
+    headers = ["STT", "Ngày OT", "Nhân sự", "Bộ phận / Vị trí", "Khung giờ & Số giờ", "Nội dung / Nhiệm vụ tăng ca", "Trạng thái"]
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col_idx, value=h)
+        cell.font = font_header
+        cell.fill = fill_header
+        cell.alignment = align_center
+        cell.border = thin_border
+    ws.row_dimensions[4].height = 26
+
+    total_hours = 0.0
+    for idx, r in enumerate(ot_rows, 1):
+        row_num = 4 + idx
+        h_val = float(r['hours'] or 0)
+        total_hours += h_val
+        st_text = "Đã hoàn thành (Đã làm)" if r['status'] == 'Completed' else "Chưa tới hạn"
+        time_display = f"{r['start_time']} - {r['end_time']} ({h_val:g}h)" if (r['start_time'] and r['end_time']) else f"{h_val:g} giờ"
+
+        cells_data = [
+            (idx, align_center, font_body),
+            (r['ot_date'], align_center, font_bold),
+            (r['staff_name'], align_left, font_bold),
+            (r['role'], align_left, font_body),
+            (time_display, align_center, font_body),
+            (r['purpose'] or "", align_left, font_body),
+            (st_text, align_center, font_body)
+        ]
+        for c_idx, (val, al, fn) in enumerate(cells_data, 1):
+            c = ws.cell(row=row_num, column=c_idx, value=val)
+            c.alignment = al
+            c.font = fn
+            c.border = thin_border
+        ws.row_dimensions[row_num].height = 20
+
+    sum_row = 5 + len(ot_rows)
+    ws.merge_cells(f"A{sum_row}:D{sum_row}")
+    ws[f"A{sum_row}"] = "TỔNG CỘNG SỐ GIỜ TĂNG CA:"
+    ws[f"A{sum_row}"].font = font_summary
+    ws[f"A{sum_row}"].alignment = align_right
+    ws[f"A{sum_row}"].fill = fill_summary
+
+    sum_cell = ws.cell(row=sum_row, column=5, value=f"{total_hours:g} giờ")
+    sum_cell.font = font_summary
+    sum_cell.alignment = align_center
+    sum_cell.fill = fill_summary
+
+    ws.merge_cells(f"F{sum_row}:G{sum_row}")
+    ws[f"F{sum_row}"].fill = fill_summary
+
+    for c in range(1, 8):
+        ws.cell(row=sum_row, column=c).border = thin_border
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+    ws.column_dimensions['A'].width = 8
+    ws.column_dimensions['F'].width = 36
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    filename = f"Bang_Cham_Cong_OT_{month_str}.xlsx"
+    return output, filename
+
+
+@app.route('/admin/overtime/add', methods=['POST'])
+@admin_required
+def add_overtime():
+    """Thêm một ca tăng ca (OT) mới."""
+    ot_date = request.form.get('ot_date', '').strip()
+    staff_name = request.form.get('staff_name', '').strip()
+    role = request.form.get('role', 'Nhân viên Trực phòng').strip()
+    start_time = request.form.get('start_time', '').strip()
+    end_time = request.form.get('end_time', '').strip()
+    raw_hours = request.form.get('hours', '').strip()
+    purpose = request.form.get('purpose', '').strip()
+    status = request.form.get('status', 'Pending').strip()
+    notes = request.form.get('notes', '').strip()
+
+    hours = 0.0
+    if raw_hours:
+        try:
+            hours = float(raw_hours)
+        except ValueError:
+            hours = 0.0
+    elif start_time and end_time:
+        try:
+            t1 = datetime.datetime.strptime(start_time, '%H:%M')
+            t2 = datetime.datetime.strptime(end_time, '%H:%M')
+            diff = (t2 - t1).total_seconds() / 3600.0
+            if diff < 0:
+                diff += 24.0
+            hours = round(diff, 2)
+        except Exception:
+            hours = 0.0
+
+    if not ot_date or not staff_name or hours <= 0:
+        flash("⚠️ Vui lòng nhập đầy đủ Ngày, Tên nhân sự và Số giờ tăng ca hợp lệ!", "warning")
+        return redirect(url_for('admin_panel', tab='overtime'))
+
+    conn = get_db_connection()
+    conn.execute('''
+        INSERT INTO overtime_records (ot_date, staff_name, role, start_time, end_time, hours, purpose, status, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (ot_date, staff_name, role, start_time, end_time, hours, purpose, status, notes))
+    conn.commit()
+    conn.close()
+
+    target_month = ot_date[:7] if len(ot_date) >= 7 else 'all'
+    flash(f"✅ Đã ghi nhận lịch tăng ca cho {staff_name} ({hours:g} giờ - {ot_date}) thành công!", "success")
+    return redirect(url_for('admin_panel', tab='overtime', ot_month=target_month))
+
+
+@app.route('/admin/overtime/toggle-status/<int:ot_id>', methods=['POST'])
+@admin_required
+def toggle_overtime_status(ot_id):
+    """Chuyển đổi trạng thái Đã làm <-> Chưa tới hạn cho ca tăng ca."""
+    current_month = request.args.get('ot_month', '').strip()
+    conn = get_db_connection()
+    row = conn.execute("SELECT status, staff_name, ot_date FROM overtime_records WHERE id = ?", (ot_id,)).fetchone()
+    if row:
+        new_status = 'Completed' if row['status'] != 'Completed' else 'Pending'
+        conn.execute("UPDATE overtime_records SET status = ? WHERE id = ?", (new_status, ot_id))
+        conn.commit()
+        st_text = "Đã làm" if new_status == 'Completed' else "Chưa tới hạn"
+        flash(f"✅ Đã cập nhật trạng thái ca tăng ca của {row['staff_name']} sang '{st_text}'!", "success")
+    conn.close()
+    return redirect(url_for('admin_panel', tab='overtime', ot_month=current_month if current_month else None))
+
+
+@app.route('/admin/overtime/delete/<int:ot_id>', methods=['POST'])
+@admin_required
+def delete_overtime(ot_id):
+    """Xóa một bản ghi tăng ca."""
+    current_month = request.args.get('ot_month', '').strip()
+    conn = get_db_connection()
+    conn.execute("DELETE FROM overtime_records WHERE id = ?", (ot_id,))
+    conn.commit()
+    conn.close()
+    flash("🗑️ Đã xóa bản ghi tăng ca thành công!", "success")
+    return redirect(url_for('admin_panel', tab='overtime', ot_month=current_month if current_month else None))
+
+
+@app.route('/admin/overtime/export', methods=['GET'])
+@admin_required
+def export_overtime_excel():
+    """Xuất file Excel bảng chấm công OT theo tháng."""
+    month = request.args.get('month', datetime.date.today().strftime('%Y-%m')).strip()
+    conn = get_db_connection()
+    if month == 'all':
+        rows = conn.execute("SELECT * FROM overtime_records ORDER BY ot_date ASC, id ASC").fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM overtime_records WHERE ot_date LIKE ? ORDER BY ot_date ASC, id ASC", (f"{month}%",)).fetchall()
+    conn.close()
+
+    excel_buffer, filename = build_overtime_report_excel(rows, month)
+    return send_file(
+        excel_buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
 @app.route('/admin/approve-cancellation/<int:cancellation_id>', methods=['POST'])
 @admin_required
 def approve_cancellation(cancellation_id):
-    """Xử lý Duyệt thông báo nghỉ gấp."""
+    """Cập nhật trạng thái thông báo nghỉ gấp (Đã tiếp nhận / Đã duyệt)."""
+    new_status = request.form.get('status', 'Approved')
+    if new_status not in ('Pending', 'Processing', 'Approved'):
+        new_status = 'Approved'
     conn = get_db_connection()
-    conn.execute("UPDATE cancellations SET status = 'Approved' WHERE id = ?", (cancellation_id,))
+    conn.execute("UPDATE cancellations SET status = ? WHERE id = ?", (new_status, cancellation_id))
     conn.commit()
     conn.close()
     
-    flash("Đã xác nhận thông báo nghỉ. Đã lưu lịch sử để hỗ trợ việc sắp xếp lịch học bù.", "success")
+    status_label = "Đã tiếp nhận" if new_status == 'Processing' else ("Đã duyệt" if new_status == 'Approved' else "Chờ xử lý")
+    flash(f"Đã cập nhật trạng thái báo nghỉ: {status_label}.", "success")
     return redirect(url_for('admin_panel', tab='cancellations'))
+
+@app.route('/admin/delete-cancellation/<int:cancellation_id>', methods=['POST'])
+@admin_required
+def delete_cancellation(cancellation_id):
+    """Xóa một thông báo nghỉ gấp."""
+    conn = get_db_connection()
+    conn.execute("DELETE FROM cancellations WHERE id = ?", (cancellation_id,))
+    conn.commit()
+    conn.close()
+    flash("Đã xóa thông báo nghỉ thành công.", "success")
+    return redirect(url_for('admin_panel', tab='cancellations'))
+
+@app.route('/admin/bulk-delete-cancellations', methods=['POST'])
+@admin_required
+def bulk_delete_cancellations():
+    """Xóa hàng loạt thông báo nghỉ gấp đã chọn."""
+    selected_ids = [int(i) for i in request.form.getlist('selected_ids') if str(i).isdigit()]
+    if selected_ids:
+        conn = get_db_connection()
+        placeholders = ','.join(['?'] * len(selected_ids))
+        conn.execute(f"DELETE FROM cancellations WHERE id IN ({placeholders})", selected_ids)
+        conn.commit()
+        conn.close()
+        flash(f"Đã xóa {len(selected_ids)} thông báo nghỉ được chọn.", "success")
+    else:
+        flash("Chưa có mục nào được chọn để xóa.", "warning")
+    return redirect(url_for('admin_panel', tab='cancellations'))
+
+@app.route('/admin/process-request/<int:request_id>', methods=['POST'])
+@admin_required
+def process_request(request_id):
+    """Đánh dấu Đã tiếp nhận yêu cầu mượn phòng."""
+    conn = get_db_connection()
+    conn.execute("UPDATE booking_requests SET status = 'Processing' WHERE id = ?", (request_id,))
+    conn.commit()
+    conn.close()
+    flash("Đã cập nhật trạng thái yêu cầu mượn phòng: Đã tiếp nhận.", "info")
+    return redirect(url_for('admin_panel', tab='requests'))
 
 @app.route('/admin/approve/<int:request_id>', methods=['POST'])
 @admin_required
 def approve_request(request_id):
-    """Xử lý Duyệt yêu cầu mượn phòng."""
+    """Xử lý Duyệt yêu cầu mượn phòng (Lưu vết và thêm vào TKB nếu chưa thêm)."""
     conn = get_db_connection()
     req = conn.execute("SELECT * FROM booking_requests WHERE id = ?", (request_id,)).fetchone()
     
     if req:
-        class_code = req['class_code'] if req['class_code'] else 'MƯỢN PHÒNG'
-        subject_name = req['subject_name'] if req['subject_name'] else req['purpose']
-        department = req['department'] if req['department'] else req['requester_name']
-        study_period = normalize_study_period_str(req['study_period']) if req['study_period'] else datetime.date.today().strftime('%d/%m/%Y')
+        if req['status'] != 'Approved':
+            class_code = req['class_code'] if req['class_code'] else 'MƯỢN PHÒNG'
+            subject_name = req['subject_name'] if req['subject_name'] else req['purpose']
+            department = req['department'] if req['department'] else req['requester_name']
+            study_period = normalize_study_period_str(req['study_period']) if req['study_period'] else datetime.date.today().strftime('%d/%m/%Y')
 
-        conn.execute('''
-            INSERT INTO schedules (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks, is_ended_early)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
-        ''', (req['room'], req['day_of_week'], req['start_period'], req['end_period'], class_code, subject_name, department, study_period))
+            conn.execute('''
+                INSERT INTO schedules (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks, is_ended_early)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
+            ''', (req['room'], req['day_of_week'], req['start_period'], req['end_period'], class_code, subject_name, department, study_period))
         
         conn.execute("UPDATE booking_requests SET status = 'Approved' WHERE id = ?", (request_id,))
         conn.commit()
@@ -1336,6 +1755,33 @@ def reject_request(request_id):
     conn.close()
     
     flash("Đã từ chối yêu cầu mượn phòng.", "warning")
+    return redirect(url_for('admin_panel', tab='requests'))
+
+@app.route('/admin/delete-request/<int:request_id>', methods=['POST'])
+@admin_required
+def delete_request(request_id):
+    """Xóa một yêu cầu mượn phòng khỏi danh sách."""
+    conn = get_db_connection()
+    conn.execute("DELETE FROM booking_requests WHERE id = ?", (request_id,))
+    conn.commit()
+    conn.close()
+    flash("Đã xóa yêu cầu mượn phòng thành công.", "success")
+    return redirect(url_for('admin_panel', tab='requests'))
+
+@app.route('/admin/bulk-delete-requests', methods=['POST'])
+@admin_required
+def bulk_delete_requests():
+    """Xóa hàng loạt yêu cầu mượn phòng đã chọn."""
+    selected_ids = [int(i) for i in request.form.getlist('selected_ids') if str(i).isdigit()]
+    if selected_ids:
+        conn = get_db_connection()
+        placeholders = ','.join(['?'] * len(selected_ids))
+        conn.execute(f"DELETE FROM booking_requests WHERE id IN ({placeholders})", selected_ids)
+        conn.commit()
+        conn.close()
+        flash(f"Đã xóa {len(selected_ids)} yêu cầu mượn phòng được chọn.", "success")
+    else:
+        flash("Chưa có mục nào được chọn để xóa.", "warning")
     return redirect(url_for('admin_panel', tab='requests'))
 
 @app.route('/admin/schedule/<int:schedule_id>/toggle_early_end', methods=['POST'])
@@ -1540,18 +1986,45 @@ def import_schedule():
 @admin_required
 def update_issue_status(issue_id):
     new_status = request.form.get('status')
-    if new_status in ['Pending', 'Processing', 'Resolved', 'Đã tiếp nhận', 'Đã khắc phục']:
+    if new_status in ['Pending', 'Processing', 'Resolved', 'Approved', 'Đã tiếp nhận', 'Đã khắc phục', 'Đã duyệt']:
         if new_status == 'Đã tiếp nhận':
             new_status = 'Processing'
-        elif new_status == 'Đã khắc phục':
+        elif new_status in ('Đã khắc phục', 'Đã duyệt', 'Approved'):
             new_status = 'Resolved'
         conn = get_db_connection()
         conn.execute('UPDATE issue_reports SET status = ? WHERE id = ?', (new_status, issue_id))
         conn.commit()
         conn.close()
-        status_label = "Đã tiếp nhận" if new_status == 'Processing' else ("Đã khắc phục" if new_status == 'Resolved' else "Chờ xử lý")
-        flash(f"Đã cập nhật trạng thái sự cố: {status_label}", "success")
+        status_label = "Đã tiếp nhận" if new_status == 'Processing' else ("Đã duyệt" if new_status == 'Resolved' else "Chờ xử lý")
+        flash(f"Đã cập nhật trạng thái sự cố: {status_label}.", "success")
     
+    return redirect(url_for('admin_panel', tab='issues'))
+
+@app.route('/admin/delete-issue/<int:issue_id>', methods=['POST'])
+@admin_required
+def delete_issue(issue_id):
+    """Xóa một báo cáo sự cố khỏi danh sách."""
+    conn = get_db_connection()
+    conn.execute("DELETE FROM issue_reports WHERE id = ?", (issue_id,))
+    conn.commit()
+    conn.close()
+    flash("Đã xóa báo cáo sự cố thành công.", "success")
+    return redirect(url_for('admin_panel', tab='issues'))
+
+@app.route('/admin/bulk-delete-issues', methods=['POST'])
+@admin_required
+def bulk_delete_issues():
+    """Xóa hàng loạt báo cáo sự cố đã chọn."""
+    selected_ids = [int(i) for i in request.form.getlist('selected_ids') if str(i).isdigit()]
+    if selected_ids:
+        conn = get_db_connection()
+        placeholders = ','.join(['?'] * len(selected_ids))
+        conn.execute(f"DELETE FROM issue_reports WHERE id IN ({placeholders})", selected_ids)
+        conn.commit()
+        conn.close()
+        flash(f"Đã xóa {len(selected_ids)} báo cáo sự cố được chọn.", "success")
+    else:
+        flash("Chưa có mục nào được chọn để xóa.", "warning")
     return redirect(url_for('admin_panel', tab='issues'))
 
 
@@ -1573,5 +2046,11 @@ def my_dashboard():
     return render_template('my_dashboard.html', bookings=my_bookings, issues=my_issues, cancellations=my_cancellations)
 
 if __name__ == '__main__':
+    import sys
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
+    is_pythonw = sys.executable.lower().endswith('pythonw.exe') or sys.stdout is None
+    if is_pythonw:
+        sys.stdout = open(os.devnull, 'w', encoding='utf-8')
+        sys.stderr = open(os.devnull, 'w', encoding='utf-8')
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    app.run(debug=debug_mode, host='127.0.0.1', port=5000)
+    app.run(debug=debug_mode, use_reloader=(debug_mode and not is_pythonw), host='127.0.0.1', port=5000)

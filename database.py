@@ -175,6 +175,23 @@ def init_db():
         )
     ''')
 
+    # 7. Bảng quản lý Lịch trình & Giờ Tăng ca (OT)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS overtime_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ot_date TEXT NOT NULL,
+            staff_name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            start_time TEXT,
+            end_time TEXT,
+            hours REAL NOT NULL,
+            purpose TEXT,
+            status TEXT DEFAULT 'Pending',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Nếu là lần đầu chạy và tạo db, ta insert 1 dòng dữ liệu mẫu để test giao diện
     if not db_exists:
         cursor.execute("""

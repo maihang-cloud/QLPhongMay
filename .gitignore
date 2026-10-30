@@ -10,5 +10,6 @@ __pycache__/
 *.log
 *.zip
 *.txt
+*.bat
 !requirements.txt
 .env

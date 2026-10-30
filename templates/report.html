@@ -32,7 +32,7 @@
                 <div class="card-header bg-primary text-white text-center py-3 py-md-4 border-0">
                     <i class="bi bi-tools display-5 mb-1 mb-md-2 d-block"></i>
                     <h3 class="fw-bold mb-1">Báo Cáo Sự Cố Kỹ Thuật</h3>
-                    <p class="mb-0 opacity-75 small">Hệ thống tiếp nhận thông tin hư hỏng thiết bị, phần mềm và hạ tầng tại Cơ sở 2</p>
+                    <p class="mb-0 opacity-75 small">Hệ thống tiếp nhận thông tin hư hỏng thiết bị, phần mềm và hạ tầng tại Phòng máy tính - B4.2 Cơ sở 2</p>
                 </div>
 
                 <div class="card-body p-3 p-md-5">
@@ -54,7 +54,7 @@
                                 <select class="form-select bg-light border-0 py-2" name="machine_number" required>
                                     <option value="" disabled selected>Chọn vị trí...</option>
                                     <option value="Máy Giáo Viên">Máy Giáo Viên</option>
-                                    <option value="Máy Học Viên">Máy Học Viên (ghi rõ số máy ở mô tả)</option>
+                                    <option value="Máy Học Viên">Máy Học Viên</option>
                                     <option value="Khác (Máy chiếu, Điều hòa, Bàn ghế...)">Khác (Điện, Máy chiếu, Máy lạnh...)</option>
                                 </select>
                             </div>
@@ -81,7 +81,7 @@
                             </div>
                             <div class="col-6 mb-3">
                                 <label class="form-label text-muted small fw-bold">Khoa / Đơn vị *</label>
-                                <input type="text" class="form-control bg-light border-0 py-2" name="department" placeholder="VD: Khoa CNTT" required>
+                                <input type="text" class="form-control bg-light border-0 py-2" name="department" placeholder="VD: Khoa Toán,..." required>
                             </div>
                         </div>
 
@@ -112,23 +112,31 @@
         <!-- ======================================================== -->
         <div class="col-lg-5 col-xl-4">
             
-            <!-- WIDGET 1: QUY TRÌNH 2 BƯỚC XỬ LÝ SỰ CỐ -->
+            <!-- WIDGET 1: QUY TRÌNH 3 BƯỚC XỬ LÝ SỰ CỐ -->
             <div class="card shadow-sm border-0 rounded-4 bg-white p-4 mb-3">
                 <h6 class="fw-bold text-dark mb-3 d-flex align-items-center">
                     <i class="bi bi-clock-history text-primary me-2 fs-5"></i>Quy Trình Tiếp Nhận & Xử Lý
                 </h6>
+                <p class="text-muted small mb-3">Theo dõi cập nhật từ Admin tại Tab <strong>Lịch sử của tôi</strong>:</p>
                 <div class="d-flex flex-column gap-3 small">
                     <div class="d-flex align-items-start">
                         <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 1</span>
                         <div>
-                            <strong>Đã tiếp nhận (Màu vàng):</strong>
-                            <div class="text-secondary">Ngay sau khi gửi báo cáo, KTV trực ca sẽ nhận được thông báo để kiểm tra và chuẩn bị thiết bị thay thế.</div>
+                            <strong>Chờ xử lý (Mặc định):</strong>
+                            <div class="text-secondary">Hệ thống đã tiếp nhận yêu cầu được gửi.</div>
                         </div>
                     </div>
                     <div class="d-flex align-items-start">
-                        <span class="badge bg-success bg-opacity-25 text-success border border-success px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 2</span>
+                        <span class="badge bg-info bg-opacity-25 text-dark border border-info px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 2</span>
                         <div>
-                            <strong>Đã khắc phục (Màu xanh lá):</strong>
+                            <strong>Đã tiếp nhận:</strong>
+                            <div class="text-secondary">Admin đang chuẩn bị thiết bị và sẽ xử lý yêu cầu được gửi.</div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start">
+                        <span class="badge bg-success bg-opacity-25 text-success border border-success px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 3</span>
+                        <div>
+                            <strong>Đã duyệt (Hoàn tất):</strong>
                             <div class="text-secondary">Sau khi hoàn tất sửa chữa/thay thế thiết bị tại phòng, trạng thái sẽ tự động đổi sang màu xanh trên trang Lịch sử.</div>
                         </div>
                     </div>
