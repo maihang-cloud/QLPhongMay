@@ -1,4 +1,4 @@
-﻿from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, Response
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import get_db_connection, init_db
 from report_exporter import (
@@ -1205,6 +1205,153 @@ def admin_panel():
         'staff_count': len(ot_staff_set)
     }
 
+    # 6. Dữ liệu Tab 📋 Nhật ký công việc (Work Log) & 🚀 Checklist Deploy 8 Phòng Máy (SOP)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS work_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            work_date TEXT NOT NULL,
+            shift_name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            target_rooms TEXT NOT NULL,
+            content TEXT NOT NULL,
+            notes TEXT DEFAULT '',
+            priority TEXT DEFAULT 'normal',
+            status TEXT DEFAULT 'in_progress',
+            created_by TEXT DEFAULT 'Admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS deployment_checklists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_name TEXT NOT NULL,
+            room TEXT NOT NULL,
+            checked_steps TEXT DEFAULT '[]',
+            notes TEXT DEFAULT '',
+            updated_by TEXT DEFAULT 'Admin',
+            updated_at TEXT,
+            UNIQUE(campaign_name, room)
+        )
+    ''')
+
+    # Khởi tạo dữ liệu mẫu lần đầu cho Nhật ký công việc để Admin dễ kiểm tra Sửa/Xóa/Chọn tất cả
+    seeded_row = conn.execute("SELECT value FROM system_settings WHERE key = 'work_logs_seeded'").fetchone()
+    if not seeded_row:
+        existing_wl_count = conn.execute("SELECT COUNT(*) as c FROM work_logs").fetchone()['c']
+        if existing_wl_count == 0:
+            today_iso = today.strftime('%Y-%m-%d')
+            sample_logs = [
+                (
+                    today_iso, 'Ca sáng', 'server_net', '6.1, 6.2, Server/Rack',
+                    'Cấu hình VLAN & kiểm tra băng thông Switch tầng 6 cho cụm phòng 6.1 - 6.6',
+                    'Port Gi1/0/1-24 tốc độ ổn định 1Gbps, đã lưu cấu hình running-config vào startup-config',
+                    'high', 'completed', 'Admin'
+                ),
+                (
+                    today_iso, 'Ca sáng', 'vmware', '5.1, 5.2, 5.3',
+                    'Kiểm thử hệ điều hành Windows 11 & phần mềm học kỳ mới trên VMware trước khi bung Image',
+                    'Snapshot v2.1 chạy mượt Visual Studio 2022, MATLAB & Veyon Client; sẵn sàng tạo file Acronis chuẩn',
+                    'high', 'in_progress', 'Admin'
+                ),
+                (
+                    today_iso, 'Ca chiều', 'support', '5.2, 6.5',
+                    'Hỗ trợ giảng viên xử lý phần mềm giảng dạy, kiểm tra cáp HDMI & cấu hình quyền ổ Z:',
+                    'Đã chép thư mục t3h và kiểm tra quyền truy cập ổ Z: (pass: giaovien) trên máy GV',
+                    'normal', 'completed', 'Admin'
+                ),
+                (
+                    today_iso, 'Cả ngày', 'process', 'Tất cả 8 phòng',
+                    'Cải tiến quy trình quản lý phòng máy & chuẩn hóa SOP triển khai Acronis + Clonezilla Lite Server',
+                    'Tích hợp bảng Checklist 23 bước trực tiếp lên hệ thống Web quản trị QTTB',
+                    'normal', 'completed', 'Admin'
+                )
+            ]
+            conn.executemany('''
+                INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', sample_logs)
+        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('work_logs_seeded', '1')")
+        conn.commit()
+
+    all_work_logs = conn.execute("SELECT * FROM work_logs ORDER BY work_date DESC, id DESC").fetchall()
+    wl_total = len(all_work_logs)
+    wl_completed = sum(1 for r in all_work_logs if r['status'] == 'completed')
+    wl_in_progress = sum(1 for r in all_work_logs if r['status'] == 'in_progress')
+    wl_pending = sum(1 for r in all_work_logs if r['status'] == 'pending')
+
+    worklog_data = {
+        'records': [dict(r) for r in all_work_logs],
+        'total_count': wl_total,
+        'completed_count': wl_completed,
+        'in_progress_count': wl_in_progress,
+        'pending_count': wl_pending
+    }
+
+    # Chuẩn bị dữ liệu Checklist Deploy 8 Phòng Máy
+    default_campaign = "HK1 (2026-2027) - Deploy Hệ thống chuẩn"
+    camp_rows = conn.execute("SELECT DISTINCT campaign_name FROM deployment_checklists ORDER BY id DESC").fetchall()
+    campaigns = [r['campaign_name'] for r in camp_rows if r['campaign_name']]
+    if not campaigns:
+        now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+        for r_code in rooms:
+            conn.execute('''
+                INSERT OR IGNORE INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
+                VALUES (?, ?, '[]', '', 'Admin', ?)
+            ''', (default_campaign, r_code, now_short))
+        conn.commit()
+        campaigns = [default_campaign]
+
+    selected_campaign = request.args.get('deploy_campaign', '').strip()
+    if not selected_campaign or selected_campaign not in campaigns:
+        selected_campaign = campaigns[0]
+
+    # Đảm bảo đủ 8 phòng cho đợt đang chọn
+    now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+    for r_code in rooms:
+        conn.execute('''
+            INSERT OR IGNORE INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
+            VALUES (?, ?, '[]', '', 'Admin', ?)
+        ''', (selected_campaign, r_code, now_short))
+    conn.commit()
+
+    deploy_rows = conn.execute(
+        "SELECT * FROM deployment_checklists WHERE campaign_name = ?",
+        (selected_campaign,)
+    ).fetchall()
+
+    room_deploy_map = {}
+    for dr in deploy_rows:
+        try:
+            parsed_steps = json.loads(dr['checked_steps'] or '[]')
+            if not isinstance(parsed_steps, list):
+                parsed_steps = []
+        except Exception:
+            parsed_steps = []
+        room_deploy_map[dr['room']] = {
+            'room': dr['room'],
+            'checked': parsed_steps,
+            'notes': dr['notes'] or '',
+            'updated_by': dr['updated_by'] or 'Admin',
+            'updated_at': dr['updated_at'] or now_short
+        }
+
+    for r_code in rooms:
+        if r_code not in room_deploy_map:
+            room_deploy_map[r_code] = {
+                'room': r_code,
+                'checked': [],
+                'notes': '',
+                'updated_by': 'Admin',
+                'updated_at': now_short
+            }
+
+    deploy_data = {
+        'campaigns': campaigns,
+        'selected_campaign': selected_campaign,
+        'room_map': room_deploy_map,
+        'subview': request.args.get('wl_view', 'daily').strip()
+    }
+
     conn.close()
     return render_template(
         'admin_panel.html',
@@ -1232,7 +1379,9 @@ def admin_panel():
         issues=issues,
         dashboard_stats=dashboard_stats,
         semester_summary=semester_summary,
-        ot_data=ot_data
+        ot_data=ot_data,
+        worklog_data=worklog_data,
+        deploy_data=deploy_data
     )
 
 def measure_host_ping_ms(target_ip):
@@ -1662,6 +1811,391 @@ def export_overtime_excel():
         download_name=filename,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+
+# ==========================================
+# QUẢN LÝ NHẬT KÝ CÔNG VIỆC (WORK LOG) & CHECKLIST DEPLOY 8 PHÒNG MÁY
+# ==========================================
+
+WORKLOG_CATEGORY_LABELS = {
+    'server_net': '🌐 Server / Router / Switch',
+    'vmware': '💿 VMware / OS / Image',
+    'support': '🛠️ Hỗ trợ GV (PM / Phần cứng)',
+    'booking': '📩 Xử lý Mượn phòng máy',
+    'process': '⚙️ Cải tiến Quy trình QTTB',
+    'office': '📁 Công việc Văn phòng khác'
+}
+
+WORKLOG_STATUS_LABELS = {
+    'completed': 'Hoàn thành',
+    'in_progress': 'Đang xử lý',
+    'pending': 'Chờ thực hiện'
+}
+
+WORKLOG_PRIORITY_LABELS = {
+    'urgent': 'Khẩn cấp',
+    'high': 'Ưu tiên cao',
+    'normal': 'Bình thường'
+}
+
+@app.route('/admin/worklog/add', methods=['POST'])
+@admin_required
+def add_worklog():
+    """Thêm công việc mới vào Nhật ký công việc thường nhật."""
+    work_date = (request.form.get('work_date') or datetime.date.today().strftime('%Y-%m-%d')).strip()
+    shift_name = (request.form.get('shift_name') or 'Ca sáng').strip()
+    category = (request.form.get('category') or 'server_net').strip()
+    target_rooms = (request.form.get('target_rooms') or 'Tất cả 8 phòng').strip()
+    content = (request.form.get('content') or '').strip()
+    notes = (request.form.get('notes') or '').strip()
+    priority = (request.form.get('priority') or 'normal').strip()
+    status = (request.form.get('status') or 'in_progress').strip()
+    created_by = get_current_user_email() or 'Admin'
+
+    if not content:
+        flash("⚠️ Vui lòng nhập nội dung công việc!", "warning")
+        return redirect(url_for('admin_panel', tab='worklog'))
+
+    conn = get_db_connection()
+    conn.execute('''
+        INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by))
+    conn.commit()
+    conn.close()
+
+    flash("✅ Đã thêm công việc mới vào Nhật ký công việc!", "success")
+    return redirect(url_for('admin_panel', tab='worklog'))
+
+
+@app.route('/admin/worklog/edit/<int:log_id>', methods=['POST'])
+@admin_required
+def edit_worklog(log_id):
+    """Chỉnh sửa nội dung và ghi chú của một công việc trong Nhật ký."""
+    work_date = (request.form.get('work_date') or datetime.date.today().strftime('%Y-%m-%d')).strip()
+    shift_name = (request.form.get('shift_name') or 'Ca sáng').strip()
+    category = (request.form.get('category') or 'server_net').strip()
+    target_rooms = (request.form.get('target_rooms') or 'Tất cả 8 phòng').strip()
+    content = (request.form.get('content') or '').strip()
+    notes = (request.form.get('notes') or '').strip()
+    priority = (request.form.get('priority') or 'normal').strip()
+    status = (request.form.get('status') or 'in_progress').strip()
+
+    if not content:
+        flash("⚠️ Nội dung công việc không được để trống!", "warning")
+        return redirect(url_for('admin_panel', tab='worklog'))
+
+    conn = get_db_connection()
+    conn.execute('''
+        UPDATE work_logs
+        SET work_date = ?, shift_name = ?, category = ?, target_rooms = ?,
+            content = ?, notes = ?, priority = ?, status = ?
+        WHERE id = ?
+    ''', (work_date, shift_name, category, target_rooms, content, notes, priority, status, log_id))
+    conn.commit()
+    conn.close()
+
+    flash(f"✏️ Đã cập nhật công việc #{log_id} thành công!", "success")
+    return redirect(url_for('admin_panel', tab='worklog'))
+
+
+@app.route('/admin/worklog/toggle-status/<int:log_id>', methods=['POST'])
+@admin_required
+def toggle_worklog_status(log_id):
+    """Đổi nhanh trạng thái công việc (Đang xử lý -> Hoàn thành -> Chờ thực hiện)."""
+    conn = get_db_connection()
+    row = conn.execute("SELECT status FROM work_logs WHERE id = ?", (log_id,)).fetchone()
+    if row:
+        cur = row['status'] or 'in_progress'
+        if cur == 'in_progress':
+            nxt = 'completed'
+        elif cur == 'completed':
+            nxt = 'pending'
+        else:
+            nxt = 'in_progress'
+        conn.execute("UPDATE work_logs SET status = ? WHERE id = ?", (nxt, log_id))
+        conn.commit()
+        flash(f"🔄 Đã chuyển trạng thái công việc sang '{WORKLOG_STATUS_LABELS.get(nxt, nxt)}'!", "success")
+    conn.close()
+    return redirect(url_for('admin_panel', tab='worklog'))
+
+
+@app.route('/admin/worklog/delete/<int:log_id>', methods=['POST'])
+@admin_required
+def delete_worklog(log_id):
+    """Xóa lẻ 1 bản ghi nhật ký công việc."""
+    conn = get_db_connection()
+    conn.execute("DELETE FROM work_logs WHERE id = ?", (log_id,))
+    conn.commit()
+    conn.close()
+    flash("🗑️ Đã xóa bản ghi công việc thành công!", "success")
+    return redirect(url_for('admin_panel', tab='worklog'))
+
+
+@app.route('/admin/worklog/bulk-delete', methods=['POST'])
+@admin_required
+def bulk_delete_worklogs():
+    """Xóa hàng loạt hoặc Chọn xóa tất cả bản ghi nhật ký công việc."""
+    selected_ids = [int(i) for i in request.form.getlist('selected_ids') if str(i).isdigit()]
+    if selected_ids:
+        conn = get_db_connection()
+        placeholders = ','.join(['?'] * len(selected_ids))
+        conn.execute(f"DELETE FROM work_logs WHERE id IN ({placeholders})", selected_ids)
+        conn.commit()
+        conn.close()
+        flash(f"🗑️ Đã xóa {len(selected_ids)} công việc được chọn khỏi Nhật ký!", "success")
+    else:
+        flash("⚠️ Chưa có công việc nào được chọn để xóa.", "warning")
+    return redirect(url_for('admin_panel', tab='worklog'))
+
+
+@app.route('/admin/worklog/export', methods=['GET'])
+@admin_required
+def export_worklog_excel():
+    """Xuất file Excel (.xlsx) Nhật ký công việc thường nhật kèm cột Ghi chú."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM work_logs ORDER BY work_date DESC, id DESC").fetchall()
+    conn.close()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Nhat Ky Cong Viec"
+    ws.views.sheetView[0].showGridLines = True
+
+    font_title = Font(name="Calibri", size=14, bold=True, color="0F2942")
+    font_subtitle = Font(name="Calibri", size=10, italic=True, color="475569")
+    font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    fill_header = PatternFill("solid", fgColor="0F2942")
+    fill_note_header = PatternFill("solid", fgColor="0D9488")
+    font_body = Font(name="Calibri", size=10, color="1F2937")
+    font_bold = Font(name="Calibri", size=10, bold=True, color="1F2937")
+    fill_note_cell = PatternFill("solid", fgColor="FFFBEB")
+
+    align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    align_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+
+    ws.merge_cells("A1:I1")
+    ws["A1"] = "SỔ NHẬT KÝ CÔNG VIỆC QUẢN TRỊ HỆ THỐNG 8 PHÒNG MÁY & VĂN PHÒNG"
+    ws["A1"].font = font_title
+    ws["A1"].alignment = align_center
+
+    ws.merge_cells("A2:I2")
+    ws["A2"] = f"Hệ thống Phòng máy (5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.5, 6.6) • Ngày xuất: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    ws["A2"].font = font_subtitle
+    ws["A2"].alignment = align_center
+
+    headers = [
+        "STT", "Ngày thực hiện", "Ca làm việc", "Danh mục công việc",
+        "Phòng máy / Phạm vi", "Nội dung công việc chi tiết",
+        "Ghi chú (Notes)", "Mức ưu tiên", "Trạng thái"
+    ]
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col_idx, value=h)
+        cell.font = font_header
+        cell.fill = fill_note_header if col_idx == 7 else fill_header
+        cell.alignment = align_center
+        cell.border = thin_border
+    ws.row_dimensions[4].height = 28
+
+    for idx, r in enumerate(rows, 1):
+        row_num = 4 + idx
+        cat_label = WORKLOG_CATEGORY_LABELS.get(r['category'], r['category'])
+        pri_label = WORKLOG_PRIORITY_LABELS.get(r['priority'], r['priority'])
+        st_label = WORKLOG_STATUS_LABELS.get(r['status'], r['status'])
+
+        row_vals = [
+            (idx, align_center, font_body),
+            (r['work_date'], align_center, font_bold),
+            (r['shift_name'], align_center, font_body),
+            (cat_label, align_left, font_bold),
+            (r['target_rooms'], align_center, font_bold),
+            (r['content'], align_left, font_body),
+            (r['notes'] or '', align_left, font_body),
+            (pri_label, align_center, font_body),
+            (st_label, align_center, font_bold)
+        ]
+        for c_idx, (val, al, fn) in enumerate(row_vals, 1):
+            c = ws.cell(row=row_num, column=c_idx, value=val)
+            c.alignment = al
+            c.font = fn
+            c.border = thin_border
+            if c_idx == 7 and val:
+                c.fill = fill_note_cell
+        ws.row_dimensions[row_num].height = 26
+
+    col_widths = [6, 14, 13, 28, 20, 44, 38, 14, 16]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    filename = f"Nhat_Ky_Cong_Viec_Phong_May_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
+@app.route('/api/deploy-checklist/update', methods=['POST'])
+@admin_required
+def api_update_deploy_checklist():
+    """API lưu tức thì tiến độ tích chọn 23 bước SOP Deploy và Ghi chú của từng phòng máy."""
+    data = request.get_json(silent=True) or {}
+    campaign_name = (data.get('campaign_name') or 'HK1 (2026-2027) - Deploy Hệ thống chuẩn').strip()
+    room = (data.get('room') or '5.1').strip()
+    checked_steps = data.get('checked_steps', [])
+    if not isinstance(checked_steps, list):
+        checked_steps = []
+    notes = (data.get('notes') or '').strip()
+    updated_by = get_current_user_email() or 'Admin'
+    now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+
+    conn = get_db_connection()
+    conn.execute('''
+        INSERT INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(campaign_name, room) DO UPDATE SET
+            checked_steps = excluded.checked_steps,
+            notes = excluded.notes,
+            updated_by = excluded.updated_by,
+            updated_at = excluded.updated_at
+    ''', (campaign_name, room, json.dumps(checked_steps), notes, updated_by, now_short))
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'room': room,
+        'checked_count': len(checked_steps),
+        'updated_at': now_short,
+        'updated_by': updated_by
+    })
+
+
+@app.route('/api/deploy-checklist/copy-phase-a-all', methods=['POST'])
+@admin_required
+def api_copy_phase_a_all():
+    """API đánh dấu hoàn tất Phần A (11 bước Master Image) cho toàn bộ 8 phòng trong đợt triển khai."""
+    data = request.get_json(silent=True) or {}
+    campaign_name = (data.get('campaign_name') or 'HK1 (2026-2027) - Deploy Hệ thống chuẩn').strip()
+    phase_a_ids = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10']
+    updated_by = get_current_user_email() or 'Admin'
+    now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+
+    conn = get_db_connection()
+    rooms_list = ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']
+    updated_map = {}
+
+    for r_code in rooms_list:
+        row = conn.execute(
+            "SELECT checked_steps, notes FROM deployment_checklists WHERE campaign_name = ? AND room = ?",
+            (campaign_name, r_code)
+        ).fetchone()
+        existing = []
+        cur_note = ''
+        if row:
+            cur_note = row['notes'] or ''
+            try:
+                existing = json.loads(row['checked_steps'] or '[]')
+            except Exception:
+                existing = []
+        merged = list(dict.fromkeys(existing + phase_a_ids))
+        conn.execute('''
+            INSERT INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(campaign_name, room) DO UPDATE SET
+                checked_steps = excluded.checked_steps,
+                updated_by = excluded.updated_by,
+                updated_at = excluded.updated_at
+        ''', (campaign_name, r_code, json.dumps(merged), cur_note, updated_by, now_short))
+        updated_map[r_code] = {
+            'room': r_code,
+            'checked': merged,
+            'notes': cur_note,
+            'updated_by': updated_by,
+            'updated_at': now_short
+        }
+
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'room_map': updated_map, 'updated_at': now_short})
+
+
+@app.route('/admin/deploy-checklist/campaign/add', methods=['POST'])
+@admin_required
+def add_deploy_campaign():
+    """Khởi tạo một đợt triển khai (Deploy Campaign) mới cho 8 phòng máy."""
+    campaign_name = (request.form.get('campaign_name') or '').strip()
+    if not campaign_name:
+        flash("⚠️ Vui lòng nhập tên đợt triển khai mới!", "warning")
+        return redirect(url_for('admin_panel', tab='worklog', wl_view='deploy'))
+
+    now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+    updated_by = get_current_user_email() or 'Admin'
+    conn = get_db_connection()
+    for r_code in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']:
+        conn.execute('''
+            INSERT OR IGNORE INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
+            VALUES (?, ?, '[]', '', ?, ?)
+        ''', (campaign_name, r_code, updated_by, now_short))
+    conn.commit()
+    conn.close()
+
+    flash(f"🚀 Đã khởi tạo đợt triển khai '{campaign_name}' cho 8 phòng máy!", "success")
+    return redirect(url_for('admin_panel', tab='worklog', wl_view='deploy', deploy_campaign=campaign_name))
+
+
+@app.route('/api/deploy-checklist/log-to-worklog', methods=['POST'])
+@admin_required
+def api_log_deploy_to_worklog():
+    """Ghi nhận nhanh tiến độ Deploy của phòng đang chọn vào Bảng Nhật ký công việc hằng ngày."""
+    data = request.get_json(silent=True) or {}
+    campaign_name = (data.get('campaign_name') or '').strip()
+    room = (data.get('room') or '5.1').strip()
+    done_count = int(data.get('done_count') or 0)
+    total_count = int(data.get('total_count') or 23)
+    notes = (data.get('notes') or '').strip()
+
+    pct = int(round((done_count / max(1, total_count)) * 100))
+    status = 'completed' if done_count >= total_count else 'in_progress'
+    today_iso = datetime.date.today().strftime('%Y-%m-%d')
+    created_by = get_current_user_email() or 'Admin'
+
+    content = (
+        f"[Deploy Hệ Thống - {campaign_name}] Triển khai Acronis Master Image & Clonezilla Lite Server "
+        f"Phòng {room}: Đạt {done_count}/{total_count} bước ({pct}%)"
+    )
+    final_note = notes if notes else f"Thực hiện theo SOP 23 bước (Acronis Recovery + Clonezilla Lite Server + Cấu hình máy GV)"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by)
+        VALUES (?, 'Cả ngày', 'vmware', ?, ?, ?, 'high', ?, ?)
+    ''', (today_iso, room, content, final_note, status, created_by))
+    new_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'log_id': new_id,
+        'message': f"Đã ghi kết quả Deploy Phòng {room} ({done_count}/{total_count} bước) vào Nhật ký công việc!"
+    })
 
 
 @app.route('/admin/approve-cancellation/<int:cancellation_id>', methods=['POST'])

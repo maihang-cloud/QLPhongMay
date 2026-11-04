@@ -512,6 +512,141 @@
         font-size: 0.95rem;
         line-height: 1.1;
     }
+
+    /* Tab Nhật ký công việc & Checklist Deploy Hệ thống */
+    #adminTabs.admin-grid-nav .nav-item.worklog-nav-span {
+        grid-column: 1 / -1;
+    }
+    #adminTabs.admin-grid-nav .nav-item.worklog-nav-span .nav-link {
+        flex-direction: row !important;
+        padding: 0.6rem 0.85rem;
+        font-size: 0.84rem;
+        background: linear-gradient(135deg, #F0FDFA 0%, #CCFBF1 100%);
+        border: 1px solid #99F6E4;
+        color: #0F2942;
+    }
+    #adminTabs.admin-grid-nav .nav-item.worklog-nav-span .nav-link.active {
+        background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%) !important;
+        border-color: #0D9488 !important;
+        color: #ffffff !important;
+    }
+    .wl-note-box {
+        background-color: #FFFBEB;
+        border: 1px solid #FDE68A;
+        color: #92400E;
+        padding: 7px 10px;
+        border-radius: 8px;
+        font-size: 0.78rem;
+        line-height: 1.35;
+    }
+    .wl-room-chip {
+        cursor: pointer;
+        user-select: none;
+        padding: 5px 11px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        border: 1.5px solid #CBD5E1;
+        background: #F8FAFC;
+        color: #334155;
+        transition: all 0.15s ease;
+    }
+    .wl-room-chip.active {
+        background: #0F2942;
+        color: #2DD4BF;
+        border-color: #0F2942;
+    }
+    .deploy-rooms-grid {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 8px;
+    }
+    @media (max-width: 991.98px) {
+        .deploy-rooms-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+    @media (max-width: 575.98px) {
+        .deploy-rooms-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    .deploy-room-card {
+        border: 2px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 9px 6px;
+        text-align: center;
+        cursor: pointer;
+        background: #F8FAFC;
+        transition: all 0.18s ease;
+    }
+    .deploy-room-card:hover {
+        border-color: #0D9488;
+        transform: translateY(-1px);
+    }
+    .deploy-room-card.active {
+        border-color: #0D9488;
+        background: #F0FDFA;
+        box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+    }
+    .deploy-room-card.done {
+        border-color: #22C55E;
+        background: #F0FDF4;
+    }
+    .deploy-step-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        border: 1px solid #E2E8F0;
+        background: #F8FAFC;
+        cursor: pointer;
+        transition: all 0.12s ease;
+        margin-bottom: 6px;
+    }
+    .deploy-step-item:hover {
+        border-color: #94A3B8;
+        background: #F1F5F9;
+    }
+    .deploy-step-item.checked {
+        background: #F0FDF4;
+        border-color: #BBF7D0;
+    }
+    .deploy-step-item.sub-step {
+        margin-left: 18px;
+        background: #FFFFFF;
+        border-left: 3.5px solid #0D9488;
+    }
+    .deploy-step-item.sub-step.checked {
+        background: #F0FDF4;
+        border-left-color: #22C55E;
+    }
+    .deploy-step-item.checked .deploy-step-title {
+        text-decoration: line-through;
+        color: #15803D;
+    }
+    .deploy-code-pill {
+        display: inline-block;
+        background: #E2E8F0;
+        color: #0F2942;
+        font-family: monospace;
+        font-weight: 700;
+        font-size: 0.75rem;
+        padding: 1px 6px;
+        border-radius: 4px;
+    }
+    .deploy-secret-pill {
+        display: inline-block;
+        background: #FEF3C7;
+        color: #92400E;
+        border: 1px solid #FDE68A;
+        font-family: monospace;
+        font-weight: 700;
+        font-size: 0.75rem;
+        padding: 1px 6px;
+        border-radius: 4px;
+    }
 </style>
 {% set active_tab = request.args.get('tab', 'dashboard') %}
 {% set pending_issues = issues|selectattr("status", "equalto", "Pending")|list %}
@@ -575,6 +710,19 @@
         <button class="nav-link {% if active_tab == 'overtime' %}active{% endif %}" id="overtime-tab" data-bs-toggle="tab" data-bs-target="#overtime" type="button" role="tab">
             <span class="tab-icon">⏰</span>
             <span>OT</span>
+        </button>
+    </li>
+
+    <!-- HÀNG 3: NHẬT KÝ CÔNG VIỆC & CHECKLIST DEPLOY 8 PHÒNG MÁY -->
+    <li class="nav-item worklog-nav-span" role="presentation">
+        <button class="nav-link {% if active_tab == 'worklog' %}active{% endif %}" id="worklog-tab" data-bs-toggle="tab" data-bs-target="#worklog" type="button" role="tab">
+            <span class="tab-icon">📋</span>
+            <span class="fw-bold">Nhật ký Công việc &amp; 🚀 Checklist Deploy 8 Phòng Máy</span>
+            {% if worklog_data['in_progress_count'] + worklog_data['pending_count'] > 0 %}
+                <span class="badge rounded-pill bg-warning text-dark ms-1" style="font-size: 0.7rem;">
+                    {{ worklog_data['in_progress_count'] + worklog_data['pending_count'] }} đang làm
+                </span>
+            {% endif %}
         </button>
     </li>
 </ul>
@@ -794,9 +942,9 @@
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="fw-bold text-dark fs-6 me-1">📩 Yêu cầu mượn phòng / dạy bù</span>
                         <span class="auto-reload-badge badge rounded-pill px-2.5 py-1 text-muted d-inline-flex align-items-center" 
-                              title="Tự động cập nhật sau 10s. Bấm để tạm dừng hoặc tiếp tục." 
+                              title="Tự động cập nhật sau 30s. Bấm để tạm dừng hoặc tiếp tục." 
                               onclick="toggleAutoReload()">
-                            <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">10s</strong>
+                            <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">30s</strong>
                         </span>
                         <button type="button" class="schedule-filter-pill active-all" data-tab-filter="requests" data-status="all" onclick="filterAdminList('requests', 'all', this)">
                             Tất cả ({{ req_all_count }})
@@ -1428,9 +1576,9 @@
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="fw-bold text-dark fs-6 me-1">🛠️ Danh sách sự cố kỹ thuật</span>
                         <span class="auto-reload-badge badge rounded-pill px-2.5 py-1 text-muted d-inline-flex align-items-center" 
-                              title="Tự động cập nhật sau 10s. Bấm để tạm dừng hoặc tiếp tục." 
+                              title="Tự động cập nhật sau 30s. Bấm để tạm dừng hoặc tiếp tục." 
                               onclick="toggleAutoReload()">
-                            <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">10s</strong>
+                            <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">30s</strong>
                         </span>
                         <button type="button" class="schedule-filter-pill active-all" data-tab-filter="issues" data-status="all" onclick="filterAdminList('issues', 'all', this)">
                             Tất cả ({{ iss_all_count }})
@@ -1709,9 +1857,9 @@
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="fw-bold text-danger fs-6 me-1">🏃 Thông báo nghỉ gấp</span>
                         <span class="auto-reload-badge badge rounded-pill px-2.5 py-1 text-muted d-inline-flex align-items-center" 
-                              title="Tự động cập nhật sau 10s. Bấm để tạm dừng hoặc tiếp tục." 
+                              title="Tự động cập nhật sau 30s. Bấm để tạm dừng hoặc tiếp tục." 
                               onclick="toggleAutoReload()">
-                            <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">10s</strong>
+                            <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">30s</strong>
                         </span>
                         <button type="button" class="schedule-filter-pill active-all" data-tab-filter="cancellations" data-status="all" onclick="filterAdminList('cancellations', 'all', this)">
                             Tất cả ({{ can_all_count }})
@@ -2140,7 +2288,648 @@
         </div>
     </div>
 
+    <!-- ========================================== -->
+    <!-- TAB 9: 📋 NHẬT KÝ CÔNG VIỆC & 🚀 CHECKLIST DEPLOY 8 PHÒNG MÁY -->
+    <!-- ========================================== -->
+    <div class="tab-pane fade {% if active_tab == 'worklog' %}show active{% endif %} admin-wrapper-font" id="worklog" role="tabpanel">
+        {% set wl_subview = deploy_data['subview'] if deploy_data else 'daily' %}
+
+        <!-- THANH TIÊU ĐỀ & CHUYỂN ĐỔI 2 CHẾ ĐỘ (NHẬT KÝ HẰNG NGÀY <-> CHECKLIST DEPLOY SOP) -->
+        <div class="card border-0 shadow-sm rounded-4 mb-3 overflow-hidden" style="background: linear-gradient(135deg, #0F2942 0%, #163A5F 60%, #0D9488 100%);">
+            <div class="card-body p-3 p-md-4 text-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div>
+                        <h5 class="fw-bold mb-1 d-flex align-items-center gap-2">
+                            <span>📋 Sổ Nhật Ký Công Việc &amp; Quy Trình Deploy Phòng Máy</span>
+                        </h5>
+                        <p class="mb-0 small" style="color: #CCFBF1;">
+                            Quản lý vận hành 8 phòng máy (5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.5, 6.6), hạ tầng Server/Switch/Router, VMware &amp; Checklist Deploy Acronis + Clonezilla
+                        </p>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 bg-dark bg-opacity-25 p-1 rounded-3 border border-light border-opacity-25">
+                        <button type="button" id="btnSubViewDaily" onclick="switchWorklogSubView('daily')"
+                                class="btn btn-sm fw-bold rounded-2 px-3 py-2 {% if wl_subview != 'deploy' %}bg-white text-dark shadow-sm{% else %}text-white{% endif %}">
+                            📋 Nhật ký công việc ({{ worklog_data['total_count'] }})
+                        </button>
+                        <button type="button" id="btnSubViewDeploy" onclick="switchWorklogSubView('deploy')"
+                                class="btn btn-sm fw-bold rounded-2 px-3 py-2 {% if wl_subview == 'deploy' %}bg-white text-dark shadow-sm{% else %}text-white{% endif %}">
+                            🚀 Checklist Deploy 8 Phòng Máy (SOP)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- PHÂN KHU 1: NHẬT KÝ CÔNG VIỆC THƯỜNG NHẬT (WORK LOG) -->
+        <!-- ===================================================== -->
+        <div id="wlDailySection" class="{% if wl_subview == 'deploy' %}d-none{% endif %}">
+
+            <!-- 4 THẺ CHỈ SỐ KPI NHẬT KÝ -->
+            <div class="row g-2 g-md-3 mb-3">
+                <div class="col-6 col-lg-3">
+                    <div class="dash-kpi-card" style="border-left: 4px solid #0F2942;">
+                        <div class="dash-kpi-title">📋 TỔNG ĐẦU VIỆC</div>
+                        <div class="dash-kpi-val" style="color: #0F2942;">{{ worklog_data['total_count'] }} <span class="fs-6 fw-semibold text-muted">việc</span></div>
+                        <div class="dash-kpi-sub">Hệ thống 8 phòng máy &amp; Văn phòng</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="dash-kpi-card" style="border-left: 4px solid #10b981;">
+                        <div class="dash-kpi-title">✅ ĐÃ HOÀN THÀNH</div>
+                        <div class="dash-kpi-val text-success">{{ worklog_data['completed_count'] }} <span class="fs-6 fw-semibold text-muted">việc</span></div>
+                        <div class="dash-kpi-sub">Đã nghiệm thu &amp; lưu nhật ký</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="dash-kpi-card" style="border-left: 4px solid #0D9488;">
+                        <div class="dash-kpi-title">🔄 ĐANG XỬ LÝ / THEO DÕI</div>
+                        <div class="dash-kpi-val text-primary">{{ worklog_data['in_progress_count'] }} <span class="fs-6 fw-semibold text-muted">việc</span></div>
+                        <div class="dash-kpi-sub">Đang test VMware, cấu hình mạng...</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="dash-kpi-card" style="border-left: 4px solid #f59e0b;">
+                        <div class="dash-kpi-title">⏳ CHỜ THỰC HIỆN</div>
+                        <div class="dash-kpi-val text-warning">{{ worklog_data['pending_count'] }} <span class="fs-6 fw-semibold text-dark">việc</span></div>
+                        <div class="dash-kpi-sub">Kế hoạch / bàn giao ca tiếp theo</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- THANH CÔNG CỤ LỌC, TÌM KIẾM, CHỌN XÓA TẤT CẢ & THÊM MỚI -->
+            <div class="card border-0 shadow-sm rounded-4 p-3 mb-3 bg-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
+                    <!-- Bộ lọc nhanh theo Danh mục -->
+                    <div class="d-flex flex-wrap gap-1">
+                        <button type="button" class="schedule-filter-pill active-all" data-wl-cat="all" onclick="filterWorklogCategory('all', this)">
+                            Tất cả ({{ worklog_data['total_count'] }})
+                        </button>
+                        <button type="button" class="schedule-filter-pill" data-wl-cat="server_net" onclick="filterWorklogCategory('server_net', this)">
+                            🌐 Server / Switch / Router
+                        </button>
+                        <button type="button" class="schedule-filter-pill" data-wl-cat="vmware" onclick="filterWorklogCategory('vmware', this)">
+                            💿 VMware / OS / Image
+                        </button>
+                        <button type="button" class="schedule-filter-pill" data-wl-cat="support" onclick="filterWorklogCategory('support', this)">
+                            🛠️ Hỗ trợ GV (PM/Cứng)
+                        </button>
+                        <button type="button" class="schedule-filter-pill" data-wl-cat="booking" onclick="filterWorklogCategory('booking', this)">
+                            📩 Mượn phòng
+                        </button>
+                        <button type="button" class="schedule-filter-pill" data-wl-cat="process" onclick="filterWorklogCategory('process', this)">
+                            ⚙️ Cải tiến quy trình
+                        </button>
+                        <button type="button" class="schedule-filter-pill" data-wl-cat="office" onclick="filterWorklogCategory('office', this)">
+                            📁 Văn phòng
+                        </button>
+                    </div>
+
+                    <!-- Nút Xuất Excel & Thêm Công Việc Mới -->
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ url_for('export_worklog_excel') }}" class="btn btn-outline-success btn-sm fw-bold rounded-3 px-3 py-2 shadow-sm">
+                            📥 Xuất Excel (.xlsx)
+                        </a>
+                        <button type="button" class="btn btn-primary btn-sm fw-bold rounded-3 px-3 py-2 shadow-sm" onclick="openAddWorklogModal()">
+                            ➕ Thêm công việc mới
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hàng 2: Tìm kiếm, Lọc phòng, Lọc trạng thái & Chọn xóa hàng loạt -->
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-md-4">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0">🔍</span>
+                            <input type="text" id="searchInput-worklogs" class="form-control bg-light border-start-0"
+                                   placeholder="Tìm theo nội dung công việc, ghi chú, phòng..." oninput="applyWorklogFilters()">
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select id="roomFilter-worklogs" class="form-select form-select-sm bg-light fw-semibold" onchange="applyWorklogFilters()">
+                            <option value="all">🏫 Tất cả phòng</option>
+                            <option value="5.1">Phòng 5.1</option>
+                            <option value="5.2">Phòng 5.2</option>
+                            <option value="5.3">Phòng 5.3</option>
+                            <option value="6.1">Phòng 6.1</option>
+                            <option value="6.2">Phòng 6.2</option>
+                            <option value="6.3">Phòng 6.3</option>
+                            <option value="6.5">Phòng 6.5</option>
+                            <option value="6.6">Phòng 6.6</option>
+                            <option value="Server">Server / Tủ Rack</option>
+                            <option value="Văn phòng">Văn phòng</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select id="statusFilter-worklogs" class="form-select form-select-sm bg-light fw-semibold" onchange="applyWorklogFilters()">
+                            <option value="all">📌 Mọi trạng thái</option>
+                            <option value="in_progress">🔄 Đang xử lý</option>
+                            <option value="completed">✅ Hoàn thành</option>
+                            <option value="pending">⏳ Chờ thực hiện</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-4 d-flex justify-content-md-end align-items-center gap-2">
+                        <div class="form-check mb-0 me-1">
+                            <input class="form-check-input" type="checkbox" id="selectAllMobile-worklogs" onchange="toggleSelectAll('worklogs', this.checked)">
+                            <label class="form-check-label small fw-bold text-dark" for="selectAllMobile-worklogs">
+                                Chọn tất cả
+                            </label>
+                        </div>
+                        <form action="{{ url_for('bulk_delete_worklogs') }}" method="POST" class="m-0" onsubmit="return confirmBulkDelete('worklogs', 'công việc trong Nhật ký')">
+                            <div id="bulkHiddenInputs-worklogs"></div>
+                            <button type="submit" id="btnBulkDelete-worklogs" class="btn btn-outline-danger btn-sm fw-bold rounded-3 px-3" disabled>
+                                🗑️ Xóa đã chọn (<span id="selectedCount-worklogs">0</span>)
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            {% set cat_badge_map = {
+                'server_net': ('🌐 Server / Mạng', '#DBEAFE', '#1E40AF'),
+                'vmware': ('💿 VMware / Image', '#F3E8FF', '#6B21A8'),
+                'support': ('🛠️ Hỗ trợ GV', '#FEF3C7', '#92400E'),
+                'booking': ('📩 Mượn phòng', '#DCFCE7', '#166534'),
+                'process': ('⚙️ Cải tiến quy trình', '#CCFBF1', '#115E59'),
+                'office': ('📁 Văn phòng', '#F1F5F9', '#334155')
+            } %}
+
+            <!-- BẢNG DANH SÁCH NHẬT KÝ CÔNG VIỆC (DESKTOP) -->
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white d-none d-lg-block mb-4">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead style="background-color: #F8FAFC;">
+                            <tr>
+                                <th class="ps-3 text-center" style="width: 40px;">
+                                    <input class="form-check-input" type="checkbox" id="selectAllDesktop-worklogs"
+                                           onchange="toggleSelectAll('worklogs', this.checked)" title="Chọn xóa tất cả">
+                                </th>
+                                <th class="text-muted small fw-bold" style="width: 11%;">NGÀY / CA</th>
+                                <th class="text-muted small fw-bold" style="width: 14%;">DANH MỤC</th>
+                                <th class="text-muted small fw-bold" style="width: 12%;">PHÒNG MÁY</th>
+                                <th class="text-muted small fw-bold" style="width: 24%;">NỘI DUNG CÔNG VIỆC</th>
+                                <th class="text-muted small fw-bold" style="width: 21%; color: #0D9488 !important;">📌 CỘT GHI CHÚ (NOTES)</th>
+                                <th class="text-center text-muted small fw-bold" style="width: 10%;">TRẠNG THÁI</th>
+                                <th class="text-center text-muted small fw-bold pe-3" style="width: 8%;">SỬA / XÓA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if worklog_data['records']|length == 0 %}
+                            <tr>
+                                <td colspan="8" class="text-center py-5 text-muted">
+                                    <i class="bi bi-journal-check fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                                    Chưa có công việc nào trong Nhật ký. Bấm <strong>"➕ Thêm công việc mới"</strong> để bắt đầu ghi nhận.
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% for w in worklog_data['records'] %}
+                            {% set cat_info = cat_badge_map.get(w['category'], ('📋 Khác', '#F1F5F9', '#334155')) %}
+                            <tr class="admin-list-item-worklogs"
+                                data-category="{{ w['category'] }}"
+                                data-status="{{ w['status'] }}"
+                                data-room="{{ w['target_rooms'] }}"
+                                data-search="{{ (w['content'] ~ ' ' ~ (w['notes'] or '') ~ ' ' ~ w['target_rooms'] ~ ' ' ~ w['work_date'])|lower }}">
+                                <td class="ps-3 text-center">
+                                    <input class="form-check-input item-check-worklogs" type="checkbox" value="{{ w['id'] }}"
+                                           onchange="syncRowCheckbox('worklogs', this)">
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-dark">
+                                        {% if w['work_date'] and '-' in w['work_date'] and w['work_date']|length == 10 %}
+                                            {% set dp = w['work_date'].split('-') %}
+                                            {{ dp[2] }}/{{ dp[1] }}/{{ dp[0] }}
+                                        {% else %}
+                                            {{ w['work_date'] }}
+                                        {% endif %}
+                                    </div>
+                                    <span class="badge bg-light text-secondary border mt-1" style="font-size: 0.7rem;">{{ w['shift_name'] }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge rounded-pill px-2 py-1 fw-bold"
+                                          style="background-color: {{ cat_info[1] }}; color: {{ cat_info[2] }}; font-size: 0.75rem;">
+                                        {{ cat_info[0] }}
+                                    </span>
+                                    <div class="mt-1">
+                                        {% if w['priority'] == 'urgent' %}
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle" style="font-size: 0.68rem;">🔥 Khẩn cấp</span>
+                                        {% elif w['priority'] == 'high' %}
+                                            <span class="badge bg-warning bg-opacity-15 text-dark border border-warning-subtle" style="font-size: 0.68rem;">⚡ Ưu tiên cao</span>
+                                        {% else %}
+                                            <span class="text-muted" style="font-size: 0.7rem;">• Bình thường</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for r_tag in w['target_rooms'].split(',') %}
+                                            {% if r_tag.strip() %}
+                                                <span class="badge rounded-2 px-2 py-1" style="background-color: #0F2942; color: #2DD4BF; font-size: 0.72rem;">
+                                                    {{ r_tag.strip() }}
+                                                </span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold text-dark" style="font-size: 0.84rem; line-height: 1.4;">
+                                        {{ w['content'] }}
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if w['notes'] and w['notes'].strip() %}
+                                        <div class="wl-note-box">
+                                            📌 {{ w['notes'] }}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted fst-italic small">— Không có ghi chú —</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <form method="POST" action="{{ url_for('toggle_worklog_status', log_id=w['id']) }}" class="m-0">
+                                        {% if w['status'] == 'completed' %}
+                                            <button type="submit" class="btn btn-success btn-sm rounded-pill px-2 py-1 fw-bold shadow-none" style="font-size: 0.74rem;" title="Bấm để chuyển trạng thái">
+                                                ✅ Hoàn thành
+                                            </button>
+                                        {% elif w['status'] == 'in_progress' %}
+                                            <button type="submit" class="btn btn-sm rounded-pill px-2 py-1 fw-bold shadow-none" style="background-color: #F0FDFA; color: #0D9488; border: 1px solid #99F6E4; font-size: 0.74rem;" title="Bấm để chuyển sang Hoàn thành">
+                                                🔄 Đang xử lý
+                                            </button>
+                                        {% else %}
+                                            <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-2 py-1 fw-bold text-dark shadow-none" style="font-size: 0.74rem;" title="Bấm để chuyển sang Đang xử lý">
+                                                ⏳ Chờ làm
+                                            </button>
+                                        {% endif %}
+                                    </form>
+                                </td>
+                                <td class="text-center pe-3">
+                                    <div class="d-flex justify-content-center gap-1">
+                                        <button type="button" class="btn btn-outline-primary btn-sm rounded-2 px-2 py-1 fw-bold"
+                                                style="font-size: 0.74rem;"
+                                                data-id="{{ w['id'] }}"
+                                                data-date="{{ w['work_date'] }}"
+                                                data-shift="{{ w['shift_name'] }}"
+                                                data-category="{{ w['category'] }}"
+                                                data-rooms="{{ w['target_rooms'] }}"
+                                                data-content="{{ w['content'] }}"
+                                                data-notes="{{ w['notes'] or '' }}"
+                                                data-priority="{{ w['priority'] }}"
+                                                data-status="{{ w['status'] }}"
+                                                onclick="openEditWorklogModal(this)" title="Sửa công việc & ghi chú">
+                                            ✏️ Sửa
+                                        </button>
+                                        <form method="POST" action="{{ url_for('delete_worklog', log_id=w['id']) }}" class="m-0"
+                                              onsubmit="return confirm('Bạn có chắc chắn muốn xóa công việc này khỏi Nhật ký?');">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm rounded-2 px-2 py-1 fw-bold" style="font-size: 0.74rem;" title="Xóa">
+                                                🗑️
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- DANH SÁCH THẺ NHẬT KÝ CÔNG VIỆC TRÊN MOBILE -->
+            <div class="d-lg-none">
+                {% if worklog_data['records']|length == 0 %}
+                    <div class="card p-4 text-center text-muted border-0 shadow-sm rounded-4 mb-3">
+                        Chưa có công việc nào trong Nhật ký.
+                    </div>
+                {% endif %}
+                {% for w in worklog_data['records'] %}
+                {% set cat_info = cat_badge_map.get(w['category'], ('📋 Khác', '#F1F5F9', '#334155')) %}
+                <div class="mobile-action-card admin-list-item-worklogs"
+                     data-category="{{ w['category'] }}"
+                     data-status="{{ w['status'] }}"
+                     data-room="{{ w['target_rooms'] }}"
+                     data-search="{{ (w['content'] ~ ' ' ~ (w['notes'] or '') ~ ' ' ~ w['target_rooms'] ~ ' ' ~ w['work_date'])|lower }}">
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <input class="form-check-input item-check-worklogs mt-0" type="checkbox" value="{{ w['id'] }}"
+                                   onchange="syncRowCheckbox('worklogs', this)">
+                            <span class="badge rounded-pill px-2 py-1 fw-bold" style="background-color: {{ cat_info[1] }}; color: {{ cat_info[2] }}; font-size: 0.73rem;">
+                                {{ cat_info[0] }}
+                            </span>
+                        </div>
+                        <small class="text-muted fw-semibold">{{ w['work_date'] }} • {{ w['shift_name'] }}</small>
+                    </div>
+
+                    <div class="mb-2 d-flex flex-wrap gap-1">
+                        {% for r_tag in w['target_rooms'].split(',') %}
+                            {% if r_tag.strip() %}
+                                <span class="badge rounded-2 px-2 py-1" style="background-color: #0F2942; color: #2DD4BF; font-size: 0.7rem;">
+                                    {{ r_tag.strip() }}
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <div class="fw-bold text-dark mb-2" style="font-size: 0.88rem;">
+                        {{ w['content'] }}
+                    </div>
+
+                    <div class="wl-note-box mb-2">
+                        <strong>📌 Ghi chú:</strong> {{ w['notes'] if (w['notes'] and w['notes'].strip()) else 'Chưa có ghi chú' }}
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top gap-2">
+                        <form method="POST" action="{{ url_for('toggle_worklog_status', log_id=w['id']) }}" class="m-0">
+                            {% if w['status'] == 'completed' %}
+                                <button type="submit" class="btn btn-success btn-sm rounded-pill px-3 fw-bold" style="font-size: 0.74rem;">✅ Hoàn thành</button>
+                            {% elif w['status'] == 'in_progress' %}
+                                <button type="submit" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold" style="font-size: 0.74rem;">🔄 Đang xử lý</button>
+                            {% else %}
+                                <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-3 fw-bold text-dark" style="font-size: 0.74rem;">⏳ Chờ làm</button>
+                            {% endif %}
+                        </form>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold"
+                                    style="font-size: 0.74rem;"
+                                    data-id="{{ w['id'] }}"
+                                    data-date="{{ w['work_date'] }}"
+                                    data-shift="{{ w['shift_name'] }}"
+                                    data-category="{{ w['category'] }}"
+                                    data-rooms="{{ w['target_rooms'] }}"
+                                    data-content="{{ w['content'] }}"
+                                    data-notes="{{ w['notes'] or '' }}"
+                                    data-priority="{{ w['priority'] }}"
+                                    data-status="{{ w['status'] }}"
+                                    onclick="openEditWorklogModal(this)">
+                                ✏️ Sửa
+                            </button>
+                            <form method="POST" action="{{ url_for('delete_worklog', log_id=w['id']) }}" class="m-0"
+                                  onsubmit="return confirm('Xóa công việc này khỏi Nhật ký?');">
+                                <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3" style="font-size: 0.74rem;">
+                                    🗑️ Xóa
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- PHÂN KHU 2: 🚀 CHECKLIST DEPLOY 8 PHÒNG MÁY (SOP 23 BƯỚC) -->
+        <!-- ===================================================== -->
+        <div id="wlDeploySection" class="{% if wl_subview != 'deploy' %}d-none{% endif %}">
+
+            <!-- Thanh chọn Đợt Triển Khai (Campaign) -->
+            <div class="card border-0 shadow-sm rounded-4 p-3 mb-3 bg-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="fw-bold text-primary small">🎯 ĐỢT DEPLOY / HỌC KỲ:</span>
+                        <select id="deployCampaignSelect" class="form-select form-select-sm fw-bold border-primary-subtle"
+                                style="min-width: 260px; color: #0F2942;" onchange="changeDeployCampaign(this.value)">
+                            {% for c_name in deploy_data['campaigns'] %}
+                                <option value="{{ c_name }}" {% if c_name == deploy_data['selected_campaign'] %}selected{% endif %}>
+                                    {{ c_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" class="btn btn-outline-primary btn-sm fw-bold rounded-3"
+                                data-bs-toggle="modal" data-bs-target="#addDeployCampaignModal">
+                            ➕ Tạo đợt mới
+                        </button>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge rounded-pill px-3 py-2 fw-bold" style="background-color: #F0FDFA; color: #0D9488; border: 1px solid #99F6E4; font-size: 0.8rem;" id="overallDeploySummaryBadge">
+                            Đang tải tiến độ 8 phòng...
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ma trận 8 Phòng Máy (5.1 -> 6.6) -->
+            <div class="card border-0 shadow-sm rounded-4 p-3 mb-3 bg-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <span class="fw-bold small" style="color: #0F2942;">
+                        🖥️ CHỌN PHÒNG MÁY ĐANG TRIỂN KHAI (BẤM VÀO PHÒNG ĐỂ TÍCH CHECKLIST TRỰC TIẾP):
+                    </span>
+                    <button type="button" class="btn btn-sm fw-bold py-1 px-2"
+                            style="background-color: #F0FDFA; color: #0D9488; border: 1px solid #99F6E4; font-size: 0.75rem;"
+                            onclick="copyPhaseAToAll8Rooms()">
+                        ⚡ Đánh dấu xong Phần A (Master Image) cho cả 8 phòng
+                    </button>
+                </div>
+                <div class="deploy-rooms-grid" id="deployRoomsGrid"></div>
+            </div>
+
+            <!-- Thanh Trạng thái & Thao tác nhanh của Phòng đang chọn -->
+            <div class="card border-0 shadow-sm rounded-4 p-3 mb-3" style="background-color: #F0FDFA; border: 1px solid #99F6E4 !important;">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge rounded-3 px-3 py-2 fw-bold fs-6" style="background-color: #0F2942; color: #2DD4BF;" id="deployActiveRoomBadge">
+                            PHÒNG 5.1
+                        </span>
+                        <div>
+                            <div class="fw-bold text-dark" style="font-size: 0.92rem;" id="deployActiveRoomProgressText">
+                                Tiến độ: 0 / 23 bước (0%)
+                            </div>
+                            <div class="text-muted" style="font-size: 0.75rem;" id="deployActiveRoomMeta">
+                                Tự động lưu vào cơ sở dữ liệu ngay khi tích chọn
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-white bg-white border btn-sm fw-bold rounded-3" onclick="completePhaseACurrentRoom()">
+                            ⚡ Xong Phần A (Phòng này)
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm fw-bold rounded-3" onclick="completeAllStepsCurrentRoom()">
+                            ✅ Hoàn tất 100% phòng này
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm fw-bold rounded-3" onclick="resetCurrentRoomSteps()">
+                            🔄 Reset phòng này
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2 Cột Checklist SOP: Phần A (Acronis & Master Image) & Phần B (Clonezilla Lite Server & Máy GV) -->
+            <div class="row g-3 mb-3">
+                <!-- PHẦN A -->
+                <div class="col-12 col-lg-6">
+                    <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 bg-white">
+                        <div class="p-3 text-white d-flex justify-content-between align-items-center" style="background-color: #0F2942;">
+                            <div class="fw-bold small">
+                                🅰️ PHẦN A: RECOVERY ACRONIS LÊN 2 MÁY MẪU (SV &amp; GV) &amp; TẠO IMAGE
+                            </div>
+                            <span class="badge rounded-pill" style="background: rgba(255,255,255,0.2); color: #2DD4BF;" id="deployPhaseACountBadge">0/11</span>
+                        </div>
+                        <div class="card-body p-2 p-md-3" id="deployPhaseAList"></div>
+                    </div>
+                </div>
+
+                <!-- PHẦN B -->
+                <div class="col-12 col-lg-6">
+                    <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 bg-white">
+                        <div class="p-3 text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%);">
+                            <div class="fw-bold small">
+                                🅱️ PHẦN B: DEPLOY CLONEZILLA LITE SERVER &amp; CẤU HÌNH MÁY GV
+                            </div>
+                            <span class="badge rounded-pill" style="background: rgba(255,255,255,0.2); color: #99F6E4;" id="deployPhaseBCountBadge">0/12</span>
+                        </div>
+                        <div class="card-body p-2 p-md-3" id="deployPhaseBList"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thanh Ghi chú riêng cho từng Phòng & Đẩy kết quả sang Nhật ký công việc -->
+            <div class="card border-0 shadow-sm rounded-4 p-3 mb-4" style="background-color: #FFFBEB; border: 1.5px solid #FDE68A !important;">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-md-auto">
+                        <label class="fw-bold small mb-0" style="color: #92400E;">
+                            📌 Ghi chú triển khai <span id="deployNoteRoomLabel">Phòng 5.1</span>:
+                        </label>
+                    </div>
+                    <div class="col-12 col-md">
+                        <input type="text" id="deployRoomNoteInput" class="form-control form-control-sm bg-white border-warning"
+                               placeholder="VD: Máy SV 14, 22 chỉ nhận 100Mbps cần bấm lại đầu mạng; Đã chép đề thi vào ổ Z..."
+                               onblur="saveCurrentRoomDeployState()">
+                    </div>
+                    <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-warning btn-sm fw-bold text-dark rounded-3 px-3" onclick="saveCurrentRoomDeployState(true)">
+                            💾 Lưu ghi chú
+                        </button>
+                        <button type="button" class="btn btn-sm fw-bold text-white rounded-3 px-3" style="background-color: #0F2942;" onclick="logCurrentRoomDeployToWorklog()">
+                            📝 Ghi kết quả vào Nhật ký công việc
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
 </div> <!-- Hết Nội dung các Tab -->
+
+
+<!-- ========================================== -->
+<!-- MODAL THÊM / SỬA CÔNG VIỆC TRONG NHẬT KÝ (CÓ CỘT GHI CHÚ RIÊNG) -->
+<!-- ========================================== -->
+<div class="modal fade admin-wrapper-font" id="worklogModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+            <div class="modal-header border-0 text-white" style="background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%);">
+                <h5 class="modal-title fw-bold" id="worklogModalTitle">➕ Thêm Công Việc Thường Nhật Mới</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="worklogForm" action="{{ url_for('add_worklog') }}" method="POST">
+                <div class="modal-body p-3 p-md-4 bg-light">
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label text-dark small fw-bold mb-1">1. Ngày thực hiện *</label>
+                            <input type="date" class="form-control border-0 bg-white shadow-sm fw-semibold" name="work_date" id="wl_work_date" required value="{{ today_date_str }}">
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label text-dark small fw-bold mb-1">2. Ca làm việc *</label>
+                            <select class="form-select border-0 bg-white shadow-sm fw-semibold" name="shift_name" id="wl_shift_name">
+                                <option value="Ca sáng">🌅 Ca sáng (07:30 - 11:30)</option>
+                                <option value="Ca chiều">🌇 Ca chiều (13:00 - 17:00)</option>
+                                <option value="Cả ngày">☀️ Cả ngày</option>
+                                <option value="Ngoài giờ / OT">🌙 Ngoài giờ / Tăng ca</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label text-dark small fw-bold mb-1">3. Mức độ ưu tiên</label>
+                            <select class="form-select border-0 bg-white shadow-sm fw-semibold" name="priority" id="wl_priority">
+                                <option value="normal">🟢 Bình thường</option>
+                                <option value="high">⚡ Ưu tiên cao</option>
+                                <option value="urgent">🔥 Khẩn cấp</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-md-7">
+                            <label class="form-label text-dark small fw-bold mb-1">4. Danh mục công việc *</label>
+                            <select class="form-select border-0 bg-white shadow-sm fw-semibold" name="category" id="wl_category">
+                                <option value="server_net">🌐 Quản lý Server, Cấu hình Router &amp; Switch</option>
+                                <option value="vmware">💿 Kiểm thử OS / Phần mềm trên VMware &amp; Deploy Image</option>
+                                <option value="support">🛠️ Hỗ trợ Giảng viên (Phần mềm &amp; Phần cứng)</option>
+                                <option value="booking">📩 Xử lý đăng ký mượn phòng máy</option>
+                                <option value="process">⚙️ Cải tiến quy trình quản lý phòng máy</option>
+                                <option value="office">📁 Công việc văn phòng &amp; Hành chính khác</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-5">
+                            <label class="form-label text-dark small fw-bold mb-1">5. Trạng thái xử lý *</label>
+                            <select class="form-select border-0 bg-white shadow-sm fw-semibold" name="status" id="wl_status">
+                                <option value="in_progress">🔄 Đang xử lý / Theo dõi</option>
+                                <option value="completed">✅ Đã hoàn thành</option>
+                                <option value="pending">⏳ Chờ thực hiện</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Chọn nhanh 8 Phòng máy -->
+                    <div class="mb-3 p-3 rounded-3 bg-white border">
+                        <label class="form-label text-dark small fw-bold mb-2">6. Phòng máy / Phạm vi áp dụng (Bấm chọn nhanh nhiều phòng):</label>
+                        <div class="d-flex flex-wrap gap-1 mb-2" id="wlRoomChipsContainer">
+                            {% for r_chip in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6', 'Tất cả 8 phòng', 'Server/Rack', 'VMware Lab', 'Văn phòng'] %}
+                                <span class="wl-room-chip" data-room-val="{{ r_chip }}" onclick="toggleWlRoomChip(this)">{{ r_chip }}</span>
+                            {% endfor %}
+                        </div>
+                        <input type="text" class="form-control form-control-sm bg-light fw-bold text-primary" name="target_rooms" id="wl_target_rooms"
+                               placeholder="VD: 5.1, 5.2, Server/Rack" required value="5.1">
+                    </div>
+
+                    <!-- Nội dung công việc chính -->
+                    <div class="mb-3">
+                        <label class="form-label text-dark small fw-bold mb-1">7. Nội dung công việc chi tiết *</label>
+                        <textarea class="form-control border-0 bg-white shadow-sm" name="content" id="wl_content" rows="2" required
+                                  placeholder="Nhập mô tả đầu việc đã thực hiện (VD: Cấu hình lại VLAN trên Switch phòng 6.1, kiểm thử bản Windows 11 trên VMware...)"></textarea>
+                    </div>
+
+                    <!-- Cột Ghi chú bổ sung -->
+                    <div class="p-3 rounded-3" style="background-color: #FFFBEB; border: 1.5px solid #FCD34D;">
+                        <label class="form-label small fw-bold mb-1" style="color: #92400E;">
+                            📌 8. Cột Ghi chú bổ sung (Thông số kỹ thuật, IP/Port, đường dẫn file Image, lưu ý bàn giao...)
+                        </label>
+                        <textarea class="form-control bg-white border-warning" name="notes" id="wl_notes" rows="2"
+                                  placeholder="VD: Đã backup file Acronis vào NAS, máy số 12 cần thay cáp mạng, pass ổ Z: giaovien..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-white border-0 py-3">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" id="worklogSubmitBtn">
+                        💾 Lưu vào Nhật ký công việc
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL TẠO ĐỢT DEPLOY MỚI -->
+<div class="modal fade admin-wrapper-font" id="addDeployCampaignModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header text-white border-0" style="background-color: #0F2942;">
+                <h6 class="modal-title fw-bold">🚀 Khởi Tạo Đợt Deploy Hệ Thống Mới</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('add_deploy_campaign') }}" method="POST">
+                <div class="modal-body bg-light">
+                    <label class="form-label small fw-bold text-dark">Tên đợt triển khai / Học kỳ *</label>
+                    <input type="text" class="form-control border-0 bg-white shadow-sm fw-semibold" name="campaign_name" required
+                           placeholder="VD: HK2 (2026-2027) - Deploy Image Mới">
+                    <div class="text-muted small mt-2">
+                        Hệ thống sẽ khởi tạo bảng Checklist 23 bước mới tinh cho cả 8 phòng máy (5.1 ➔ 6.6) nhưng vẫn giữ nguyên lịch sử các đợt trước.
+                    </div>
+                </div>
+                <div class="modal-footer bg-white border-0">
+                    <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-sm btn-primary fw-bold px-3">🚀 Tạo đợt mới</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 
 <!-- ========================================== -->
@@ -2838,7 +3627,7 @@
             eInput.addEventListener('change', calcOtHours);
         }
 
-        // Lắng nghe sự kiện chuyển Tab để cập nhật URL và reset lại bộ đếm reload 10s
+        // Lắng nghe sự kiện chuyển Tab để cập nhật URL và reset lại bộ đếm reload 30s
         const tabBtns = document.querySelectorAll('#adminTabs button[data-bs-toggle="tab"]');
         tabBtns.forEach(btn => {
             btn.addEventListener('shown.bs.tab', function(e) {
@@ -2847,21 +3636,443 @@
                 url.searchParams.set('tab', targetId);
                 history.replaceState(null, '', url.toString());
                 
-                autoReloadSeconds = 10;
+                autoReloadSeconds = 30;
                 updateAutoReloadUI();
             });
         });
 
         startAutoReloadWatcher();
         setInterval(syncNetworkStatus, 15000);
+        initDeployChecklistUI();
     });
 
     // ==========================================
-    // AUTO-RELOAD SAU 10S CHO CÁC TAB XỬ LÝ GẤP
+    // QUẢN LÝ NHẬT KÝ CÔNG VIỆC (WORK LOG) & CHECKLIST DEPLOY 8 PHÒNG MÁY
+    // ==========================================
+    let currentWorklogCategory = 'all';
+
+    function switchWorklogSubView(mode) {
+        const dailySec = document.getElementById('wlDailySection');
+        const deploySec = document.getElementById('wlDeploySection');
+        const btnDaily = document.getElementById('btnSubViewDaily');
+        const btnDeploy = document.getElementById('btnSubViewDeploy');
+        if (!dailySec || !deploySec) return;
+
+        if (mode === 'deploy') {
+            dailySec.classList.add('d-none');
+            deploySec.classList.remove('d-none');
+            btnDeploy.classList.add('bg-white', 'text-dark', 'shadow-sm');
+            btnDeploy.classList.remove('text-white');
+            btnDaily.classList.remove('bg-white', 'text-dark', 'shadow-sm');
+            btnDaily.classList.add('text-white');
+        } else {
+            deploySec.classList.add('d-none');
+            dailySec.classList.remove('d-none');
+            btnDaily.classList.add('bg-white', 'text-dark', 'shadow-sm');
+            btnDaily.classList.remove('text-white');
+            btnDeploy.classList.remove('bg-white', 'text-dark', 'shadow-sm');
+            btnDeploy.classList.add('text-white');
+        }
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', 'worklog');
+        url.searchParams.set('wl_view', mode);
+        history.replaceState(null, '', url.toString());
+    }
+
+    function filterWorklogCategory(catVal, btnEl) {
+        currentWorklogCategory = catVal;
+        document.querySelectorAll('button[data-wl-cat]').forEach(b => {
+            b.classList.remove('active-all');
+        });
+        if (btnEl) btnEl.classList.add('active-all');
+        applyWorklogFilters();
+    }
+
+    function applyWorklogFilters() {
+        const searchInput = document.getElementById('searchInput-worklogs');
+        const roomSelect = document.getElementById('roomFilter-worklogs');
+        const statusSelect = document.getElementById('statusFilter-worklogs');
+
+        const keyword = (searchInput ? searchInput.value : '').trim().toLowerCase();
+        const roomVal = roomSelect ? roomSelect.value : 'all';
+        const statusVal = statusSelect ? statusSelect.value : 'all';
+
+        const items = document.querySelectorAll('.admin-list-item-worklogs');
+        items.forEach(item => {
+            const itemCat = item.getAttribute('data-category') || '';
+            const itemStatus = item.getAttribute('data-status') || '';
+            const itemRoom = item.getAttribute('data-room') || '';
+            const itemSearch = item.getAttribute('data-search') || '';
+
+            const matchCat = (currentWorklogCategory === 'all') || (itemCat === currentWorklogCategory);
+            const matchStatus = (statusVal === 'all') || (itemStatus === statusVal);
+            const matchRoom = (roomVal === 'all') || itemRoom.toLowerCase().includes(roomVal.toLowerCase()) || itemRoom.includes('Tất cả');
+            const matchSearch = (!keyword) || itemSearch.includes(keyword);
+
+            if (matchCat && matchStatus && matchRoom && matchSearch) {
+                item.style.display = '';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        updateSelectedCount('worklogs');
+    }
+
+    function syncRoomChipsWithInput() {
+        const inputEl = document.getElementById('wl_target_rooms');
+        if (!inputEl) return;
+        const currentParts = inputEl.value.split(',').map(s => s.trim()).filter(Boolean);
+        document.querySelectorAll('#wlRoomChipsContainer .wl-room-chip').forEach(chip => {
+            const val = chip.getAttribute('data-room-val');
+            if (currentParts.includes(val)) {
+                chip.classList.add('active');
+            } else {
+                chip.classList.remove('active');
+            }
+        });
+    }
+
+    function toggleWlRoomChip(chipEl) {
+        chipEl.classList.toggle('active');
+        const selected = [];
+        document.querySelectorAll('#wlRoomChipsContainer .wl-room-chip.active').forEach(c => {
+            selected.push(c.getAttribute('data-room-val'));
+        });
+        const inputEl = document.getElementById('wl_target_rooms');
+        if (inputEl) {
+            inputEl.value = selected.join(', ');
+        }
+    }
+
+    function openAddWorklogModal() {
+        const form = document.getElementById('worklogForm');
+        form.action = "{{ url_for('add_worklog') }}";
+        document.getElementById('worklogModalTitle').textContent = '➕ Thêm Công Việc Thường Nhật Mới';
+        document.getElementById('worklogSubmitBtn').textContent = '💾 Lưu vào Nhật ký công việc';
+
+        document.getElementById('wl_work_date').value = "{{ today_date_str }}";
+        document.getElementById('wl_shift_name').value = 'Ca sáng';
+        document.getElementById('wl_priority').value = 'normal';
+        document.getElementById('wl_category').value = 'server_net';
+        document.getElementById('wl_status').value = 'in_progress';
+        document.getElementById('wl_target_rooms').value = '5.1';
+        document.getElementById('wl_content').value = '';
+        document.getElementById('wl_notes').value = '';
+
+        syncRoomChipsWithInput();
+        const modal = new bootstrap.Modal(document.getElementById('worklogModal'));
+        modal.show();
+    }
+
+    function openEditWorklogModal(btnEl) {
+        const id = btnEl.getAttribute('data-id');
+        const form = document.getElementById('worklogForm');
+        form.action = `/admin/worklog/edit/${id}`;
+        document.getElementById('worklogModalTitle').textContent = `✏️ Chỉnh Sửa Công Việc #${id}`;
+        document.getElementById('worklogSubmitBtn').textContent = '💾 Lưu Cập Nhật';
+
+        document.getElementById('wl_work_date').value = btnEl.getAttribute('data-date') || "{{ today_date_str }}";
+        document.getElementById('wl_shift_name').value = btnEl.getAttribute('data-shift') || 'Ca sáng';
+        document.getElementById('wl_priority').value = btnEl.getAttribute('data-priority') || 'normal';
+        document.getElementById('wl_category').value = btnEl.getAttribute('data-category') || 'server_net';
+        document.getElementById('wl_status').value = btnEl.getAttribute('data-status') || 'in_progress';
+        document.getElementById('wl_target_rooms').value = btnEl.getAttribute('data-rooms') || '';
+        document.getElementById('wl_content').value = btnEl.getAttribute('data-content') || '';
+        document.getElementById('wl_notes').value = btnEl.getAttribute('data-notes') || '';
+
+        syncRoomChipsWithInput();
+        const modal = new bootstrap.Modal(document.getElementById('worklogModal'));
+        modal.show();
+    }
+
+    // ====================================================
+    // LOGIC CHECKLIST DEPLOY 8 PHÒNG MÁY (23 BƯỚC CHUẨN SOP)
+    // ====================================================
+    const DEPLOY_PHASE_A_STEPS = [
+        { id: 'A0', label: 'A. Recovery từ file Acronis lên 2 máy mẫu (Sinh viên và Giáo viên)', hint: 'Lưu ý: File có sẵn Veyon dành cho Client' },
+        { id: 'A1', label: '1. Kiểm tra Power Option', hint: 'Chỉnh High Performance, Turn off display / Sleep = Never' },
+        { id: 'A2', label: '2. Cài đặt Driver', hint: 'Kiểm tra Device Manager nhận đủ toàn bộ thiết bị' },
+        { id: 'A3', label: '3. Tắt Fast Startup', hint: 'Control Panel ➔ Power Options ➔ Choose what the power buttons do ➔ Bỏ tích Fast Startup' },
+        { id: 'A4', label: '4. Kiểm tra Date and Time', hint: 'Đúng múi giờ (UTC+07:00) Bangkok, Hanoi, Jakarta & đồng bộ giờ chuẩn' },
+        { id: 'A5', label: '5. Clean ổ D và This PC', hint: 'Dọn sạch dữ liệu cũ trên ổ D, Desktop, Downloads, Documents, Recycle Bin' },
+        { id: 'A6', label: '6. Xóa Temp', hint: 'Chạy Run: temp, %temp%, prefetch và xóa sạch' },
+        { id: 'A7', label: '7. Kiểm tra Windows Active', hint: 'Đảm bảo Windows & Office đã báo Activated bản quyền' },
+        { id: 'A8', label: '8. Backup lại 1 file với đầy đủ các bước trên máy thực', hint: 'Để sau này cập nhật phần mềm chỉ cần cài phần mềm là okay' },
+        { id: 'A9', label: '9. Chuyển sang Administrator ➔ Paste source Script Automation ➔ Run file "first run" ➔ PC Shutdown', hint: 'Thực hiện đúng trình tự trên tài khoản Administrator trước khi bắt Image' },
+        { id: 'A10', label: '10. Tạo file Image chuẩn (7 máy giáo viên (Dell) và các máy sinh viên)', hint: 'Hoàn tất file Master Image chuẩn bị bung hàng loạt' }
+    ];
+
+    const DEPLOY_PHASE_B_STEPS = [
+        { id: 'B1', label: '1. Kiểm tra tốc độ mạng của phòng phải đủ 1 Gbps', hint: 'Kiểm tra Link Speed = 1.0 Gbps trên máy mẫu & Switch trước khi chạy Clonezilla' },
+        { id: 'B2', label: '2. Bung Image lên máy Giáo viên (GV) trước', hint: 'Khôi phục máy GV hoàn tất để dùng máy GV làm Clonezilla Lite Server' },
+        { divider: '3. Từ máy giáo viên triển khai Clonezilla Lite Server lên máy con:' },
+        { id: 'B3_1', sub: true, label: '3.1. Chọn mode: <span class="deploy-code-pill">lite-server</span>' },
+        { id: 'B3_2', sub: true, label: '3.2. Chọn <span class="deploy-code-pill">Netboot</span>' },
+        { id: 'B3_3', sub: true, label: '3.3. Chọn <span class="deploy-code-pill">Using existing DHCP</span>' },
+        { id: 'B3_4', sub: true, label: '3.4. Chọn <span class="deploy-code-pill">DHCP use DHCP broadcast</span>' },
+        { id: 'B3_5', sub: true, label: '3.5. Chọn <span class="deploy-code-pill">Choose number client</span> (Nhập đúng số máy con)' },
+        { id: 'B3_6', sub: true, label: '3.6. Chọn <span class="deploy-code-pill">Reboot client</span> sau khi triển khai thành công' },
+        { divider: '4. Cấu hình máy Giáo viên (GV):' },
+        { id: 'B4_1', sub: true, label: '4.1. Đặt IP tĩnh cho máy Giáo viên' },
+        { id: 'B4_2', sub: true, label: '4.2. Chép <span class="deploy-code-pill">t3h</span> và cài đặt phần mềm thi trắc nghiệm' },
+        { id: 'B4_3', sub: true, label: '4.3. Chỉnh sửa quyền của ổ <span class="deploy-code-pill">Z</span> trong Logon, pass là <span class="deploy-secret-pill">giaovien</span>' },
+        { id: 'B5', label: '5. Hoàn tất triển khai phòng máy', hint: 'Kiểm tra Veyon Master nhìn thấy đủ máy con & nghiệm thu phòng máy' }
+    ];
+
+    const ALL_DEPLOY_STEP_IDS = [
+        ...DEPLOY_PHASE_A_STEPS.map(s => s.id),
+        ...DEPLOY_PHASE_B_STEPS.filter(s => !s.divider).map(s => s.id)
+    ];
+
+    const DEPLOY_ROOMS_LIST = ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6'];
+    let deployRoomStateMap = {{ (deploy_data['room_map'] if deploy_data else {}) | tojson | safe }};
+    let activeDeployRoom = '5.1';
+
+    function initDeployChecklistUI() {
+        DEPLOY_ROOMS_LIST.forEach(r => {
+            if (!deployRoomStateMap[r]) {
+                deployRoomStateMap[r] = { room: r, checked: [], notes: '', updated_by: 'Admin', updated_at: '' };
+            }
+        });
+        renderDeployUI();
+    }
+
+    function changeDeployCampaign(campaignName) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', 'worklog');
+        url.searchParams.set('wl_view', 'deploy');
+        url.searchParams.set('deploy_campaign', campaignName);
+        window.location.href = url.toString();
+    }
+
+    function selectDeployRoom(roomCode) {
+        activeDeployRoom = roomCode;
+        renderDeployUI();
+    }
+
+    function renderDeployUI() {
+        const gridEl = document.getElementById('deployRoomsGrid');
+        if (!gridEl) return;
+
+        const totalSteps = ALL_DEPLOY_STEP_IDS.length;
+        let completedRoomsCount = 0;
+
+        gridEl.innerHTML = DEPLOY_ROOMS_LIST.map(r => {
+            const st = deployRoomStateMap[r] || { checked: [], notes: '' };
+            const doneCount = (st.checked || []).length;
+            const pct = Math.round((doneCount / totalSteps) * 100);
+            const isDone = doneCount >= totalSteps;
+            if (isDone) completedRoomsCount++;
+            const isActive = (r === activeDeployRoom);
+
+            return `
+                <div class="deploy-room-card ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}" onclick="selectDeployRoom('${r}')">
+                    <div class="fw-bold" style="color: #0F2942; font-size: 0.86rem;">
+                        ${isDone ? '✅ ' : ''}Phòng ${r}
+                    </div>
+                    <div class="fw-bold mt-1" style="font-size: 0.74rem; color: ${isDone ? '#15803D' : (isActive ? '#0D9488' : '#64748B')};">
+                        ${doneCount}/${totalSteps} bước (${pct}%)
+                    </div>
+                    <div class="progress mt-1" style="height: 5px; background-color: #E2E8F0;">
+                        <div class="progress-bar" role="progressbar"
+                             style="width: ${pct}%; background-color: ${isDone ? '#22C55E' : '#0D9488'};"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const summaryBadge = document.getElementById('overallDeploySummaryBadge');
+        if (summaryBadge) {
+            summaryBadge.textContent = `🏆 Tổng tiến độ đợt này: ${completedRoomsCount} / 8 phòng hoàn tất 100%`;
+        }
+
+        const curState = deployRoomStateMap[activeDeployRoom] || { checked: [], notes: '', updated_at: '' };
+        const checkedSet = new Set(curState.checked || []);
+        const curDone = checkedSet.size;
+        const curPct = Math.round((curDone / totalSteps) * 100);
+
+        document.getElementById('deployActiveRoomBadge').textContent = `PHÒNG ${activeDeployRoom}`;
+        document.getElementById('deployNoteRoomLabel').textContent = `Phòng ${activeDeployRoom}`;
+        document.getElementById('deployActiveRoomProgressText').textContent = `Tiến độ Phòng ${activeDeployRoom}: ${curDone} / ${totalSteps} bước (${curPct}%)`;
+        document.getElementById('deployActiveRoomMeta').textContent = curState.updated_at
+            ? `Cập nhật lần cuối: ${curState.updated_at} bởi ${curState.updated_by || 'Admin'}`
+            : 'Tự động lưu vào cơ sở dữ liệu ngay khi tích chọn';
+        document.getElementById('deployRoomNoteInput').value = curState.notes || '';
+
+        // Render Phase A
+        const phaseAHtml = DEPLOY_PHASE_A_STEPS.map(s => {
+            const isChecked = checkedSet.has(s.id);
+            return `
+                <div class="deploy-step-item ${isChecked ? 'checked' : ''}" onclick="toggleDeployStep('${s.id}')">
+                    <input type="checkbox" class="form-check-input mt-1 flex-shrink-0" ${isChecked ? 'checked' : ''}
+                           onclick="event.stopPropagation(); toggleDeployStep('${s.id}')">
+                    <div>
+                        <div class="deploy-step-title fw-semibold text-dark" style="font-size: 0.82rem;">${s.label}</div>
+                        ${s.hint ? `<div class="text-muted" style="font-size: 0.73rem;">${s.hint}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('deployPhaseAList').innerHTML = phaseAHtml;
+
+        // Render Phase B
+        const phaseBHtml = DEPLOY_PHASE_B_STEPS.map(s => {
+            if (s.divider) {
+                return `<div class="fw-bold text-uppercase mt-2 mb-1 px-1" style="font-size: 0.73rem; color: #0F2942;">${s.divider}</div>`;
+            }
+            const isChecked = checkedSet.has(s.id);
+            return `
+                <div class="deploy-step-item ${s.sub ? 'sub-step' : ''} ${isChecked ? 'checked' : ''}" onclick="toggleDeployStep('${s.id}')">
+                    <input type="checkbox" class="form-check-input mt-1 flex-shrink-0" ${isChecked ? 'checked' : ''}
+                           onclick="event.stopPropagation(); toggleDeployStep('${s.id}')">
+                    <div>
+                        <div class="deploy-step-title fw-semibold text-dark" style="font-size: 0.82rem;">${s.label}</div>
+                        ${s.hint ? `<div class="text-muted" style="font-size: 0.73rem;">${s.hint}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('deployPhaseBList').innerHTML = phaseBHtml;
+
+        const aDone = DEPLOY_PHASE_A_STEPS.filter(s => checkedSet.has(s.id)).length;
+        const bCheckable = DEPLOY_PHASE_B_STEPS.filter(s => !s.divider);
+        const bDone = bCheckable.filter(s => checkedSet.has(s.id)).length;
+
+        document.getElementById('deployPhaseACountBadge').textContent = `${aDone}/${DEPLOY_PHASE_A_STEPS.length} bước`;
+        document.getElementById('deployPhaseBCountBadge').textContent = `${bDone}/${bCheckable.length} bước`;
+    }
+
+    function toggleDeployStep(stepId) {
+        const st = deployRoomStateMap[activeDeployRoom];
+        const arr = st.checked || [];
+        const idx = arr.indexOf(stepId);
+        if (idx >= 0) {
+            arr.splice(idx, 1);
+        } else {
+            arr.push(stepId);
+        }
+        st.checked = arr;
+        renderDeployUI();
+        saveCurrentRoomDeployState();
+    }
+
+    function completePhaseACurrentRoom() {
+        const st = deployRoomStateMap[activeDeployRoom];
+        const set = new Set(st.checked || []);
+        DEPLOY_PHASE_A_STEPS.forEach(s => set.add(s.id));
+        st.checked = Array.from(set);
+        renderDeployUI();
+        saveCurrentRoomDeployState();
+    }
+
+    function completeAllStepsCurrentRoom() {
+        deployRoomStateMap[activeDeployRoom].checked = [...ALL_DEPLOY_STEP_IDS];
+        renderDeployUI();
+        saveCurrentRoomDeployState();
+    }
+
+    function resetCurrentRoomSteps() {
+        if (!confirm(`Bạn có chắc muốn Reset toàn bộ tích chọn của Phòng ${activeDeployRoom} về 0% không?`)) return;
+        deployRoomStateMap[activeDeployRoom].checked = [];
+        renderDeployUI();
+        saveCurrentRoomDeployState();
+    }
+
+    async function saveCurrentRoomDeployState(showNotice = false) {
+        const campaignSelect = document.getElementById('deployCampaignSelect');
+        const campaignName = campaignSelect ? campaignSelect.value : '';
+        const noteInput = document.getElementById('deployRoomNoteInput');
+        const st = deployRoomStateMap[activeDeployRoom];
+        if (noteInput) {
+            st.notes = noteInput.value;
+        }
+
+        try {
+            const res = await fetch('/api/deploy-checklist/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    campaign_name: campaignName,
+                    room: activeDeployRoom,
+                    checked_steps: st.checked || [],
+                    notes: st.notes || ''
+                })
+            });
+            const data = await res.json();
+            if (data && data.success) {
+                st.updated_at = data.updated_at;
+                st.updated_by = data.updated_by;
+                document.getElementById('deployActiveRoomMeta').textContent =
+                    `✔ Đã lưu tự động lúc ${data.updated_at} bởi ${data.updated_by}`;
+                if (showNotice) {
+                    alert(`✅ Đã lưu ghi chú và tiến độ của Phòng ${activeDeployRoom}!`);
+                }
+            }
+        } catch (err) {
+            console.error('Save deploy checklist error:', err);
+        }
+    }
+
+    async function copyPhaseAToAll8Rooms() {
+        if (!confirm('Đánh dấu hoàn thành 11 bước Phần A (Đã chuẩn bị xong Master Image) cho cả 8 phòng máy trong đợt này?')) return;
+        const campaignSelect = document.getElementById('deployCampaignSelect');
+        const campaignName = campaignSelect ? campaignSelect.value : '';
+        try {
+            const res = await fetch('/api/deploy-checklist/copy-phase-a-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ campaign_name: campaignName })
+            });
+            const data = await res.json();
+            if (data && data.success && data.room_map) {
+                deployRoomStateMap = data.room_map;
+                renderDeployUI();
+                alert('⚡ Đã đánh dấu xong Phần A (Master Image) cho toàn bộ 8 phòng máy!');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function logCurrentRoomDeployToWorklog() {
+        const campaignSelect = document.getElementById('deployCampaignSelect');
+        const campaignName = campaignSelect ? campaignSelect.value : '';
+        const st = deployRoomStateMap[activeDeployRoom] || { checked: [], notes: '' };
+        const noteVal = document.getElementById('deployRoomNoteInput').value || st.notes || '';
+        const doneCount = (st.checked || []).length;
+        const totalCount = ALL_DEPLOY_STEP_IDS.length;
+
+        try {
+            await saveCurrentRoomDeployState(false);
+            const res = await fetch('/api/deploy-checklist/log-to-worklog', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    campaign_name: campaignName,
+                    room: activeDeployRoom,
+                    done_count: doneCount,
+                    total_count: totalCount,
+                    notes: noteVal
+                })
+            });
+            const data = await res.json();
+            if (data && data.success) {
+                if (confirm(`✅ ${data.message}\n\nBạn có muốn chuyển sang xem Bảng Nhật ký công việc ngay không?`)) {
+                    window.location.href = `/admin/panel?tab=worklog&wl_view=daily`;
+                }
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    // ==========================================
+    // AUTO-RELOAD SAU 30S CHO CÁC TAB XỬ LÝ GẤP
     // (Yêu cầu, Báo vắng/nghỉ, Sự cố)
     // ==========================================
     let autoReloadTimer = null;
-    let autoReloadSeconds = 10;
+    let autoReloadSeconds = 30;
     let isAutoReloadPaused = false;
     const URGENT_TABS = ['requests', 'cancellations', 'issues'];
 
@@ -2887,7 +4098,7 @@
                 if (icon) icon.className = 'bi bi-pause-circle text-warning me-1 auto-reload-icon';
             } else {
                 b.classList.remove('paused');
-                b.setAttribute('title', 'Tự động cập nhật sau mỗi 10s. Bấm để tạm dừng.');
+                b.setAttribute('title', 'Tự động cập nhật sau mỗi 30s. Bấm để tạm dừng.');
                 if (secSpan) secSpan.textContent = autoReloadSeconds + 's';
                 if (icon) {
                     const isSpinning = autoReloadSeconds <= 2 ? ' spin-reload-active' : '';
@@ -2900,14 +4111,14 @@
     function toggleAutoReload() {
         isAutoReloadPaused = !isAutoReloadPaused;
         if (!isAutoReloadPaused) {
-            autoReloadSeconds = 10;
+            autoReloadSeconds = 30;
         }
         updateAutoReloadUI();
     }
 
     function startAutoReloadWatcher() {
         if (autoReloadTimer) clearInterval(autoReloadTimer);
-        autoReloadSeconds = 10;
+        autoReloadSeconds = 30;
         updateAutoReloadUI();
 
         autoReloadTimer = setInterval(() => {
@@ -2931,15 +4142,15 @@
             const hasSearchText = searchInput && searchInput.value.trim().length > 0;
 
             if (isModalOpen || isInputFocused || hasCheckedItem || hasSearchText) {
-                // Đang bận thao tác, tạm hoãn và giữ ở mức 5s để không gây gián đoạn công việc
-                autoReloadSeconds = 5;
+                // Đang bận thao tác, tạm hoãn và giữ ở mức 10s để không gây gián đoạn công việc
+                autoReloadSeconds = 10;
                 updateAutoReloadUI();
                 return;
             }
 
             autoReloadSeconds--;
             if (autoReloadSeconds <= 0) {
-                autoReloadSeconds = 10;
+                autoReloadSeconds = 30;
                 // Giữ nguyên tab hiện tại khi tải lại
                 const url = new URL(window.location.href);
                 url.searchParams.set('tab', currentTab);

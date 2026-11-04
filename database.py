@@ -192,6 +192,37 @@ def init_db():
         )
     ''')
 
+    # 8. Bảng Nhật ký công việc thường nhật của Admin (Work Log)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS work_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            work_date TEXT NOT NULL,
+            shift_name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            target_rooms TEXT NOT NULL,
+            content TEXT NOT NULL,
+            notes TEXT DEFAULT '',
+            priority TEXT DEFAULT 'normal',
+            status TEXT DEFAULT 'in_progress',
+            created_by TEXT DEFAULT 'Admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 9. Bảng Checklist Deploy hệ thống 8 phòng máy theo từng đợt (SOP Acronis & Clonezilla)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS deployment_checklists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_name TEXT NOT NULL,
+            room TEXT NOT NULL,
+            checked_steps TEXT DEFAULT '[]',
+            notes TEXT DEFAULT '',
+            updated_by TEXT DEFAULT 'Admin',
+            updated_at TEXT,
+            UNIQUE(campaign_name, room)
+        )
+    ''')
+
     # Nếu là lần đầu chạy và tạo db, ta insert 1 dòng dữ liệu mẫu để test giao diện
     if not db_exists:
         cursor.execute("""
