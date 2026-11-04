@@ -1,4 +1,5 @@
 import sqlite3
+import datetime
 import os
 
 # Khai báo đường dẫn tuyệt đối tới file database (tương thích cả Windows và PythonAnywhere Linux)
@@ -85,26 +86,6 @@ def init_db():
         )
     ''')
     
-    # 5. Bảng lưu tài khoản Admin
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS admin (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            email TEXT NOT NULL,
-            reset_token TEXT
-        )
-    ''')
-    
-    # Tạo tài khoản admin mặc định nếu chưa có
-    from werkzeug.security import generate_password_hash
-    admin_exists = cursor.execute("SELECT * FROM admin WHERE username = 'admin'").fetchone()
-    if not admin_exists:
-        default_hash = generate_password_hash('admin123')
-        cursor.execute("INSERT INTO admin (username, password_hash, email) VALUES (?, ?, ?)", 
-                       ('admin', default_hash, 'mlhang@hcmus.edu.vn'))
-
-
     # Add email & admin_note columns if they don't exist
     try:
         cursor.execute("ALTER TABLE booking_requests ADD COLUMN email TEXT")
@@ -222,6 +203,88 @@ def init_db():
             UNIQUE(campaign_name, room)
         )
     ''')
+
+    # Khởi tạo cấu hình mặc định cho B42Lab NetAgent & IP Router 8 phòng máy
+    ak_row = cursor.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
+    if not ak_row or not ak_row['value']:
+        cursor.execute(
+            "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('netagent_key', 'b42lab-secret-2026')"
+        )
+
+    default_router_ips = {
+        '5.1': '10.29.37.53',
+        '5.2': '10.29.37.54',
+        '5.3': '10.29.37.52',
+        '6.1': '10.29.37.60',
+        '6.2': '10.29.37.62',
+        '6.3': '10.29.37.64',
+        '6.5': '10.29.37.63',
+        '6.6': '10.29.37.61',
+    }
+    now_str = datetime.datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+    for r_code, real_ip in default_router_ips.items():
+        existing_net = cursor.execute(
+            "SELECT room, target_ip FROM room_network_status WHERE room = ?", (r_code,)
+        ).fetchone()
+        if not existing_net:
+            cursor.execute(
+                "INSERT INTO room_network_status (room, target_ip, status, ping_ms, updated_at) VALUES (?, ?, 'online', 46, ?)",
+                (r_code, real_ip, now_str)
+            )
+        elif existing_net['target_ip'] and existing_net['target_ip'].startswith('192.168.1.'):
+            cursor.execute(
+                "UPDATE room_network_status SET target_ip = ? WHERE room = ?",
+                (real_ip, r_code)
+            )
+
+    # Khởi tạo dữ liệu mẫu lần đầu cho Nhật ký công việc
+    seeded_row = cursor.execute("SELECT value FROM system_settings WHERE key = 'work_logs_seeded'").fetchone()
+    if not seeded_row:
+        existing_wl_count = cursor.execute("SELECT COUNT(*) as c FROM work_logs").fetchone()['c']
+        if existing_wl_count == 0:
+            today_iso = datetime.date.today().strftime('%Y-%m-%d')
+            sample_logs = [
+                (
+                    today_iso, 'Ca sáng', 'server_net', '6.1, 6.2, Server/Rack',
+                    'Cấu hình VLAN & kiểm tra băng thông Switch tầng 6 cho cụm phòng 6.1 - 6.6',
+                    'Port Gi1/0/1-24 tốc độ ổn định 1Gbps, đã lưu cấu hình running-config vào startup-config',
+                    'high', 'completed', 'Admin'
+                ),
+                (
+                    today_iso, 'Ca sáng', 'vmware', '5.1, 5.2, 5.3',
+                    'Kiểm thử hệ điều hành Windows 11 & phần mềm học kỳ mới trên VMware trước khi bung Image',
+                    'Snapshot v2.1 chạy mượt Visual Studio 2022, MATLAB & Veyon Client; sẵn sàng tạo file Acronis chuẩn',
+                    'high', 'in_progress', 'Admin'
+                ),
+                (
+                    today_iso, 'Ca chiều', 'support', '5.2, 6.5',
+                    'Hỗ trợ giảng viên xử lý phần mềm giảng dạy, kiểm tra cáp HDMI & cấu hình quyền ổ Z:',
+                    'Đã chép thư mục t3h và kiểm tra quyền truy cập ổ Z: (pass: giaovien) trên máy GV',
+                    'normal', 'completed', 'Admin'
+                ),
+                (
+                    today_iso, 'Cả ngày', 'process', 'Tất cả 8 phòng',
+                    'Cải tiến quy trình quản lý phòng máy & chuẩn hóa SOP triển khai Acronis + Clonezilla Lite Server',
+                    'Tích hợp bảng Checklist 23 bước trực tiếp lên hệ thống Web quản trị QTTB',
+                    'normal', 'completed', 'Admin'
+                )
+            ]
+            cursor.executemany('''
+                INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', sample_logs)
+        cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('work_logs_seeded', '1')")
+
+    # Khởi tạo đợt Checklist Deploy mặc định nếu bảng đang trống
+    has_campaign = cursor.execute("SELECT 1 FROM deployment_checklists LIMIT 1").fetchone()
+    if not has_campaign:
+        default_campaign = "HK1 (2026-2027) - Deploy Hệ thống chuẩn"
+        now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+        for r_code in default_router_ips.keys():
+            cursor.execute('''
+                INSERT OR IGNORE INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
+                VALUES (?, ?, '[]', '', 'Admin', ?)
+            ''', (default_campaign, r_code, now_short))
 
     # Nếu là lần đầu chạy và tạo db, ta insert 1 dòng dữ liệu mẫu để test giao diện
     if not db_exists:

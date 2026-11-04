@@ -1,18 +1,32 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.utils import secure_filename
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 from database import get_db_connection, init_db
 from report_exporter import (
+    ROOMS_LIST,
+    parse_report_date as parse_study_period_date,
+    clean_and_group_departments,
     get_schedule_ca_slots,
     build_semester_report_excel,
     summarize_available_semesters,
     filter_schedules_for_report
 )
 from functools import wraps
+import pandas as pd
 import urllib.request
 import urllib.parse
+import subprocess
+import platform
+import datetime
 import secrets
+import time
 import json
 import os
+import io
+import re
 
 app = Flask(__name__)
 
@@ -236,38 +250,6 @@ def logout():
 # PHÂN HỆ USER (PUBLIC & AUTHENTICATED)
 # ==========================================
 
-import datetime
-import re
-
-ROOMS_LIST = ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']
-
-def parse_study_period_date(raw_val):
-    """Phân tích chuỗi Giai_Doan (VD: '28/09/2026', '2026-09-28 00:00:00') thành datetime.date."""
-    if not raw_val:
-        return None
-    if isinstance(raw_val, datetime.datetime):
-        return raw_val.date()
-    if isinstance(raw_val, datetime.date):
-        return raw_val
-    s = str(raw_val).strip()
-    if not s:
-        return None
-    # Thử định dạng YYYY-MM-DD (hoặc YYYY-MM-DD HH:MM:SS từ Excel)
-    for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d'):
-        try:
-            part = s[:10] if fmt in ('%Y-%m-%d', '%Y/%m/%d') and len(s) >= 10 else s
-            return datetime.datetime.strptime(part, fmt).date()
-        except ValueError:
-            pass
-    # Tìm mẫu DD/MM/YYYY hoặc DD-MM-YYYY trong chuỗi bất kỳ
-    m = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})', s)
-    if m:
-        try:
-            return datetime.date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-        except ValueError:
-            pass
-    return None
-
 def normalize_study_period_str(raw_val):
     """Chuẩn hóa giá trị Giai_Doan về chuỗi DD/MM/YYYY nếu là ngày hợp lệ."""
     dt = parse_study_period_date(raw_val)
@@ -473,15 +455,7 @@ def submit_issue():
 @login_required
 def booking_page():
     """Hiển thị trang chứa Form đăng ký mượn phòng."""
-    selected_day = request.args.get('filter_day', 2, type=int)
-    raw_date = request.args.get('filter_date', '').strip()
-    ref_date = parse_study_period_date(raw_date) if raw_date else datetime.date.today()
-    
-    morning_free, afternoon_free = get_free_slots_for_day(selected_day, ref_date=ref_date)
-    return render_template('booking.html', 
-                           selected_day=selected_day, 
-                           morning_free=morning_free, 
-                           afternoon_free=afternoon_free)
+    return render_template('booking.html')
 
 @app.route('/api/free-slots')
 def api_free_slots():
@@ -822,7 +796,7 @@ def admin_panel():
     admin_morning_free, admin_afternoon_free = get_free_slots_for_day(filter_day, ref_date=free_target_date)
 
     # 3. Lấy dữ liệu hiển thị dạng Lưới theo tuần (Chế độ Google Calendar)
-    rooms = ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']
+    rooms = ROOMS_LIST
     selected_room = request.args.get('room', '5.1')
 
     raw_tt_date = request.args.get('timetable_date', '').strip()
@@ -881,53 +855,8 @@ def admin_panel():
     issues = conn.execute("SELECT * FROM issue_reports ORDER BY created_at DESC").fetchall()
 
     # 4. Tính toán số liệu thống kê cho Tab 📊 Dashboard & B42Lab NetAgent
-    conn.execute("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)")
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS room_network_status (
-            room TEXT PRIMARY KEY,
-            target_ip TEXT DEFAULT '8.8.8.8',
-            status TEXT DEFAULT 'online',
-            ping_ms INTEGER DEFAULT 12,
-            updated_at TEXT
-        )
-    ''')
-    # Khởi tạo mã khóa bảo mật cho NetAgent nếu chưa có
     ak_row = conn.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
-    if not ak_row or not ak_row['value']:
-        default_agent_key = "b42lab-secret-2026"
-        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('netagent_key', ?)", (default_agent_key,))
-        conn.commit()
-        netagent_key = default_agent_key
-    else:
-        netagent_key = ak_row['value']
-
-    # Đảm bảo đủ 8 phòng trong bảng room_network_status với đúng IP Router mặc định của trường
-    default_router_ips = {
-        '5.1': '10.29.37.53',
-        '5.2': '10.29.37.54',
-        '5.3': '10.29.37.52',
-        '6.1': '10.29.37.60',
-        '6.2': '10.29.37.62',
-        '6.3': '10.29.37.64',
-        '6.5': '10.29.37.63',
-        '6.6': '10.29.37.61',
-    }
-    now_str = datetime.datetime.now().strftime('%H:%M:%S %d/%m/%Y')
-    for idx, r in enumerate(rooms):
-        existing_net = conn.execute("SELECT room, target_ip FROM room_network_status WHERE room = ?", (r,)).fetchone()
-        real_ip = default_router_ips.get(r, '8.8.8.8')
-        if not existing_net:
-            conn.execute(
-                "INSERT INTO room_network_status (room, target_ip, status, ping_ms, updated_at) VALUES (?, ?, 'online', ?, ?)",
-                (r, real_ip, 46, now_str)
-            )
-        elif existing_net['target_ip'] and existing_net['target_ip'].startswith('192.168.1.'):
-            # Tự động nâng cấp các IP mẫu 192.168.1.10x sang IP Router thực tế 10.29.37.xx
-            conn.execute(
-                "UPDATE room_network_status SET target_ip = ? WHERE room = ?",
-                (real_ip, r)
-            )
-    conn.commit()
+    netagent_key = ak_row['value'] if (ak_row and ak_row['value']) else "b42lab-secret-2026"
 
     net_rows = conn.execute("SELECT * FROM room_network_status").fetchall()
     net_map = {row['room']: dict(row) for row in net_rows}
@@ -967,28 +896,14 @@ def admin_panel():
     peak_dow_pct = min(100, int(round((day_ca_used[peak_dow] / 32.0) * 100))) if total_ca_used > 0 else 0
 
     # Phân bổ theo Khoa / Đơn vị (Tự động nhận diện động & tính theo Số ca chuẩn 2.5 tiết)
-    dept_groups = {}
+    dept_map = clean_and_group_departments(all_enriched_schedules)
+    dept_totals = {}
     for s in all_enriched_schedules:
         raw_dept = (s.get('department') or '').strip()
-        if not raw_dept:
-            clean_dept = 'Khác'
-        else:
-            # Bỏ tiền tố "Khoa " ở đầu (không phân biệt hoa thường) để đồng nhất tên đơn vị
-            clean_dept = re.sub(r'^[Kk]hoa\s+', '', raw_dept).strip()
-            if not clean_dept:
-                clean_dept = raw_dept
-        norm_key = re.sub(r'[\s\-–—/]+', ' ', clean_dept.lower()).strip()
+        label = dept_map.get(raw_dept, 'Khác')
         num_ca = len(get_schedule_ca_slots(s['start_period'], s['end_period']))
-        if norm_key not in dept_groups:
-            dept_groups[norm_key] = {'labels': {}, 'total': 0}
-        dept_groups[norm_key]['total'] += num_ca
-        dept_groups[norm_key]['labels'][clean_dept] = dept_groups[norm_key]['labels'].get(clean_dept, 0) + num_ca
-
-    sorted_depts = []
-    for norm_key, info in dept_groups.items():
-        best_label = max(info['labels'].items(), key=lambda x: (x[1], '-' in x[0], len(x[0])))[0]
-        sorted_depts.append((best_label, info['total']))
-    sorted_depts.sort(key=lambda x: (-x[1], x[0]))
+        dept_totals[label] = dept_totals.get(label, 0) + num_ca
+    sorted_depts = sorted(dept_totals.items(), key=lambda x: (-x[1], x[0]))
 
     total_sched_ca = max(1, total_ca_used)
     palette = [
@@ -1005,8 +920,6 @@ def admin_panel():
     ]
 
     dept_items = []
-    dept_counts = {}
-    dept_pcts = {}
     gradient_stops = []
     current_deg = 0.0
 
@@ -1018,8 +931,6 @@ def admin_panel():
         gradient_stops.append(f"{color} {current_deg:.1f}deg {next_deg:.1f}deg")
         current_deg = next_deg
 
-        dept_counts[label] = count
-        dept_pcts[label] = pct
         dept_items.append({
             'name': label,
             'count': count,
@@ -1126,8 +1037,6 @@ def admin_panel():
         'utilization_pct': utilization_pct,
         'peak_dow': peak_dow,
         'peak_dow_pct': peak_dow_pct,
-        'dept_counts': dept_counts,
-        'dept_pcts': dept_pcts,
         'dept_items': dept_items,
         'donut_gradient': donut_gradient,
         'room_live_cards': room_live_cards,
@@ -1147,21 +1056,6 @@ def admin_panel():
     semester_summary = summarize_available_semesters(raw_schedules)
 
     # 5. Dữ liệu Quản lý Lịch trình & Chấm công Tăng ca (OT)
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS overtime_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ot_date TEXT NOT NULL,
-            staff_name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            start_time TEXT,
-            end_time TEXT,
-            hours REAL NOT NULL,
-            purpose TEXT,
-            status TEXT DEFAULT 'Pending',
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
     ot_month = request.args.get('ot_month', 'all').strip()
     ot_filter_status = request.args.get('ot_status', 'all').strip()
 
@@ -1206,73 +1100,6 @@ def admin_panel():
     }
 
     # 6. Dữ liệu Tab 📋 Nhật ký công việc (Work Log) & 🚀 Checklist Deploy 8 Phòng Máy (SOP)
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS work_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            work_date TEXT NOT NULL,
-            shift_name TEXT NOT NULL,
-            category TEXT NOT NULL,
-            target_rooms TEXT NOT NULL,
-            content TEXT NOT NULL,
-            notes TEXT DEFAULT '',
-            priority TEXT DEFAULT 'normal',
-            status TEXT DEFAULT 'in_progress',
-            created_by TEXT DEFAULT 'Admin',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS deployment_checklists (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            campaign_name TEXT NOT NULL,
-            room TEXT NOT NULL,
-            checked_steps TEXT DEFAULT '[]',
-            notes TEXT DEFAULT '',
-            updated_by TEXT DEFAULT 'Admin',
-            updated_at TEXT,
-            UNIQUE(campaign_name, room)
-        )
-    ''')
-
-    # Khởi tạo dữ liệu mẫu lần đầu cho Nhật ký công việc để Admin dễ kiểm tra Sửa/Xóa/Chọn tất cả
-    seeded_row = conn.execute("SELECT value FROM system_settings WHERE key = 'work_logs_seeded'").fetchone()
-    if not seeded_row:
-        existing_wl_count = conn.execute("SELECT COUNT(*) as c FROM work_logs").fetchone()['c']
-        if existing_wl_count == 0:
-            today_iso = today.strftime('%Y-%m-%d')
-            sample_logs = [
-                (
-                    today_iso, 'Ca sáng', 'server_net', '6.1, 6.2, Server/Rack',
-                    'Cấu hình VLAN & kiểm tra băng thông Switch tầng 6 cho cụm phòng 6.1 - 6.6',
-                    'Port Gi1/0/1-24 tốc độ ổn định 1Gbps, đã lưu cấu hình running-config vào startup-config',
-                    'high', 'completed', 'Admin'
-                ),
-                (
-                    today_iso, 'Ca sáng', 'vmware', '5.1, 5.2, 5.3',
-                    'Kiểm thử hệ điều hành Windows 11 & phần mềm học kỳ mới trên VMware trước khi bung Image',
-                    'Snapshot v2.1 chạy mượt Visual Studio 2022, MATLAB & Veyon Client; sẵn sàng tạo file Acronis chuẩn',
-                    'high', 'in_progress', 'Admin'
-                ),
-                (
-                    today_iso, 'Ca chiều', 'support', '5.2, 6.5',
-                    'Hỗ trợ giảng viên xử lý phần mềm giảng dạy, kiểm tra cáp HDMI & cấu hình quyền ổ Z:',
-                    'Đã chép thư mục t3h và kiểm tra quyền truy cập ổ Z: (pass: giaovien) trên máy GV',
-                    'normal', 'completed', 'Admin'
-                ),
-                (
-                    today_iso, 'Cả ngày', 'process', 'Tất cả 8 phòng',
-                    'Cải tiến quy trình quản lý phòng máy & chuẩn hóa SOP triển khai Acronis + Clonezilla Lite Server',
-                    'Tích hợp bảng Checklist 23 bước trực tiếp lên hệ thống Web quản trị QTTB',
-                    'normal', 'completed', 'Admin'
-                )
-            ]
-            conn.executemany('''
-                INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', sample_logs)
-        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('work_logs_seeded', '1')")
-        conn.commit()
-
     all_work_logs = conn.execute("SELECT * FROM work_logs ORDER BY work_date DESC, id DESC").fetchall()
     wl_total = len(all_work_logs)
     wl_completed = sum(1 for r in all_work_logs if r['status'] == 'completed')
@@ -1386,10 +1213,6 @@ def admin_panel():
 
 def measure_host_ping_ms(target_ip):
     """Đo ping (ms) tới 1 địa chỉ IP/Host trên cả Windows và Linux."""
-    import subprocess
-    import platform
-    import time
-
     target_ip = (target_ip or '').strip()
     if not target_ip:
         return False, None
@@ -1415,7 +1238,6 @@ def api_network_heartbeat():
     provided_key = (data.get('agent_key') or request.headers.get('X-Agent-Key') or '').strip()
 
     conn = get_db_connection()
-    conn.execute("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT)")
     ak_row = conn.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
     expected_key = ak_row['value'] if ak_row and ak_row['value'] else 'b42lab-secret-2026'
 
@@ -1430,7 +1252,7 @@ def api_network_heartbeat():
         results = {str(data['room']): {'status': data.get('status', 'online'), 'ping_ms': data.get('ping_ms')}}
 
     for r_code, r_info in results.items():
-        if r_code in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']:
+        if r_code in ROOMS_LIST:
             st = 'online' if r_info.get('status') in ('online', 1, True, '1') else 'offline'
             p_ms = r_info.get('ping_ms')
             conn.execute('''
@@ -1494,7 +1316,7 @@ def api_network_status():
 def save_network_config():
     """Lưu cấu hình IP của 8 phòng máy từ giao diện Admin."""
     conn = get_db_connection()
-    for r in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']:
+    for r in ROOMS_LIST:
         ip_val = (request.form.get(f"ip_{r}") or '8.8.8.8').strip()
         conn.execute("UPDATE room_network_status SET target_ip = ? WHERE room = ?", (ip_val, r))
     conn.commit()
@@ -1538,7 +1360,7 @@ def download_netagent_script():
         with open(agent_path, 'r', encoding='utf-8') as f:
             content = f.read()
         lines = ["ROOM_TARGETS = {"]
-        for r in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']:
+        for r in ROOMS_LIST:
             lines.append(f'    "{r}": "{ip_dict.get(r, "8.8.8.8")}",')
         lines.append("}")
         new_block = "\n".join(lines)
@@ -1610,11 +1432,6 @@ def export_semester_report():
 
 def build_overtime_report_excel(ot_rows, month_str):
     """Xuất file Excel bảng chấm công và theo dõi tăng ca (OT)."""
-    import io
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.utils import get_column_letter
-
     wb = Workbook()
     ws = wb.active
     ws.title = "Bang Cham Cong OT"
@@ -1953,11 +1770,6 @@ def bulk_delete_worklogs():
 @admin_required
 def export_worklog_excel():
     """Xuất file Excel (.xlsx) Nhật ký công việc thường nhật kèm cột Ghi chú."""
-    import io
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.utils import get_column_letter
-
     conn = get_db_connection()
     rows = conn.execute("SELECT * FROM work_logs ORDER BY work_date DESC, id DESC").fetchall()
     conn.close()
@@ -2097,10 +1909,9 @@ def api_copy_phase_a_all():
     now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
 
     conn = get_db_connection()
-    rooms_list = ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']
     updated_map = {}
 
-    for r_code in rooms_list:
+    for r_code in ROOMS_LIST:
         row = conn.execute(
             "SELECT checked_steps, notes FROM deployment_checklists WHERE campaign_name = ? AND room = ?",
             (campaign_name, r_code)
@@ -2147,7 +1958,7 @@ def add_deploy_campaign():
     now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
     updated_by = get_current_user_email() or 'Admin'
     conn = get_db_connection()
-    for r_code in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']:
+    for r_code in ROOMS_LIST:
         conn.execute('''
             INSERT OR IGNORE INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
             VALUES (?, ?, '[]', '', ?, ?)
@@ -2436,9 +2247,6 @@ def add_schedule():
     flash(f"Đã thêm lịch môn {subject_name} vào phòng {room} (lặp {num_weeks} tuần) thành công.", "success")
     return redirect(url_for('admin_panel', tab='schedules'))
 
-import pandas as pd
-from werkzeug.utils import secure_filename
-
 @app.route('/admin/import_schedule', methods=['POST'])
 @admin_required
 def import_schedule():
@@ -2581,7 +2389,6 @@ def my_dashboard():
 
 if __name__ == '__main__':
     import sys
-    app.config['TEMPLATES_AUTO_RELOAD'] = True
     is_pythonw = sys.executable.lower().endswith('pythonw.exe') or sys.stdout is None
     if is_pythonw:
         sys.stdout = open(os.devnull, 'w', encoding='utf-8')
