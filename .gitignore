@@ -6,6 +6,7 @@ lab_schedule.db
 # Bỏ qua thư mục nháp, ghi chú cá nhân, log, file nén và file lưu mã bí mật
 Note/
 test_debug/
+*.docx
 __pycache__/
 *.pyc
 *.log
