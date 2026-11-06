@@ -1312,13 +1312,62 @@
                         </form>
                     </div>
                 </div>
+
+                <!-- Hàng 2: Thanh Tìm kiếm nhanh & Chọn xóa môn Giáo vụ báo hủy -->
+                <div class="row g-2 align-items-center mt-2 pt-2 border-top">
+                    <div class="col-12 col-md-5">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0 text-muted">🔍</span>
+                            <input type="text" id="searchInput-schedules" class="form-control bg-light border-start-0"
+                                   placeholder="Tìm môn học, mã lớp (VD: 26KDL1A), đơn vị/khoa, giai đoạn để xóa môn hủy..."
+                                   oninput="applyScheduleFilters()">
+                            <button type="button" id="btnClearSearch-schedules" class="btn btn-light border d-none text-muted" onclick="clearScheduleFilters()" title="Xóa bộ lọc tìm kiếm">
+                                ✖
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select id="roomFilter-schedules" class="form-select form-select-sm bg-light fw-semibold" onchange="applyScheduleFilters()">
+                            <option value="all">🏫 Tất cả phòng</option>
+                            {% for r in rooms %}
+                                <option value="{{ r }}">Phòng {{ r }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select id="dayFilter-schedules" class="form-select form-select-sm bg-light fw-semibold" onchange="applyScheduleFilters()">
+                            <option value="all">🗓️ Mọi thứ</option>
+                            <option value="2">Thứ 2</option>
+                            <option value="3">Thứ 3</option>
+                            <option value="4">Thứ 4</option>
+                            <option value="5">Thứ 5</option>
+                            <option value="6">Thứ 6</option>
+                            <option value="7">Thứ 7</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-3 d-flex justify-content-between justify-content-md-end align-items-center gap-2">
+                        <span class="badge bg-light text-secondary border px-2 py-1" style="font-size: 0.74rem;">
+                            Hiện: <strong class="text-dark" id="visibleScheduleCount">{{ schedules|length }}</strong>/{{ schedules|length }}
+                        </span>
+                        <form id="bulkDeleteForm-schedules" action="{{ url_for('bulk_delete_schedules') }}" method="POST" class="m-0 d-inline" onsubmit="return confirmBulkDelete('schedules', 'lịch môn học (do Giáo vụ báo hủy)');">
+                            <input type="hidden" name="schedule_filter" value="{{ schedule_filter }}">
+                            <div id="bulkHiddenInputs-schedules"></div>
+                            <button type="submit" id="btnBulkDelete-schedules" class="btn btn-sm btn-danger fw-bold px-3 py-1 shadow-sm" style="font-size: 0.76rem;" disabled>
+                                🗑️ Xóa môn chọn (<span id="selectedCount-schedules">0</span>)
+                            </button>
+                        </form>
+                    </div>
+                </div>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 620px; overflow-y: auto;">
                     <table class="table table-hover schedule-mgmt-table mb-0">
                         <thead style="position: sticky; top: 0; z-index: 5;">
                             <tr>
-                                <th class="ps-3 d-none d-md-table-cell">ID</th>
+                                <th class="ps-3 text-center" style="width: 38px;">
+                                    <input type="checkbox" class="form-check-input" id="selectAllDesktop-schedules" onchange="toggleSelectAll('schedules', this.checked)" title="Chọn tất cả các môn đang hiển thị">
+                                </th>
+                                <th class="d-none d-md-table-cell">ID</th>
                                 <th>Phòng</th>
                                 <th>Thứ / Tiết</th>
                                 <th>Mã Lớp</th>
@@ -1332,8 +1381,14 @@
                         </thead>
                         <tbody>
                             {% for row in schedules %}
-                            <tr class="{% if row['is_ended_early'] %}row-ended-early{% endif %}">
-                                <td class="ps-3 text-muted d-none d-md-table-cell">{{ row['id'] }}</td>
+                            <tr class="admin-list-item-schedules {% if row['is_ended_early'] %}row-ended-early{% endif %}"
+                                data-room="{{ row['room'] }}"
+                                data-day="{{ row['day_of_week'] }}"
+                                data-search="{{ (row['id']|string ~ ' ' ~ row['room'] ~ ' thứ ' ~ row['day_of_week']|string ~ ' ' ~ (row['class_code'] or '') ~ ' ' ~ (row['subject_name'] or '') ~ ' ' ~ (row['department'] or '') ~ ' ' ~ (row['start_date_str'] or '') ~ ' ' ~ (row['end_date_str'] or ''))|lower }}">
+                                <td class="ps-3 text-center">
+                                    <input type="checkbox" class="form-check-input item-check-schedules" value="{{ row['id'] }}" onchange="syncRowCheckbox('schedules', this)">
+                                </td>
+                                <td class="text-muted d-none d-md-table-cell">{{ row['id'] }}</td>
                                 <td>
                                     <span class="badge {% if row['is_ended_early'] %}bg-secondary bg-opacity-25 text-secondary border-secondary{% else %}bg-primary bg-opacity-10 text-primary border-primary{% endif %} border fw-bold px-2 py-1">
                                         P.{{ row['room'] }}
@@ -1410,18 +1465,26 @@
                                             </button>
                                         {% endif %}
                                     </form>
-                                    <form action="{{ url_for('delete_schedule', schedule_id=row['id']) }}" method="POST" class="d-inline" onsubmit="return confirm('Xóa vĩnh viễn lịch học này?');">
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary border-0 text-danger py-0 px-1" title="Xóa lịch"><i class="bi bi-trash"></i></button>
+                                    <form action="{{ url_for('delete_schedule', schedule_id=row['id']) }}" method="POST" class="d-inline" onsubmit="return confirm('Xóa vĩnh viễn môn «{{ row['subject_name']|e }}» (Lớp {{ row['class_code']|e }}, P.{{ row['room'] }}) khỏi Lịch học?');">
+                                        <input type="hidden" name="schedule_filter" value="{{ schedule_filter }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2 fw-semibold" style="font-size: 0.74rem;" title="Xóa môn học này (Giáo vụ hủy môn)">
+                                            <i class="bi bi-trash"></i> Xóa
+                                        </button>
                                     </form>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="10" class="text-center text-muted py-5">
+                                <td colspan="11" class="text-center text-muted py-5">
                                     Không có lịch học nào trong bộ lọc này.
                                 </td>
                             </tr>
                             {% endfor %}
+                            <tr id="noScheduleMatchRow" class="d-none">
+                                <td colspan="11" class="text-center text-muted py-4">
+                                    🔍 Không tìm thấy môn học nào khớp với điều kiện tìm kiếm.
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -3768,6 +3831,73 @@
             return false;
         }
         return confirm(`⚠️ Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedIds.size} ${labelName} đã chọn không?`);
+    }
+
+    function applyScheduleFilters() {
+        const searchInput = document.getElementById('searchInput-schedules');
+        const roomSelect = document.getElementById('roomFilter-schedules');
+        const daySelect = document.getElementById('dayFilter-schedules');
+        const clearBtn = document.getElementById('btnClearSearch-schedules');
+
+        const keyword = (searchInput ? searchInput.value : '').trim().toLowerCase();
+        const roomVal = roomSelect ? roomSelect.value : 'all';
+        const dayVal = daySelect ? daySelect.value : 'all';
+
+        if (clearBtn) {
+            if (keyword || roomVal !== 'all' || dayVal !== 'all') {
+                clearBtn.classList.remove('d-none');
+            } else {
+                clearBtn.classList.add('d-none');
+            }
+        }
+
+        const rows = document.querySelectorAll('.admin-list-item-schedules');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const rRoom = row.getAttribute('data-room') || '';
+            const rDay = row.getAttribute('data-day') || '';
+            const rSearch = row.getAttribute('data-search') || '';
+
+            const matchRoom = (roomVal === 'all') || (rRoom === roomVal);
+            const matchDay = (dayVal === 'all') || (rDay === dayVal);
+            const matchKeyword = (!keyword) || rSearch.includes(keyword);
+
+            if (matchRoom && matchDay && matchKeyword) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+                const cb = row.querySelector('.item-check-schedules');
+                if (cb && cb.checked) cb.checked = false;
+            }
+        });
+
+        const countEl = document.getElementById('visibleScheduleCount');
+        if (countEl) countEl.textContent = visibleCount;
+
+        const noMatchRow = document.getElementById('noScheduleMatchRow');
+        if (noMatchRow && rows.length > 0) {
+            if (visibleCount === 0) {
+                noMatchRow.classList.remove('d-none');
+            } else {
+                noMatchRow.classList.add('d-none');
+            }
+        }
+
+        const desktopAll = document.getElementById('selectAllDesktop-schedules');
+        if (desktopAll) desktopAll.checked = false;
+        updateSelectedCount('schedules');
+    }
+
+    function clearScheduleFilters() {
+        const searchInput = document.getElementById('searchInput-schedules');
+        const roomSelect = document.getElementById('roomFilter-schedules');
+        const daySelect = document.getElementById('dayFilter-schedules');
+        if (searchInput) searchInput.value = '';
+        if (roomSelect) roomSelect.value = 'all';
+        if (daySelect) daySelect.value = 'all';
+        applyScheduleFilters();
     }
 
     function openUpdateWeeksModal(scheduleId, subjectName, roomLabel, currentWeeks, returnTab) {

@@ -2623,13 +2623,37 @@ def update_schedule_weeks(schedule_id):
 @admin_required
 def delete_schedule(schedule_id):
     """Xóa một lịch học khỏi cơ sở dữ liệu."""
+    schedule_filter = request.form.get('schedule_filter', 'all')
     conn = get_db_connection()
+    row = conn.execute("SELECT subject_name, class_code, room FROM schedules WHERE id = ?", (schedule_id,)).fetchone()
     conn.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
     conn.commit()
     conn.close()
     
-    flash("Đã xóa lịch học thành công.", "success")
-    return redirect(url_for('admin_panel', tab='schedules'))
+    if row:
+        cls_info = f" - Lớp {row['class_code']}" if row['class_code'] else ""
+        flash(f"🗑️ Đã xóa môn '{row['subject_name']}'{cls_info} (P.{row['room']}) khỏi Lịch học.", "success")
+    else:
+        flash("Đã xóa lịch học thành công.", "success")
+    return redirect(url_for('admin_panel', tab='schedules', schedule_filter=schedule_filter))
+
+
+@app.route('/admin/bulk-delete-schedules', methods=['POST'])
+@admin_required
+def bulk_delete_schedules():
+    """Xóa hàng loạt các môn học được chọn (ví dụ khi Giáo vụ báo hủy môn)."""
+    schedule_filter = request.form.get('schedule_filter', 'all')
+    selected_ids = [int(i) for i in request.form.getlist('selected_ids') if str(i).isdigit()]
+    if selected_ids:
+        conn = get_db_connection()
+        placeholders = ','.join(['?'] * len(selected_ids))
+        conn.execute(f"DELETE FROM schedules WHERE id IN ({placeholders})", selected_ids)
+        conn.commit()
+        conn.close()
+        flash(f"🗑️ Đã xóa {len(selected_ids)} lịch môn học được chọn khỏi Thời khóa biểu!", "success")
+    else:
+        flash("⚠️ Chưa có môn học nào được chọn để xóa.", "warning")
+    return redirect(url_for('admin_panel', tab='schedules', schedule_filter=schedule_filter))
 
 @app.route('/admin/delete_all_schedules', methods=['POST'])
 @admin_required
