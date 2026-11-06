@@ -926,6 +926,18 @@
                               onclick="toggleAutoReload()">
                             <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">30s</strong>
                         </span>
+                        <button type="button" class="btn btn-sm rounded-pill px-2 py-1 fw-bold d-inline-flex align-items-center {% if email_config and email_config['ready'] %}btn-outline-success{% else %}btn-outline-primary{% endif %}"
+                                style="font-size: 0.73rem;"
+                                onclick="openEmailConfigModal('requests')"
+                                title="Cấu hình gửi kết quả tự động qua Email đăng nhập của User">
+                            {% if email_config and email_config['ready'] %}
+                                📧 Auto-Email: BẬT
+                            {% elif email_config and not email_config['enabled'] %}
+                                🔕 Auto-Email: TẮT
+                            {% else %}
+                                ⚙️ Cấu hình Email trả KQ
+                            {% endif %}
+                        </button>
                         <button type="button" class="schedule-filter-pill active-all" data-tab-filter="requests" data-status="all" onclick="filterAdminList('requests', 'all', this)">
                             Tất cả ({{ req_all_count }})
                         </button>
@@ -1004,6 +1016,9 @@
                     </div>
                     <div class="mobile-action-meta">
                         👨‍🏫 <strong>{{ req['requester_name'] }}</strong> <span class="text-muted">({{ req['department'] }})</span>
+                        {% if req['email'] %}
+                            <div class="text-primary small fw-semibold"><i class="bi bi-envelope-at me-1"></i>{{ req['email'] }}</div>
+                        {% endif %}
                     </div>
                     {% if req['subject_name'] or req['class_code'] or req['subject_code'] %}
                     <div class="mobile-action-meta">
@@ -1017,22 +1032,55 @@
                             <div class="text-danger fw-semibold mt-1">💻 Phần mềm: {{ req['software_required'] }}</div>
                         {% endif %}
                         {% if req['admin_note'] %}
-                            <div class="text-dark fw-semibold mt-1">💬 Phản hồi: {{ req['admin_note'] }}</div>
+                            <div class="text-dark fw-semibold mt-1">💬 Phản hồi QTTB: {{ req['admin_note'] }}</div>
                         {% endif %}
                         {% if req['created_at'] %}
                             <div class="text-muted mt-1" style="font-size: 0.7rem;"><i class="bi bi-clock me-1"></i>Gửi lúc: {{ req['created_at'] }}</div>
                         {% endif %}
                     </div>
                     <div class="d-flex flex-wrap gap-1">
-                        <form action="{{ url_for('process_request', request_id=req['id']) }}" method="POST" class="m-0 flex-fill">
-                            <button type="submit" class="btn btn-sm {% if req_status == 'Processing' %}btn-info text-dark fw-bold{% else %}btn-outline-info text-dark fw-semibold{% endif %} w-100 py-1" style="font-size: 0.74rem;">Đã tiếp nhận</button>
-                        </form>
-                        <form action="{{ url_for('approve_request', request_id=req['id']) }}" method="POST" class="m-0 flex-fill">
-                            <button type="submit" class="btn btn-sm {% if req_status == 'Approved' %}btn-success fw-bold{% else %}btn-outline-success fw-semibold{% endif %} w-100 py-1" style="font-size: 0.74rem;">Đã duyệt</button>
-                        </form>
-                        <form action="{{ url_for('reject_request', request_id=req['id']) }}" method="POST" class="m-0 flex-fill" onsubmit="let reason = prompt('Nhập lý do từ chối yêu cầu này (tùy chọn):'); if(reason === null) return false; this.insertAdjacentHTML('beforeend', '<input type=\'hidden\' name=\'admin_note\' value=\'' + reason + '\'>'); return true;">
-                            <button type="submit" class="btn btn-sm {% if req_status == 'Rejected' %}btn-danger fw-bold{% else %}btn-outline-danger fw-semibold{% endif %} w-100 py-1" style="font-size: 0.74rem;">Từ chối</button>
-                        </form>
+                        <button type="button"
+                                class="btn btn-sm {% if req_status == 'Processing' %}btn-info text-dark fw-bold{% else %}btn-outline-info text-dark fw-semibold{% endif %} flex-fill py-1"
+                                style="font-size: 0.74rem;"
+                                data-action="{{ url_for('process_request', request_id=req['id']) }}"
+                                data-type="booking"
+                                data-status="Processing"
+                                data-status-label="👀 Đã tiếp nhận yêu cầu mượn phòng"
+                                data-user="{{ req['requester_name'] }}"
+                                data-email="{{ req['email'] or '' }}"
+                                data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
+                                data-note="{{ req['admin_note'] or '' }}"
+                                onclick="openStatusReplyModal(this)">
+                            Đã tiếp nhận
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm {% if req_status == 'Approved' %}btn-success fw-bold{% else %}btn-outline-success fw-semibold{% endif %} flex-fill py-1"
+                                style="font-size: 0.74rem;"
+                                data-action="{{ url_for('approve_request', request_id=req['id']) }}"
+                                data-type="booking"
+                                data-status="Approved"
+                                data-status-label="✅ Duyệt yêu cầu mượn phòng"
+                                data-user="{{ req['requester_name'] }}"
+                                data-email="{{ req['email'] or '' }}"
+                                data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
+                                data-note="{{ req['admin_note'] or '' }}"
+                                onclick="openStatusReplyModal(this)">
+                            Đã duyệt
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm {% if req_status == 'Rejected' %}btn-danger fw-bold{% else %}btn-outline-danger fw-semibold{% endif %} flex-fill py-1"
+                                style="font-size: 0.74rem;"
+                                data-action="{{ url_for('reject_request', request_id=req['id']) }}"
+                                data-type="booking"
+                                data-status="Rejected"
+                                data-status-label="❌ Từ chối yêu cầu mượn phòng"
+                                data-user="{{ req['requester_name'] }}"
+                                data-email="{{ req['email'] or '' }}"
+                                data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
+                                data-note="{{ req['admin_note'] or '' }}"
+                                onclick="openStatusReplyModal(this)">
+                            Từ chối
+                        </button>
                         <form action="{{ url_for('delete_request', request_id=req['id']) }}" method="POST" class="m-0" onsubmit="return confirm('Xóa vĩnh viễn yêu cầu mượn phòng này?');">
                             <button type="submit" class="btn btn-sm btn-outline-secondary text-danger py-1 px-2" title="Xóa"><i class="bi bi-trash"></i></button>
                         </form>
@@ -1076,6 +1124,9 @@
                             <td>
                                 <strong>{{ req['requester_name'] }}</strong><br>
                                 <span class="text-muted small">{{ req['department'] }}</span>
+                                {% if req['email'] %}
+                                    <br><span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle mt-1" style="font-size: 0.69rem;" title="Email nhận kết quả"><i class="bi bi-envelope-at me-1"></i>{{ req['email'] }}</span>
+                                {% endif %}
                                 {% if req['created_at'] %}
                                     <br><span class="text-muted" style="font-size: 0.72rem;"><i class="bi bi-clock me-1"></i>{{ req['created_at'] }}</span>
                                 {% endif %}
@@ -1116,21 +1167,48 @@
                             </td>
                             <td class="text-center pe-3 text-nowrap">
                                 <div class="d-inline-flex align-items-center gap-1">
-                                    <form action="{{ url_for('process_request', request_id=req['id']) }}" method="POST" class="d-inline m-0">
-                                        <button type="submit" class="btn btn-sm {% if req_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark{% endif %} py-1 px-2" style="font-size: 0.75rem;">
-                                            Đã tiếp nhận
-                                        </button>
-                                    </form>
-                                    <form action="{{ url_for('approve_request', request_id=req['id']) }}" method="POST" class="d-inline m-0">
-                                        <button type="submit" class="btn btn-sm {% if req_status == 'Approved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %} py-1 px-2" style="font-size: 0.75rem;">
-                                            Đã duyệt
-                                        </button>
-                                    </form>
-                                    <form action="{{ url_for('reject_request', request_id=req['id']) }}" method="POST" class="d-inline m-0" onsubmit="let reason = prompt('Bạn có chắc chắn muốn từ chối yêu cầu này? Vui lòng nhập lý do (tùy chọn):'); if(reason === null) return false; this.insertAdjacentHTML('beforeend', '<input type=\'hidden\' name=\'admin_note\' value=\'' + reason + '\'>'); return true;">
-                                        <button type="submit" class="btn btn-sm {% if req_status == 'Rejected' %}btn-danger fw-bold shadow-sm{% else %}btn-outline-danger{% endif %} py-1 px-2" style="font-size: 0.75rem;">
-                                            Từ chối
-                                        </button>
-                                    </form>
+                                    <button type="button"
+                                            class="btn btn-sm {% if req_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark{% endif %} py-1 px-2"
+                                            style="font-size: 0.75rem;"
+                                            data-action="{{ url_for('process_request', request_id=req['id']) }}"
+                                            data-type="booking"
+                                            data-status="Processing"
+                                            data-status-label="👀 Đã tiếp nhận yêu cầu mượn phòng"
+                                            data-user="{{ req['requester_name'] }}"
+                                            data-email="{{ req['email'] or '' }}"
+                                            data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
+                                            data-note="{{ req['admin_note'] or '' }}"
+                                            onclick="openStatusReplyModal(this)">
+                                        Đã tiếp nhận
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm {% if req_status == 'Approved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %} py-1 px-2"
+                                            style="font-size: 0.75rem;"
+                                            data-action="{{ url_for('approve_request', request_id=req['id']) }}"
+                                            data-type="booking"
+                                            data-status="Approved"
+                                            data-status-label="✅ Duyệt yêu cầu mượn phòng"
+                                            data-user="{{ req['requester_name'] }}"
+                                            data-email="{{ req['email'] or '' }}"
+                                            data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
+                                            data-note="{{ req['admin_note'] or '' }}"
+                                            onclick="openStatusReplyModal(this)">
+                                        Đã duyệt
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm {% if req_status == 'Rejected' %}btn-danger fw-bold shadow-sm{% else %}btn-outline-danger{% endif %} py-1 px-2"
+                                            style="font-size: 0.75rem;"
+                                            data-action="{{ url_for('reject_request', request_id=req['id']) }}"
+                                            data-type="booking"
+                                            data-status="Rejected"
+                                            data-status-label="❌ Từ chối yêu cầu mượn phòng"
+                                            data-user="{{ req['requester_name'] }}"
+                                            data-email="{{ req['email'] or '' }}"
+                                            data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
+                                            data-note="{{ req['admin_note'] or '' }}"
+                                            onclick="openStatusReplyModal(this)">
+                                        Từ chối
+                                    </button>
                                     <form action="{{ url_for('delete_request', request_id=req['id']) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Xóa vĩnh viễn yêu cầu mượn phòng này?');">
                                         <button type="submit" class="btn btn-sm btn-outline-secondary border-0 text-danger py-1 px-2" title="Xóa yêu cầu"><i class="bi bi-trash"></i></button>
                                     </form>
@@ -1560,6 +1638,18 @@
                               onclick="toggleAutoReload()">
                             <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">30s</strong>
                         </span>
+                        <button type="button" class="btn btn-sm rounded-pill px-2 py-1 fw-bold d-inline-flex align-items-center {% if email_config and email_config['ready'] %}btn-outline-success{% else %}btn-outline-primary{% endif %}"
+                                style="font-size: 0.73rem;"
+                                onclick="openEmailConfigModal('requests')"
+                                title="Cấu hình gửi kết quả tự động qua Email đăng nhập của User">
+                            {% if email_config and email_config['ready'] %}
+                                📧 Auto-Email: BẬT
+                            {% elif email_config and not email_config['enabled'] %}
+                                🔕 Auto-Email: TẮT
+                            {% else %}
+                                ⚙️ Cấu hình Email trả KQ
+                            {% endif %}
+                        </button>
                         <button type="button" class="schedule-filter-pill active-all" data-tab-filter="issues" data-status="all" onclick="filterAdminList('issues', 'all', this)">
                             Tất cả ({{ iss_all_count }})
                         </button>
@@ -1633,24 +1723,46 @@
                     </div>
                     <div class="mobile-action-meta">
                         👤 <strong>{{ issue.reporter_name }}</strong> <span class="text-muted">({{ issue.department }})</span>
+                        {% if issue.email %}
+                            <div class="text-primary small fw-semibold"><i class="bi bi-envelope-at me-1"></i>{{ issue.email }}</div>
+                        {% endif %}
                     </div>
                     <div class="mobile-action-meta">
                         <span class="badge bg-secondary bg-opacity-10 text-secondary border me-1 text-wrap text-start">{{ issue.issue_category }}</span>
                         <span class="text-danger fw-semibold">⚠️ {{ issue.description }}</span>
+                        {% if issue.admin_note %}
+                            <div class="text-dark fw-semibold mt-1 small">💬 Phản hồi QTTB: {{ issue.admin_note }}</div>
+                        {% endif %}
                     </div>
                     <div class="d-flex flex-wrap gap-1 mt-2">
-                        <form action="{{ url_for('update_issue_status', issue_id=issue.id) }}" method="POST" class="m-0 flex-fill">
-                            <input type="hidden" name="status" value="Processing">
-                            <button type="submit" class="btn btn-sm {% if iss_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark fw-semibold{% endif %} w-100 py-1" style="font-size: 0.74rem;">
-                                Đã tiếp nhận
-                            </button>
-                        </form>
-                        <form action="{{ url_for('update_issue_status', issue_id=issue.id) }}" method="POST" class="m-0 flex-fill">
-                            <input type="hidden" name="status" value="Resolved">
-                            <button type="submit" class="btn btn-sm {% if iss_status == 'Resolved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success fw-semibold{% endif %} w-100 py-1" style="font-size: 0.74rem;">
-                                Đã duyệt
-                            </button>
-                        </form>
+                        <button type="button"
+                                class="btn btn-sm {% if iss_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark fw-semibold{% endif %} flex-fill py-1"
+                                style="font-size: 0.74rem;"
+                                data-action="{{ url_for('update_issue_status', issue_id=issue.id) }}"
+                                data-type="issue"
+                                data-status="Processing"
+                                data-status-label="👀 Đã tiếp nhận báo cáo sự cố"
+                                data-user="{{ issue.reporter_name }}"
+                                data-email="{{ issue.email or '' }}"
+                                data-summary="Phòng {{ issue.room }} • Máy {{ issue.machine_number }} • {{ issue.issue_category }} ({{ issue.description }})"
+                                data-note="{{ issue.admin_note or '' }}"
+                                onclick="openStatusReplyModal(this)">
+                            Đã tiếp nhận
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm {% if iss_status == 'Resolved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success fw-semibold{% endif %} flex-fill py-1"
+                                style="font-size: 0.74rem;"
+                                data-action="{{ url_for('update_issue_status', issue_id=issue.id) }}"
+                                data-type="issue"
+                                data-status="Resolved"
+                                data-status-label="✅ Đã xử lý / Đã duyệt sự cố"
+                                data-user="{{ issue.reporter_name }}"
+                                data-email="{{ issue.email or '' }}"
+                                data-summary="Phòng {{ issue.room }} • Máy {{ issue.machine_number }} • {{ issue.issue_category }} ({{ issue.description }})"
+                                data-note="{{ issue.admin_note or '' }}"
+                                onclick="openStatusReplyModal(this)">
+                            Đã duyệt
+                        </button>
                         <form action="{{ url_for('delete_issue', issue_id=issue.id) }}" method="POST" class="m-0" onsubmit="return confirm('Xóa vĩnh viễn báo cáo sự cố này?');">
                             <button type="submit" class="btn btn-sm btn-outline-secondary text-danger py-1 px-2" title="Xóa"><i class="bi bi-trash"></i></button>
                         </form>
@@ -1694,6 +1806,9 @@
                             <td>
                                 <strong>{{ issue.reporter_name }}</strong><br>
                                 <span class="text-muted small">{{ issue.department }}</span>
+                                {% if issue.email %}
+                                    <br><span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle mt-1" style="font-size: 0.69rem;" title="Email nhận kết quả"><i class="bi bi-envelope-at me-1"></i>{{ issue.email }}</span>
+                                {% endif %}
                             </td>
                             <td>
                                 <span class="badge bg-primary bg-opacity-10 text-primary border border-primary">P.{{ issue.room }}</span><br>
@@ -1704,7 +1819,12 @@
                                     {{ issue.issue_category }}
                                 </span>
                             </td>
-                            <td class="small text-break" style="max-width: 240px;">{{ issue.description }}</td>
+                            <td class="small text-break" style="max-width: 240px;">
+                                {{ issue.description }}
+                                {% if issue.admin_note %}
+                                    <div class="text-muted mt-1" style="font-size: 0.72rem;">💬 {{ issue.admin_note }}</div>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if iss_status == "Processing" %}
                                     <span class="badge bg-info bg-opacity-15 text-dark border border-info"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
@@ -1716,18 +1836,34 @@
                             </td>
                             <td class="text-center pe-3 text-nowrap">
                                 <div class="d-inline-flex align-items-center gap-1">
-                                    <form action="{{ url_for('update_issue_status', issue_id=issue.id) }}" method="POST" class="d-inline m-0">
-                                        <input type="hidden" name="status" value="Processing">
-                                        <button type="submit" class="btn btn-sm {% if iss_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark{% endif %} py-1 px-2" style="font-size: 0.75rem;" title="Đánh dấu Đã tiếp nhận">
-                                            Đã tiếp nhận
-                                        </button>
-                                    </form>
-                                    <form action="{{ url_for('update_issue_status', issue_id=issue.id) }}" method="POST" class="d-inline m-0">
-                                        <input type="hidden" name="status" value="Resolved">
-                                        <button type="submit" class="btn btn-sm {% if iss_status == 'Resolved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %} py-1 px-2" style="font-size: 0.75rem;" title="Đánh dấu Đã duyệt">
-                                            Đã duyệt
-                                        </button>
-                                    </form>
+                                    <button type="button"
+                                            class="btn btn-sm {% if iss_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark{% endif %} py-1 px-2"
+                                            style="font-size: 0.75rem;"
+                                            data-action="{{ url_for('update_issue_status', issue_id=issue.id) }}"
+                                            data-type="issue"
+                                            data-status="Processing"
+                                            data-status-label="👀 Đã tiếp nhận báo cáo sự cố"
+                                            data-user="{{ issue.reporter_name }}"
+                                            data-email="{{ issue.email or '' }}"
+                                            data-summary="Phòng {{ issue.room }} • Máy {{ issue.machine_number }} • {{ issue.issue_category }} ({{ issue.description }})"
+                                            data-note="{{ issue.admin_note or '' }}"
+                                            onclick="openStatusReplyModal(this)">
+                                        Đã tiếp nhận
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm {% if iss_status == 'Resolved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %} py-1 px-2"
+                                            style="font-size: 0.75rem;"
+                                            data-action="{{ url_for('update_issue_status', issue_id=issue.id) }}"
+                                            data-type="issue"
+                                            data-status="Resolved"
+                                            data-status-label="✅ Đã xử lý / Đã duyệt sự cố"
+                                            data-user="{{ issue.reporter_name }}"
+                                            data-email="{{ issue.email or '' }}"
+                                            data-summary="Phòng {{ issue.room }} • Máy {{ issue.machine_number }} • {{ issue.issue_category }} ({{ issue.description }})"
+                                            data-note="{{ issue.admin_note or '' }}"
+                                            onclick="openStatusReplyModal(this)">
+                                        Đã duyệt
+                                    </button>
                                     <form action="{{ url_for('delete_issue', issue_id=issue.id) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Xóa vĩnh viễn báo cáo sự cố này?');">
                                         <button type="submit" class="btn btn-sm btn-outline-secondary border-0 text-danger py-1 px-2" title="Xóa sự cố"><i class="bi bi-trash"></i></button>
                                     </form>
@@ -1841,6 +1977,18 @@
                               onclick="toggleAutoReload()">
                             <i class="bi bi-arrow-repeat text-primary me-1 auto-reload-icon"></i>Tự làm mới: <strong class="text-primary auto-reload-sec ms-1">30s</strong>
                         </span>
+                        <button type="button" class="btn btn-sm rounded-pill px-2 py-1 fw-bold d-inline-flex align-items-center {% if email_config and email_config['ready'] %}btn-outline-success{% else %}btn-outline-primary{% endif %}"
+                                style="font-size: 0.73rem;"
+                                onclick="openEmailConfigModal('requests')"
+                                title="Cấu hình gửi kết quả tự động qua Email đăng nhập của User">
+                            {% if email_config and email_config['ready'] %}
+                                📧 Auto-Email: BẬT
+                            {% elif email_config and not email_config['enabled'] %}
+                                🔕 Auto-Email: TẮT
+                            {% else %}
+                                ⚙️ Cấu hình Email trả KQ
+                            {% endif %}
+                        </button>
                         <button type="button" class="schedule-filter-pill active-all" data-tab-filter="cancellations" data-status="all" onclick="filterAdminList('cancellations', 'all', this)">
                             Tất cả ({{ can_all_count }})
                         </button>
@@ -1914,25 +2062,45 @@
                     </div>
                     <div class="mobile-action-meta">
                         👨‍🏫 <strong>{{ req['teacher_name'] }}</strong> <span class="text-muted" style="font-size: 0.72rem;">({{ req['created_at'] }})</span>
+                        {% if req['email'] %}
+                            <div class="text-primary small fw-semibold"><i class="bi bi-envelope-at me-1"></i>{{ req['email'] }}</div>
+                        {% endif %}
                     </div>
-                    {% if req['reason'] %}
+                    {% if req['reason'] or req['admin_note'] %}
                     <div class="mobile-action-meta bg-light p-2 rounded-3 mb-2 border" style="font-size: 0.78rem;">
-                        📝 Lịch học bù / Lý do: <em>{{ req['reason'] }}</em>
+                        {% if req['reason'] %}📝 Lịch học bù / Lý do: <em>{{ req['reason'] }}</em>{% endif %}
+                        {% if req['admin_note'] %}<div class="text-dark fw-semibold mt-1">💬 Phản hồi QTTB: {{ req['admin_note'] }}</div>{% endif %}
                     </div>
                     {% endif %}
                     <div class="d-flex flex-wrap gap-1 mt-2">
-                        <form action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}" method="POST" class="m-0 flex-fill">
-                            <input type="hidden" name="status" value="Processing">
-                            <button type="submit" class="btn btn-sm {% if can_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark fw-semibold{% endif %} w-100 py-1" style="font-size: 0.74rem;">
-                                Đã tiếp nhận
-                            </button>
-                        </form>
-                        <form action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}" method="POST" class="m-0 flex-fill">
-                            <input type="hidden" name="status" value="Approved">
-                            <button type="submit" class="btn btn-sm {% if can_status == 'Approved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success fw-semibold{% endif %} w-100 py-1" style="font-size: 0.74rem;">
-                                Đã duyệt
-                            </button>
-                        </form>
+                        <button type="button"
+                                class="btn btn-sm {% if can_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark fw-semibold{% endif %} flex-fill py-1"
+                                style="font-size: 0.74rem;"
+                                data-action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}"
+                                data-type="cancellation"
+                                data-status="Processing"
+                                data-status-label="👀 Đã tiếp nhận thông báo nghỉ gấp"
+                                data-user="{{ req['teacher_name'] }}"
+                                data-email="{{ req['email'] or '' }}"
+                                data-summary="Phòng {{ req['room'] }} • Ngày {{ req['cancel_date'] }} ({{ req['period'] }}) • {{ req['reason'] or 'Báo nghỉ' }}"
+                                data-note="{{ req['admin_note'] or '' }}"
+                                onclick="openStatusReplyModal(this)">
+                            Đã tiếp nhận
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm {% if can_status == 'Approved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success fw-semibold{% endif %} flex-fill py-1"
+                                style="font-size: 0.74rem;"
+                                data-action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}"
+                                data-type="cancellation"
+                                data-status="Approved"
+                                data-status-label="✅ Xác nhận & Duyệt thông báo nghỉ"
+                                data-user="{{ req['teacher_name'] }}"
+                                data-email="{{ req['email'] or '' }}"
+                                data-summary="Phòng {{ req['room'] }} • Ngày {{ req['cancel_date'] }} ({{ req['period'] }}) • {{ req['reason'] or 'Báo nghỉ' }}"
+                                data-note="{{ req['admin_note'] or '' }}"
+                                onclick="openStatusReplyModal(this)">
+                            Đã duyệt
+                        </button>
                         <form action="{{ url_for('delete_cancellation', cancellation_id=req['id']) }}" method="POST" class="m-0" onsubmit="return confirm('Xóa vĩnh viễn thông báo nghỉ này?');">
                             <button type="submit" class="btn btn-sm btn-outline-secondary text-danger py-1 px-2" title="Xóa"><i class="bi bi-trash"></i></button>
                         </form>
@@ -1975,12 +2143,20 @@
                             </td>
                             <td>
                                 <strong>{{ req['teacher_name'] }}</strong><br>
+                                {% if req['email'] %}
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle mt-1" style="font-size: 0.69rem;" title="Email nhận kết quả"><i class="bi bi-envelope-at me-1"></i>{{ req['email'] }}</span><br>
+                                {% endif %}
                                 <span class="text-muted" style="font-size: 0.72rem;">{{ req['created_at'] }}</span>
                             </td>
                             <td><span class="badge bg-danger">P.{{ req['room'] }}</span></td>
                             <td class="fw-bold text-nowrap">{{ req['cancel_date'] }}</td>
                             <td>{{ req['period'] }}</td>
-                            <td class="text-muted small" style="max-width: 240px;">{{ req['reason'] }}</td>
+                            <td class="text-muted small" style="max-width: 240px;">
+                                {{ req['reason'] }}
+                                {% if req['admin_note'] %}
+                                    <div class="text-dark mt-1" style="font-size: 0.72rem;">💬 {{ req['admin_note'] }}</div>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if can_status == 'Processing' %}
                                     <span class="badge bg-info bg-opacity-15 text-dark border border-info"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
@@ -1992,18 +2168,34 @@
                             </td>
                             <td class="text-center pe-3 text-nowrap">
                                 <div class="d-inline-flex align-items-center gap-1">
-                                    <form action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}" method="POST" class="d-inline m-0">
-                                        <input type="hidden" name="status" value="Processing">
-                                        <button type="submit" class="btn btn-sm {% if can_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark{% endif %} py-1 px-2" style="font-size: 0.75rem;">
-                                            Đã tiếp nhận
-                                        </button>
-                                    </form>
-                                    <form action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}" method="POST" class="d-inline m-0">
-                                        <input type="hidden" name="status" value="Approved">
-                                        <button type="submit" class="btn btn-sm {% if can_status == 'Approved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %} py-1 px-2" style="font-size: 0.75rem;">
-                                            Đã duyệt
-                                        </button>
-                                    </form>
+                                    <button type="button"
+                                            class="btn btn-sm {% if can_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark{% endif %} py-1 px-2"
+                                            style="font-size: 0.75rem;"
+                                            data-action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}"
+                                            data-type="cancellation"
+                                            data-status="Processing"
+                                            data-status-label="👀 Đã tiếp nhận thông báo nghỉ gấp"
+                                            data-user="{{ req['teacher_name'] }}"
+                                            data-email="{{ req['email'] or '' }}"
+                                            data-summary="Phòng {{ req['room'] }} • Ngày {{ req['cancel_date'] }} ({{ req['period'] }}) • {{ req['reason'] or 'Báo nghỉ' }}"
+                                            data-note="{{ req['admin_note'] or '' }}"
+                                            onclick="openStatusReplyModal(this)">
+                                        Đã tiếp nhận
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm {% if can_status == 'Approved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %} py-1 px-2"
+                                            style="font-size: 0.75rem;"
+                                            data-action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}"
+                                            data-type="cancellation"
+                                            data-status="Approved"
+                                            data-status-label="✅ Xác nhận & Duyệt thông báo nghỉ"
+                                            data-user="{{ req['teacher_name'] }}"
+                                            data-email="{{ req['email'] or '' }}"
+                                            data-summary="Phòng {{ req['room'] }} • Ngày {{ req['cancel_date'] }} ({{ req['period'] }}) • {{ req['reason'] or 'Báo nghỉ' }}"
+                                            data-note="{{ req['admin_note'] or '' }}"
+                                            onclick="openStatusReplyModal(this)">
+                                        Đã duyệt
+                                    </button>
                                     <form action="{{ url_for('delete_cancellation', cancellation_id=req['id']) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Xóa vĩnh viễn thông báo nghỉ này?');">
                                         <button type="submit" class="btn btn-sm btn-outline-secondary border-0 text-danger py-1 px-2" title="Xóa thông báo"><i class="bi bi-trash"></i></button>
                                     </form>
@@ -2675,6 +2867,15 @@
                                 data-bs-toggle="modal" data-bs-target="#addDeployCampaignModal">
                             ➕ Tạo đợt mới
                         </button>
+                        {% if deploy_data['campaigns']|length > 1 %}
+                        <form action="{{ url_for('delete_deploy_campaign') }}" method="POST" class="m-0"
+                              onsubmit="return confirm('Bạn có chắc chắn muốn xóa đợt triển khai «{{ deploy_data['selected_campaign'] }}» không?');">
+                            <input type="hidden" name="campaign_name" value="{{ deploy_data['selected_campaign'] }}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm fw-bold rounded-3" title="Xóa đợt triển khai đang chọn">
+                                🗑️ Xóa đợt này
+                            </button>
+                        </form>
+                        {% endif %}
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge rounded-pill px-3 py-2 fw-bold" style="background-color: #F0FDFA; color: #0D9488; border: 1px solid #99F6E4; font-size: 0.8rem;" id="overallDeploySummaryBadge">
@@ -3154,6 +3355,135 @@
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL XÁC NHẬN TRẠNG THÁI & TRẢ KẾT QUẢ QUA EMAIL CHO USER -->
+<div class="modal fade admin-wrapper-font" id="statusReplyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header border-0 text-white py-3" id="srModalHeader" style="background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%);">
+                <h6 class="modal-title fw-bold mb-0" id="srModalTitle">📧 Xác nhận & Trả kết quả qua Email</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="statusReplyForm" method="POST">
+                <input type="hidden" name="status" id="srHiddenStatus" value="">
+                <div class="modal-body bg-light p-3 p-md-4">
+                    <div class="p-3 rounded-3 bg-white border mb-3 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mb-2">
+                            <span class="badge bg-primary rounded-pill px-3 py-1" id="srBadgeLabel">Trạng thái</span>
+                            <span class="small text-muted fw-semibold" id="srUserLabel">Người gửi</span>
+                        </div>
+                        <div class="fw-bold text-dark small mb-2" id="srSummaryText">Chi tiết yêu cầu</div>
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-2 border-top">
+                            <div class="small">
+                                <span class="text-muted">Email nhận kết quả:</span>
+                                <strong class="text-primary ms-1" id="srEmailText">Chưa có email</strong>
+                            </div>
+                            <span class="badge {% if email_config and email_config['ready'] %}bg-success bg-opacity-10 text-success border border-success-subtle{% else %}bg-warning bg-opacity-15 text-dark border border-warning-subtle{% endif %}" style="font-size: 0.7rem;">
+                                {% if email_config and email_config['ready'] %}
+                                    ⚡ Tự động gửi qua SMTP
+                                {% else %}
+                                    ⚠️ Chưa nhập App Password (Có thể gửi bằng Gmail Web)
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-dark mb-1">
+                            💬 Lời nhắn / Ghi chú phản hồi gửi kèm trong Email &amp; Lịch sử User (tùy chọn):
+                        </label>
+                        <textarea class="form-control border-primary-subtle bg-white" name="admin_note" id="srNoteInput" rows="3"
+                                  placeholder="Nhập nội dung phản hồi cụ thể cho giảng viên (để trống nếu chỉ gửi thông báo chuẩn mặc định)..."></textarea>
+                    </div>
+
+                    <div class="mb-1">
+                        <div class="text-muted fw-bold mb-1" style="font-size: 0.72rem;">⚡ Chọn nhanh mẫu câu phản hồi:</div>
+                        <div class="d-flex flex-wrap gap-1" id="srQuickChips"></div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-white border-top d-flex justify-content-between align-items-center flex-wrap gap-2 py-2 px-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold" id="srGmailWebBtn" onclick="openGmailComposeFallback()" title="Mở cửa sổ Gmail Web đã điền sẵn người nhận, tiêu đề và nội dung">
+                        ✉️ Mở Gmail soạn sẵn
+                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Hủy</button>
+                        <button type="submit" class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" id="srSubmitBtn">
+                            ✅ Xác nhận &amp; Gửi kết quả
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CẤU HÌNH EMAIL TỰ ĐỘNG (GMAIL SMTP APP PASSWORD) -->
+<div class="modal fade admin-wrapper-font" id="emailConfigModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header text-white border-0 py-3" style="background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%);">
+                <h6 class="modal-title fw-bold mb-0">📧 Cấu hình Tự động Gửi Email Trả Kết Quả</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('save_email_config') }}" method="POST">
+                <input type="hidden" name="return_tab" id="ecReturnTab" value="requests">
+                <div class="modal-body bg-light p-3 p-md-4">
+                    <div class="form-check form-switch p-3 bg-white rounded-3 border mb-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <label class="form-check-label fw-bold text-dark d-block" for="smtpEnabledSwitch">
+                                Tự động gửi Email khi Admin thao tác
+                            </label>
+                            <small class="text-muted">Gửi tới email đăng nhập của giảng viên khi bấm Đã tiếp nhận / Đã duyệt / Từ chối</small>
+                        </div>
+                        <input class="form-check-input ms-2" type="checkbox" role="switch" id="smtpEnabledSwitch" name="smtp_enabled" value="1"
+                               style="width: 2.6em; height: 1.35em;"
+                               {% if not email_config or email_config['enabled'] %}checked{% endif %}>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-dark mb-1">1. Tên hiển thị người gửi (From Name):</label>
+                        <input type="text" class="form-control form-control-sm bg-white fw-semibold" name="smtp_sender_name" id="ecSenderName"
+                               value="{{ email_config['sender_name'] if email_config else 'Hệ thống Phòng máy B4.2 - Phòng QTTB' }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-dark mb-1">2. Địa chỉ Gmail / Email trường dùng để gửi đi (SMTP User):</label>
+                        <input type="email" class="form-control form-control-sm bg-white fw-semibold text-primary" name="smtp_email" id="ecSmtpEmail"
+                               value="{{ email_config['email'] if email_config else 'mlhang@hcmus.edu.vn' }}" placeholder="VD: mlhang@hcmus.edu.vn" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-dark mb-1">
+                            3. Mật khẩu ứng dụng Google (App Password 16 ký tự):
+                            {% if email_config and email_config['has_password'] %}
+                                <span class="badge bg-success ms-1">Đã lưu mật khẩu</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark ms-1">Chưa thiết lập</span>
+                            {% endif %}
+                        </label>
+                        <input type="password" class="form-control form-control-sm bg-white font-monospace" name="smtp_password" id="ecSmtpPassword"
+                               placeholder="{% if email_config and email_config['has_password'] %}•••••••••••• (Để trống nếu giữ nguyên mật khẩu cũ){% else %}Nhập mã 16 ký tự (VD: abcd efgh ijkl mnop){% endif %}">
+                        <div class="text-muted mt-1" style="font-size: 0.74rem; line-height: 1.4;">
+                            💡 <strong>Cách lấy mã:</strong> Vào <a href="https://myaccount.google.com/apppasswords" target="_blank" class="fw-bold text-primary">Google App Passwords</a> &rarr; Tạo tên ứng dụng <code>QLPhongMay</code> &rarr; Copy 16 ký tự dán vào ô trên.
+                        </div>
+                    </div>
+
+                    <div class="p-2.5 rounded-3 bg-white border d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span class="small text-muted">Kiểm tra gửi thử 1 email tới hộp thư của bạn:</span>
+                        <button type="button" class="btn btn-sm btn-outline-teal fw-bold" style="border-color: #0D9488; color: #0D9488;" id="btnTestSmtp" onclick="sendTestSmtpEmail()">
+                            📨 Gửi Email Test
+                        </button>
+                    </div>
+                    <div id="ecTestResult" class="mt-2 small fw-semibold d-none"></div>
+                </div>
+                <div class="modal-footer bg-white border-top py-2 px-3">
+                    <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-sm btn-primary fw-bold px-4">💾 Lưu cấu hình Email</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -4044,6 +4374,194 @@
             }
         } catch (err) {
             console.error(err);
+        }
+    }
+
+    // ==========================================
+    // XỬ LÝ MODAL PHẢN HỒI & TRẢ KẾT QUẢ QUA EMAIL CHO USER
+    // ==========================================
+    let currentReplyContext = {};
+
+    const QUICK_REPLY_TEMPLATES = {
+        booking: {
+            Processing: [
+                'QTTB đã tiếp nhận yêu cầu và đang kiểm tra lịch phòng máy.',
+                'Đang tiến hành cài đặt phần mềm theo yêu cầu của Quý Thầy/Cô.',
+                'Đã tiếp nhận, sẽ phản hồi kết quả duyệt phòng sớm nhất.'
+            ],
+            Approved: [
+                'Đã duyệt phòng và cập nhật vào Thời khóa biểu. Đã báo bộ phận trực mở cửa phòng đúng giờ.',
+                'Đã duyệt mượn phòng và hoàn tất cài đặt phần mềm phục vụ giảng dạy.',
+                'Phòng máy đã sẵn sàng, kính mời Quý Thầy/Cô sử dụng theo lịch đăng ký.'
+            ],
+            Rejected: [
+                'Khung giờ này phòng máy đã có lịch học chính khóa hoặc lịch bảo trì định kỳ.',
+                'Hiện tại tất cả các phòng máy đều đã kín lịch trong ca này, mong Quý Thầy/Cô thông cảm chọn khung giờ khác.',
+                'Phần mềm yêu cầu không tương thích với cấu hình hiện tại của phòng máy này.'
+            ]
+        },
+        issue: {
+            Processing: [
+                'Kỹ thuật viên QTTB đã tiếp nhận báo cáo và đang xuống phòng máy kiểm tra.',
+                'Đã ghi nhận sự cố máy tính, kỹ thuật sẽ xử lý trước ca học tiếp theo.'
+            ],
+            Resolved: [
+                'Đã kiểm tra và khắc phục hoàn tất sự cố phần cứng/phần mềm trên máy.',
+                'Đã bung lại Image / cài đặt lại phần mềm, máy hoạt động ổn định bình thường.',
+                'Đã thay thế thiết bị ngoại vi (chuột/bàn phím/dây mạng) mới cho máy.'
+            ]
+        },
+        cancellation: {
+            Processing: [
+                'QTTB đã tiếp nhận thông báo nghỉ học và đang chuyển thông tin cho bộ phận trực phòng.',
+                'Đã ghi nhận lịch báo vắng của Quý Thầy/Cô.'
+            ],
+            Approved: [
+                'Đã xác nhận lịch báo nghỉ và thông báo chị Hân khóa cửa phòng máy trong ca này.',
+                'Đã duyệt thông báo nghỉ và giải phóng ca phòng trống trên hệ thống. Quý Thầy/Cô có thể đăng ký dạy bù ở mục Mượn phòng.'
+            ]
+        }
+    };
+
+    function openStatusReplyModal(btnEl) {
+        const actionUrl = btnEl.getAttribute('data-action') || '';
+        const reqType = btnEl.getAttribute('data-type') || 'booking';
+        const status = btnEl.getAttribute('data-status') || 'Processing';
+        const statusLabel = btnEl.getAttribute('data-status-label') || 'Cập nhật trạng thái';
+        const userName = btnEl.getAttribute('data-user') || 'Giảng viên';
+        const userEmail = btnEl.getAttribute('data-email') || '';
+        const summary = btnEl.getAttribute('data-summary') || '';
+        const existingNote = btnEl.getAttribute('data-note') || '';
+
+        currentReplyContext = { actionUrl, reqType, status, statusLabel, userName, userEmail, summary };
+
+        const formEl = document.getElementById('statusReplyForm');
+        formEl.action = actionUrl;
+        document.getElementById('srHiddenStatus').value = status;
+        document.getElementById('srBadgeLabel').textContent = statusLabel;
+        document.getElementById('srUserLabel').textContent = '👤 ' + userName;
+        document.getElementById('srSummaryText').textContent = summary;
+        document.getElementById('srEmailText').textContent = userEmail ? userEmail : 'Không có email đính kèm';
+        document.getElementById('srNoteInput').value = existingNote;
+
+        const badgeEl = document.getElementById('srBadgeLabel');
+        const submitBtn = document.getElementById('srSubmitBtn');
+        if (status === 'Processing') {
+            badgeEl.className = 'badge bg-info text-dark rounded-pill px-3 py-1 fw-bold';
+            submitBtn.className = 'btn btn-sm btn-info text-dark fw-bold px-3 shadow-sm';
+            submitBtn.innerHTML = '👀 Xác nhận Tiếp nhận &amp; Gửi Email';
+        } else if (status === 'Approved' || status === 'Resolved') {
+            badgeEl.className = 'badge bg-success rounded-pill px-3 py-1 fw-bold';
+            submitBtn.className = 'btn btn-sm btn-success fw-bold px-3 shadow-sm';
+            submitBtn.innerHTML = '✅ Xác nhận Duyệt &amp; Gửi Email';
+        } else {
+            badgeEl.className = 'badge bg-danger rounded-pill px-3 py-1 fw-bold';
+            submitBtn.className = 'btn btn-sm btn-danger fw-bold px-3 shadow-sm';
+            submitBtn.innerHTML = '❌ Xác nhận Từ chối &amp; Gửi Email';
+        }
+
+        const gmailBtn = document.getElementById('srGmailWebBtn');
+        if (gmailBtn) {
+            gmailBtn.style.display = userEmail ? 'inline-block' : 'none';
+        }
+
+        const chipsWrap = document.getElementById('srQuickChips');
+        chipsWrap.innerHTML = '';
+        const typeGroup = QUICK_REPLY_TEMPLATES[reqType] || {};
+        const templates = typeGroup[status] || [];
+        templates.forEach(tpl => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn btn-sm btn-outline-secondary rounded-pill py-0 px-2 text-start';
+            b.style.fontSize = '0.71rem';
+            b.textContent = '+ ' + tpl;
+            b.onclick = () => {
+                document.getElementById('srNoteInput').value = tpl;
+            };
+            chipsWrap.appendChild(b);
+        });
+
+        const modal = new bootstrap.Modal(document.getElementById('statusReplyModal'));
+        modal.show();
+    }
+
+    function openGmailComposeFallback() {
+        const to = (currentReplyContext.userEmail || '').trim();
+        if (!to) {
+            alert('Yêu cầu này không có địa chỉ email của người gửi.');
+            return;
+        }
+        const note = (document.getElementById('srNoteInput').value || '').trim();
+        let reqTypeLabel = 'đăng ký mượn phòng máy';
+        if (currentReplyContext.reqType === 'issue') {
+            reqTypeLabel = 'báo cáo sự cố kỹ thuật';
+        } else if (currentReplyContext.reqType === 'cancellation') {
+            reqTypeLabel = 'thông báo nghỉ học';
+        }
+        const cleanStatus = (currentReplyContext.statusLabel || '').replace(/^[^\wÀ-ỹ]+/, '').trim();
+        const subject = `Phản hồi yêu cầu ${reqTypeLabel} (${currentReplyContext.summary}) - Phòng máy tính B4.2`;
+        const bodyLines = [
+            `Kính gửi Thầy/Cô ${currentReplyContext.userName},`,
+            ``,
+            `Hệ thống Quản lý Phòng máy tính Tòa B4.2 (Phòng Quản trị Thiết bị) xin thông báo kết quả xử lý yêu cầu:`,
+            `- Trạng thái: ${cleanStatus}`,
+            `- Chi tiết yêu cầu: ${currentReplyContext.summary}`,
+            note ? `- Phản hồi từ Quản trị viên Phòng máy (QTTB): ${note}` : ``,
+            ``,
+            `Trân trọng,`,
+            `Bộ phận quản lý phòng máy`
+        ].filter(Boolean).join('\n');
+
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines)}`;
+        window.open(gmailUrl, '_blank');
+    }
+
+    function openEmailConfigModal(returnTab) {
+        const rt = document.getElementById('ecReturnTab');
+        if (rt) rt.value = returnTab || getActiveAdminTab() || 'requests';
+        const resBox = document.getElementById('ecTestResult');
+        if (resBox) resBox.classList.add('d-none');
+        const modal = new bootstrap.Modal(document.getElementById('emailConfigModal'));
+        modal.show();
+    }
+
+    async function sendTestSmtpEmail() {
+        const btn = document.getElementById('btnTestSmtp');
+        const resBox = document.getElementById('ecTestResult');
+        const smtpEmail = document.getElementById('ecSmtpEmail').value.trim();
+        const smtpPassword = document.getElementById('ecSmtpPassword').value.trim();
+        const senderName = document.getElementById('ecSenderName').value.trim();
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Đang gửi thử...';
+        resBox.classList.remove('d-none', 'text-success', 'text-danger');
+        resBox.textContent = 'Đang kết nối tới máy chủ smtp.gmail.com:587...';
+
+        try {
+            const resp = await fetch('/admin/email-test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to_email: smtpEmail,
+                    smtp_email: smtpEmail,
+                    smtp_password: smtpPassword,
+                    smtp_sender_name: senderName
+                })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                resBox.classList.add('text-success');
+                resBox.textContent = '✅ ' + data.message + ' — Hãy bấm "Lưu cấu hình Email" để áp dụng!';
+            } else {
+                resBox.classList.add('text-danger');
+                resBox.textContent = '❌ ' + data.message;
+            }
+        } catch (err) {
+            resBox.classList.add('text-danger');
+            resBox.textContent = '❌ Lỗi kết nối: ' + err;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '📨 Gửi Email Test';
         }
     }
 

@@ -1,0 +1,249 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .contact-wrapper {
+        max-width: 920px;
+        margin: 0 auto;
+    }
+    .contact-banner {
+        background: #ffffff;
+        border: 1px solid #CBD5E1;
+        border-left: 5px solid var(--primary-color);
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 1px 3px rgba(15, 41, 66, 0.05);
+    }
+    .contact-card {
+        background: #ffffff;
+        border: 1px solid #CBD5E1;
+        border-radius: 12px;
+        padding: 1.25rem 1.4rem;
+        box-shadow: 0 1px 3px rgba(15, 41, 66, 0.04);
+        display: flex;
+        flex-direction: column;
+    }
+    .contact-card-equal {
+        height: 100%;
+    }
+    .contact-badge-navy,
+    .contact-badge-teal,
+    .contact-badge-slate {
+        color: #ffffff;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        padding: 0.32rem 0.7rem;
+        border-radius: 6px;
+        display: inline-block;
+    }
+    .contact-badge-navy {
+        background-color: var(--primary-color);
+    }
+    .contact-badge-teal {
+        background-color: var(--accent-color);
+    }
+    .contact-badge-slate {
+        background-color: #1E293B;
+    }
+    .contact-desc {
+        color: #475569;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        margin-bottom: 0.9rem;
+        min-height: 2.6rem;
+    }
+    .contact-info-box {
+        background-color: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        margin-top: auto;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .contact-row {
+        display: grid;
+        grid-template-columns: 105px 1fr;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.35rem 0;
+        font-size: 0.9rem;
+    }
+    .contact-row + .contact-row {
+        border-top: 1px dashed #E2E8F0;
+    }
+    .contact-label {
+        color: #64748B;
+        font-weight: 500;
+    }
+    .contact-person {
+        color: var(--primary-color);
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
+    .contact-action-link {
+        color: var(--accent-color);
+        font-weight: 700;
+        text-decoration: none;
+    }
+    .contact-action-link:hover {
+        color: var(--primary-color);
+        text-decoration: underline;
+    }
+    .tech-subcard {
+        background-color: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 10px;
+        padding: 0.85rem 0.75rem;
+        text-align: center;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .tech-subcard:hover {
+        border-color: #99F6E4;
+        box-shadow: 0 3px 8px rgba(13, 148, 136, 0.08);
+    }
+    .tech-phone-pill {
+        display: inline-block;
+        margin-top: 0.4rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--accent-color);
+        background-color: #F0FDFA;
+        border: 1px solid #99F6E4;
+        padding: 0.2rem 0.8rem;
+        border-radius: 999px;
+        text-decoration: none;
+    }
+    .tech-phone-pill:hover {
+        background-color: var(--accent-color);
+        color: #ffffff;
+        border-color: var(--accent-color);
+    }
+</style>
+
+<div class="contact-wrapper my-2">
+
+    <!-- Banner Đơn vị vận hành -->
+    <div class="contact-banner mb-3">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+            <span class="small fw-bold text-uppercase" style="color: var(--accent-color); letter-spacing: 0.04em;">
+                Thông tin Liên hệ &amp; Hỗ trợ vận hành
+            </span>
+            <span class="badge rounded-pill px-3 py-1 fw-semibold" style="background-color: #F0FDFA; color: var(--accent-color); border: 1px solid #99F6E4;">
+                Tòa B4.2 – Cơ sở 2
+            </span>
+        </div>
+        <h1 class="h5 fw-bold mb-1" style="color: var(--primary-color);">
+            Hệ thống Phòng máy tính - Phòng Quản trị Thiết bị - Tòa B4.2 – Cơ sở 2
+        </h1>
+        <p class="text-secondary small mb-0">
+            Địa chỉ: Khu đô thị Đại học Quốc gia TP. Hồ Chí Minh, Phường Đông Hoà, TP. Hồ Chí Minh
+        </p>
+    </div>
+
+    <!-- Hàng 1: Quản lý & Kỹ thuật Phòng máy + Trực Đóng / Mở cửa Phòng máy -->
+    <div class="row g-3 mb-3 align-items-stretch">
+        <!-- Card 1: Quản lý & Kỹ thuật Phòng máy -->
+        <div class="col-md-6">
+            <div class="contact-card contact-card-equal">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <span class="contact-badge-navy">1. Quản lý &amp; Kỹ thuật Phòng máy</span>
+                    <span class="small fw-semibold" style="color: var(--accent-color);">Phòng 5.1 – 6.6</span>
+                </div>
+                <p class="contact-desc">
+                    Hỗ trợ kỹ thuật phần mềm, phần cứng máy tính và cài đặt phần giảng dạy.
+                </p>
+                <div class="contact-info-box">
+                    <div class="contact-row">
+                        <span class="contact-label">Phụ trách:</span>
+                        <span class="contact-person">Chị Hằng</span>
+                    </div>
+                    <div class="contact-row">
+                        <span class="contact-label">Điện thoại:</span>
+                        <div><a href="tel:0853212259" class="contact-action-link">0853212259</a></div>
+                    </div>
+                    <div class="contact-row">
+                        <span class="contact-label">Email:</span>
+                        <div><a href="mailto:mlhang@hcmus.edu.vn" class="contact-action-link">mlhang@hcmus.edu.vn</a></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Trực Đóng / Mở cửa Phòng máy -->
+        <div class="col-md-6">
+            <div class="contact-card contact-card-equal">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <span class="contact-badge-teal">2. Trực Đóng / Mở cửa Phòng máy</span>
+                    <span class="small fw-semibold text-secondary">Tòa B4.2</span>
+                </div>
+                <p class="contact-desc">
+                    Phụ trách trực đóng / mở cửa các phòng máy tính tại cụm phòng máy Tòa B4.2.
+                </p>
+                <div class="contact-info-box">
+                    <div class="contact-row">
+                        <span class="contact-label">Phụ trách:</span>
+                        <span class="contact-person">Chị Hân</span>
+                    </div>
+                    <div class="contact-row">
+                        <span class="contact-label">Điện thoại:</span>
+                        <div><a href="tel:0931437955" class="contact-action-link">0931437955</a></div>
+                    </div>
+                    <div class="contact-row">
+                        <span class="contact-label">Khu vực trực:</span>
+                        <span class="fw-semibold text-dark">Tòa B4.2 – Cơ sở 2</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hàng 2: Kỹ thuật Điện - Nước, Âm thanh, Máy chiếu -->
+    <div class="contact-card">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <span class="contact-badge-slate">3. Kỹ thuật Điện - Nước, Âm thanh, Máy chiếu</span>
+            <span class="small text-secondary">Hỗ trợ hạ tầng kỹ thuật tòa nhà &amp; thiết bị trình chiếu</span>
+        </div>
+        <div class="row g-2">
+            <div class="col-6 col-md-3">
+                <div class="tech-subcard">
+                    <div class="text-secondary small">Kỹ thuật viên</div>
+                    <div class="contact-person mt-1">Anh Đạt</div>
+                    <a href="tel:0386424395" class="tech-phone-pill">0386424395</a>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="tech-subcard">
+                    <div class="text-secondary small">Kỹ thuật viên</div>
+                    <div class="contact-person mt-1">Anh Phong</div>
+                    <a href="tel:0938286593" class="tech-phone-pill">0938286593</a>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="tech-subcard">
+                    <div class="text-secondary small">Kỹ thuật viên</div>
+                    <div class="contact-person mt-1">Anh K.Phong</div>
+                    <a href="tel:0792006672" class="tech-phone-pill">0792006672</a>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="tech-subcard">
+                    <div class="text-secondary small">Kỹ thuật viên</div>
+                    <div class="contact-person mt-1">Anh Nam</div>
+                    <a href="tel:0934162030" class="tech-phone-pill">0934162030</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

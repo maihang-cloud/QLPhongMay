@@ -112,6 +112,11 @@ def init_db():
     except Exception:
         pass
 
+    try:
+        cursor.execute("ALTER TABLE cancellations ADD COLUMN admin_note TEXT")
+    except Exception:
+        pass
+
     # Migration an toàn: Thêm cột created_at cho DB cũ nếu chưa có
     try:
         cursor.execute("ALTER TABLE booking_requests ADD COLUMN created_at TIMESTAMP")
@@ -211,6 +216,19 @@ def init_db():
             "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('netagent_key', 'b42lab-secret-2026')"
         )
 
+    # Khởi tạo cấu hình mặc định cho Hệ thống Gửi Email Thông báo Kết quả (SMTP)
+    default_smtp_settings = {
+        'smtp_enabled': '1',
+        'smtp_email': 'mlhang@hcmus.edu.vn',
+        'smtp_password': '',
+        'smtp_sender_name': 'Hệ thống Phòng máy B4.2 - Phòng QTTB'
+    }
+    for s_key, s_val in default_smtp_settings.items():
+        cursor.execute(
+            "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
+            (s_key, s_val)
+        )
+
     default_router_ips = {
         '5.1': '10.29.37.53',
         '5.2': '10.29.37.54',
@@ -275,7 +293,8 @@ def init_db():
             ''', sample_logs)
         cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('work_logs_seeded', '1')")
 
-    # Khởi tạo đợt Checklist Deploy mặc định nếu bảng đang trống
+    # Dọn sạch bản ghi đợt Deploy bị lỗi mã hóa ký tự (nếu có) và khởi tạo đợt mặc định nếu bảng đang trống
+    cursor.execute("DELETE FROM deployment_checklists WHERE campaign_name LIKE '%?%'")
     has_campaign = cursor.execute("SELECT 1 FROM deployment_checklists LIMIT 1").fetchone()
     if not has_campaign:
         default_campaign = "HK1 (2026-2027) - Deploy Hệ thống chuẩn"

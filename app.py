@@ -15,12 +15,19 @@ from report_exporter import (
     filter_schedules_for_report
 )
 from functools import wraps
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.header import Header
+from email.utils import formataddr
+import html as html_lib
 import pandas as pd
 import urllib.request
 import urllib.parse
 import subprocess
+import threading
 import platform
 import datetime
+import smtplib
 import secrets
 import time
 import json
@@ -127,6 +134,307 @@ app.jinja_env.auto_reload = True
 # Khởi tạo DB khi app bắt đầu chạy
 with app.app_context():
     init_db()
+
+
+# ==========================================
+# HỆ THỐNG GỬI EMAIL THÔNG BÁO KẾT QUẢ TỰ ĐỘNG CHO USER (SMTP)
+# ==========================================
+
+def get_email_settings(conn=None):
+    """Đọc cấu hình SMTP gửi email tự động từ bảng system_settings hoặc biến môi trường."""
+    close_after = False
+    if conn is None:
+        conn = get_db_connection()
+        close_after = True
+
+    rows = conn.execute(
+        "SELECT key, value FROM system_settings WHERE key IN ('smtp_enabled', 'smtp_email', 'smtp_password', 'smtp_sender_name')"
+    ).fetchall()
+    if close_after:
+        conn.close()
+
+    cfg = {r['key']: (r['value'] or '') for r in rows}
+    smtp_enabled = cfg.get('smtp_enabled', '1') == '1'
+    smtp_email = (cfg.get('smtp_email') or os.environ.get('SMTP_EMAIL', 'mlhang@hcmus.edu.vn')).strip()
+    smtp_password = (cfg.get('smtp_password') or os.environ.get('SMTP_PASSWORD', '')).strip()
+    smtp_sender_name = (cfg.get('smtp_sender_name') or 'Hệ thống Phòng máy B4.2 - Phòng QTTB').strip()
+
+    return {
+        'enabled': smtp_enabled,
+        'email': smtp_email,
+        'password': smtp_password,
+        'sender_name': smtp_sender_name,
+        'has_password': bool(smtp_password),
+        'ready': bool(smtp_enabled and smtp_email and smtp_password)
+    }
+
+
+def send_smtp_email_sync(to_email, subject, html_body, text_body, email_cfg=None):
+    """Thực hiện gửi email qua Gmail SMTP (TLS port 587). Trả về (success, message)."""
+    if email_cfg is None:
+        email_cfg = get_email_settings()
+
+    to_email = (to_email or '').strip()
+    if not to_email or '@' not in to_email:
+        return False, "Yêu cầu không có địa chỉ email người nhận hợp lệ."
+
+    if not email_cfg.get('enabled'):
+        return False, "Tính năng gửi email tự động đang tắt."
+
+    sender_email = email_cfg.get('email', '').strip()
+    sender_pass = email_cfg.get('password', '').replace(' ', '').strip()
+    sender_name = email_cfg.get('sender_name') or 'Hệ thống Phòng máy B4.2 - Phòng QTTB'
+
+    if not sender_email or not sender_pass:
+        return False, "Chưa cấu hình Mật khẩu ứng dụng (Google App Password) cho email gửi đi."
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = Header(subject, 'utf-8')
+    msg['From'] = formataddr((str(Header(sender_name, 'utf-8')), sender_email))
+    msg['To'] = to_email
+
+    part_text = MIMEText(text_body, 'plain', 'utf-8')
+    part_html = MIMEText(html_body, 'html', 'utf-8')
+    msg.attach(part_text)
+    msg.attach(part_html)
+
+    try:
+        with smtplib.SMTP('smtp.gmail.com', 587, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(sender_email, sender_pass)
+            server.sendmail(sender_email, [to_email], msg.as_string())
+        return True, f"Đã gửi email tới {to_email}"
+    except Exception as e:
+        return False, f"Lỗi SMTP: {e}"
+
+
+def build_request_notification_email(req_type, record, new_status, admin_note='', dashboard_url=''):
+    """Tạo tiêu đề, nội dung HTML và Plain-text trang trọng (không dùng icon) cho email trả kết quả yêu cầu của User."""
+    rec = dict(record)
+    room = str(rec.get('room') or '').replace('Phòng ', '').replace('P.', '').strip()
+    user_email = (rec.get('email') or '').strip()
+    note_clean = (admin_note or rec.get('admin_note') or '').strip()
+    now_str = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+
+    if req_type == 'booking':
+        user_name = rec.get('requester_name') or user_email.split('@')[0]
+        type_title = "YÊU CẦU ĐĂNG KÝ MƯỢN PHÒNG MÁY"
+        day_str = f"Thứ {rec.get('day_of_week')}"
+        period_str = f"Tiết {rec.get('start_period'):g} - {rec.get('end_period'):g}" if isinstance(rec.get('start_period'), (int, float)) else f"Tiết {rec.get('start_period')} - {rec.get('end_period')}"
+        subj_info = rec.get('subject_name') or rec.get('purpose') or 'Mượn phòng máy'
+        subject = f"Phản hồi yêu cầu đăng ký mượn phòng máy P.{room} ({day_str}, {period_str}) - Phòng máy tính B4.2"
+
+        if new_status == 'Processing':
+            status_badge = "ĐÃ TIẾP NHẬN & ĐANG XỬ LÝ"
+            badge_bg, badge_color = "#E0F2FE", "#0369A1"
+            lead_msg = f"Bộ phận Quản lý Phòng máy (Phòng QTTB) đã tiếp nhận yêu cầu mượn <strong>Phòng {room}</strong> của Quý Thầy/Cô và đang tiến hành kiểm tra lịch phòng / chuẩn bị phần mềm."
+        elif new_status == 'Approved':
+            status_badge = "ĐÃ DUYỆT MƯỢN PHÒNG"
+            badge_bg, badge_color = "#DCFCE7", "#15803D"
+            lead_msg = f"Yêu cầu đăng ký mượn <strong>Phòng {room}</strong> ({day_str}, {period_str}) của Quý Thầy/Cô đã được <strong>DUYỆT</strong> và cập nhật vào Thời khóa biểu vận hành phòng máy."
+        else:
+            status_badge = "TỪ CHỐI YÊU CẦU"
+            badge_bg, badge_color = "#FEE2E2", "#B91C1C"
+            lead_msg = f"Rất tiếc, yêu cầu đăng ký mượn <strong>Phòng {room}</strong> ({day_str}, {period_str}) hiện chưa thể đáp ứng. Quý Thầy/Cô vui lòng xem chi tiết phản hồi bên dưới."
+
+        detail_rows = [
+            ("Người đăng ký", f"{user_name} ({rec.get('department') or 'Đơn vị'})"),
+            ("Phòng máy", f"Phòng {room} - Tòa B4.2"),
+            ("Thời gian đăng ký", f"{day_str} | {period_str} (Tuần/Ngày: {rec.get('study_period') or 'Hiện tại'})"),
+            ("Môn học / Lớp", f"{subj_info} {(' - Lớp ' + str(rec.get('class_code'))) if rec.get('class_code') else ''}"),
+            ("Mục đích & Phần mềm", f"{rec.get('purpose') or 'Giảng dạy'}{(' - Phần mềm yêu cầu: ' + str(rec.get('software_required'))) if rec.get('software_required') else ''}")
+        ]
+
+    elif req_type == 'issue':
+        user_name = rec.get('reporter_name') or user_email.split('@')[0]
+        type_title = "BÁO CÁO SỰ CỐ KỸ THUẬT PHÒNG MÁY"
+        machine_no = rec.get('machine_number') or 'N/A'
+        subject = f"Phản hồi yêu cầu báo cáo sự cố kỹ thuật P.{room} (Máy {machine_no}) - Phòng máy tính B4.2"
+
+        if new_status == 'Processing':
+            status_badge = "ĐÃ TIẾP NHẬN & ĐANG XỬ LÝ"
+            badge_bg, badge_color = "#E0F2FE", "#0369A1"
+            lead_msg = f"Kỹ thuật viên Phòng máy B4.2 đã tiếp nhận thông tin báo sự cố tại <strong>Phòng {room} (Máy {machine_no})</strong> và đang tiến hành kiểm tra, xử lý."
+        else:
+            status_badge = "ĐÃ KHẮC PHỤC / HOÀN TẤT"
+            badge_bg, badge_color = "#DCFCE7", "#15803D"
+            lead_msg = f"Sự cố kỹ thuật tại <strong>Phòng {room} (Máy {machine_no})</strong> do Quý Thầy/Cô phản ánh đã được Kỹ thuật viên Phòng máy kiểm tra và khắc phục hoàn tất."
+
+        detail_rows = [
+            ("Người báo sự cố", f"{user_name} ({rec.get('department') or 'Đơn vị'})"),
+            ("Vị trí thiết bị", f"Phòng {room} - Máy số: {machine_no}"),
+            ("Phân loại sự cố", str(rec.get('issue_category') or 'Sự cố kỹ thuật')),
+            ("Mô tả chi tiết", str(rec.get('description') or ''))
+        ]
+
+    else:  # cancellation
+        user_name = rec.get('teacher_name') or user_email.split('@')[0]
+        type_title = "THÔNG BÁO NGHỈ HỌC / BÁO VẮNG ĐỘT XUẤT"
+        cancel_date = rec.get('cancel_date') or ''
+        period_str = rec.get('period') or ''
+        subject = f"Phản hồi yêu cầu thông báo nghỉ học P.{room} (Ngày {cancel_date}) - Phòng máy tính B4.2"
+
+        if new_status == 'Processing':
+            status_badge = "ĐÃ TIẾP NHẬN THÔNG BÁO NGHỈ"
+            badge_bg, badge_color = "#E0F2FE", "#0369A1"
+            lead_msg = f"Bộ phận Quản lý Phòng máy B4.2 đã tiếp nhận thông báo nghỉ học tại <strong>Phòng {room}</strong> (Ngày {cancel_date}, {period_str})."
+        else:
+            status_badge = "ĐÃ XÁC NHẬN & CẬP NHẬT LỊCH TRỰC"
+            badge_bg, badge_color = "#DCFCE7", "#15803D"
+            lead_msg = f"Thông báo nghỉ học tại <strong>Phòng {room}</strong> (Ngày {cancel_date}, {period_str}) của Quý Thầy/Cô đã được xác nhận và chuyển thông tin tới bộ phận Trực đóng/mở cửa phòng máy."
+
+        detail_rows = [
+            ("Giảng viên thông báo", str(user_name)),
+            ("Phòng máy", f"Phòng {room} - Tòa B4.2"),
+            ("Ngày báo nghỉ", str(cancel_date)),
+            ("Ca / Tiết nghỉ", str(period_str)),
+            ("Lý do", str(rec.get('reason') or 'Báo nghỉ đột xuất'))
+        ]
+
+    rows_html = ""
+    rows_text = []
+    for k, v in detail_rows:
+        rows_html += f"""
+        <tr>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; color: #475569; font-weight: 600; width: 36%; font-size: 14px;">{html_lib.escape(str(k))}</td>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; color: #0F172A; font-weight: 500; font-size: 14px;">{html_lib.escape(str(v))}</td>
+        </tr>
+        """
+        rows_text.append(f"- {k}: {v}")
+
+    note_block_html = ""
+    note_block_text = ""
+    if note_clean:
+        note_block_html = f"""
+        <div style="margin-top: 18px; padding: 14px 16px; background-color: #F0FDFA; border-left: 4px solid #0D9488; border-radius: 6px;">
+            <div style="font-size: 13px; font-weight: 700; color: #0F766E; text-transform: uppercase; margin-bottom: 4px;">
+                Phản hồi / Ghi chú từ Quản trị viên Phòng máy (QTTB):
+            </div>
+            <div style="font-size: 14px; color: #134E4A; line-height: 1.5;">
+                {html_lib.escape(note_clean)}
+            </div>
+        </div>
+        """
+        note_block_text = f"\n[Phản hồi từ QTTB]: {note_clean}\n"
+
+    dashboard_btn_html = ""
+    if dashboard_url:
+        dashboard_btn_html = f"""
+        <div style="text-align: center; margin-top: 22px;">
+            <a href="{dashboard_url}" style="display: inline-block; background-color: #0F2942; color: #FFFFFF; text-decoration: none; font-weight: 700; font-size: 14px; padding: 10px 24px; border-radius: 6px;">
+                Xem chi tiết trên Hệ thống Quản lý Phòng máy
+            </a>
+        </div>
+        """
+
+    signature_text = "Bộ phận quản lý phòng máy"
+
+    html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin: 0; padding: 20px; background-color: #F1F5F9; font-family: 'Segoe UI', Roboto, Arial, sans-serif; color: #1E293B;">
+    <div style="max-width: 640px; margin: 0 auto; background-color: #FFFFFF; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(15, 41, 66, 0.08); border: 1px solid #E2E8F0;">
+        <div style="background: linear-gradient(135deg, #0F2942 0%, #1E3A5F 100%); padding: 20px 26px; color: #FFFFFF; text-align: center;">
+            <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #FFFFFF; letter-spacing: 0.5px; text-align: center;">
+                PHÒNG MÁY TÍNH B4.2
+            </h2>
+        </div>
+
+        <div style="padding: 26px;">
+            <div style="margin-bottom: 18px;">
+                <span style="display: inline-block; background-color: {badge_bg}; color: {badge_color}; font-weight: 700; font-size: 12.5px; padding: 6px 14px; border-radius: 4px; letter-spacing: 0.3px;">
+                    TRẠNG THÁI: {status_badge}
+                </span>
+                <div style="font-size: 12px; color: #64748B; margin-top: 6px;">Thời gian cập nhật: {now_str}</div>
+            </div>
+
+            <p style="font-size: 15px; line-height: 1.6; margin-top: 0;">
+                Kính gửi Thầy/Cô <strong>{html_lib.escape(str(user_name))}</strong>,
+            </p>
+            <p style="font-size: 14.5px; line-height: 1.6; color: #334155;">
+                {lead_msg}
+            </p>
+
+            {note_block_html}
+
+            <div style="margin-top: 20px; border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden;">
+                <div style="background-color: #F8FAFC; padding: 10px 14px; font-size: 12.5px; font-weight: 700; color: #0F2942; border-bottom: 1px solid #E2E8F0; text-transform: uppercase;">
+                    THÔNG TIN CHI TIẾT — {type_title}
+                </div>
+                <table style="width: 100%; border-collapse: collapse;">
+                    {rows_html}
+                </table>
+            </div>
+
+            {dashboard_btn_html}
+
+            <div style="margin-top: 26px; padding-top: 16px; border-top: 1px solid #E2E8F0; font-size: 14px; color: #1E293B; line-height: 1.6;">
+                <div>Trân trọng,</div>
+                <div style="font-weight: 700; color: #0F2942; margin-top: 4px;">
+                    {signature_text}
+                </div>
+            </div>
+        </div>
+
+        <div style="background-color: #0F2942; color: #CBD5E1; padding: 16px 26px; font-size: 12px; line-height: 1.6;">
+            <div style="color: #FFFFFF; font-weight: 700;">
+                Hệ thống Phòng máy tính - Phòng Quản trị Thiết bị - Tòa B4.2 – Cơ sở 2
+            </div>
+            <div>Điện thoại hỗ trợ kỹ thuật: 0853212259 – Email: <a href="mailto:mlhang@hcmus.edu.vn" style="color: #2DD4BF; text-decoration: none;">mlhang@hcmus.edu.vn</a> | Trực đóng/mở cửa: 0931437955</div>
+        </div>
+    </div>
+</body>
+</html>"""
+
+    text_body = (
+        f"Kính gửi Thầy/Cô {user_name},\n\n"
+        f"Trạng thái xử lý ({type_title}): {status_badge}\n"
+        f"{re.sub(r'<[^>]+>', '', lead_msg)}\n"
+        f"{note_block_text}\n"
+        f"Thông tin chi tiết:\n" + "\n".join(rows_text) + "\n\n"
+        f"Trân trọng,\n"
+        f"{signature_text}\n"
+    )
+
+    return subject, html_body, text_body
+
+
+def notify_user_on_status_change(req_type, record, new_status, admin_note='', conn=None):
+    """Gửi email thông báo kết quả xử lý yêu cầu tới email đăng nhập của User (chạy ngầm qua Thread)."""
+    if not record:
+        return ""
+    rec = dict(record)
+    to_email = (rec.get('email') or '').strip()
+    if not to_email or '@' not in to_email:
+        return " (Yêu cầu này không có email người gửi)"
+
+    email_cfg = get_email_settings(conn=conn)
+    if not email_cfg.get('enabled'):
+        return ""
+
+    try:
+        dashboard_url = url_for('my_dashboard', _external=True)
+    except Exception:
+        dashboard_url = ""
+
+    subject, html_body, text_body = build_request_notification_email(
+        req_type=req_type,
+        record=rec,
+        new_status=new_status,
+        admin_note=admin_note,
+        dashboard_url=dashboard_url
+    )
+
+    if not email_cfg.get('ready'):
+        return f" (⚠️ Chưa cấu hình App Password gửi mail tự động cho {to_email} — bấm '📧 Cấu hình Email' hoặc nút ✉️ để gửi)"
+
+    def _bg_worker():
+        send_smtp_email_sync(to_email, subject, html_body, text_body, email_cfg=email_cfg)
+
+    threading.Thread(target=_bg_worker, daemon=True).start()
+    return f" (📧 Đã gửi email thông báo kết quả tới {to_email})"
 
 
 # ==========================================
@@ -418,6 +726,11 @@ def get_free_slots_for_day(day_of_week, ref_date=None):
 def index():
     """Chuyển hướng đến trang chủ"""
     return redirect(url_for('home_page'))
+
+@app.route('/lien-he')
+def contact_page():
+    """Trang thông tin liên hệ hỗ trợ công khai (không cần đăng nhập)"""
+    return render_template('contact.html')
 
 @app.route('/bao-cao-su-co')
 @login_required
@@ -1116,7 +1429,10 @@ def admin_panel():
 
     # Chuẩn bị dữ liệu Checklist Deploy 8 Phòng Máy
     default_campaign = "HK1 (2026-2027) - Deploy Hệ thống chuẩn"
-    camp_rows = conn.execute("SELECT DISTINCT campaign_name FROM deployment_checklists ORDER BY id DESC").fetchall()
+    conn.execute("DELETE FROM deployment_checklists WHERE campaign_name LIKE '%?%'")
+    camp_rows = conn.execute(
+        "SELECT campaign_name FROM deployment_checklists GROUP BY campaign_name ORDER BY MAX(id) DESC"
+    ).fetchall()
     campaigns = [r['campaign_name'] for r in camp_rows if r['campaign_name']]
     if not campaigns:
         now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
@@ -1179,6 +1495,8 @@ def admin_panel():
         'subview': request.args.get('wl_view', 'daily').strip()
     }
 
+    email_config = get_email_settings(conn=conn)
+
     conn.close()
     return render_template(
         'admin_panel.html',
@@ -1208,7 +1526,8 @@ def admin_panel():
         semester_summary=semester_summary,
         ot_data=ot_data,
         worklog_data=worklog_data,
-        deploy_data=deploy_data
+        deploy_data=deploy_data,
+        email_config=email_config
     )
 
 def measure_host_ping_ms(target_ip):
@@ -1970,6 +2289,20 @@ def add_deploy_campaign():
     return redirect(url_for('admin_panel', tab='worklog', wl_view='deploy', deploy_campaign=campaign_name))
 
 
+@app.route('/admin/deploy-checklist/campaign/delete', methods=['POST'])
+@admin_required
+def delete_deploy_campaign():
+    """Xóa một đợt triển khai (Deploy Campaign) khỏi hệ thống."""
+    campaign_name = (request.form.get('campaign_name') or '').strip()
+    if campaign_name:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM deployment_checklists WHERE campaign_name = ?", (campaign_name,))
+        conn.commit()
+        conn.close()
+        flash(f"🗑️ Đã xóa đợt triển khai '{campaign_name}'!", "success")
+    return redirect(url_for('admin_panel', tab='worklog', wl_view='deploy'))
+
+
 @app.route('/api/deploy-checklist/log-to-worklog', methods=['POST'])
 @admin_required
 def api_log_deploy_to_worklog():
@@ -2009,20 +2342,98 @@ def api_log_deploy_to_worklog():
     })
 
 
+@app.route('/admin/email-config', methods=['POST'])
+@admin_required
+def save_email_config():
+    """Lưu cấu hình gửi Email tự động (Gmail SMTP App Password)."""
+    smtp_enabled = '1' if request.form.get('smtp_enabled') == '1' else '0'
+    smtp_email = (request.form.get('smtp_email') or 'mlhang@hcmus.edu.vn').strip()
+    smtp_password = (request.form.get('smtp_password') or '').strip()
+    smtp_sender_name = (request.form.get('smtp_sender_name') or 'Hệ thống Phòng máy B4.2 - Phòng QTTB').strip()
+    return_tab = (request.form.get('return_tab') or 'requests').strip()
+
+    conn = get_db_connection()
+    conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_enabled', ?)", (smtp_enabled,))
+    conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_email', ?)", (smtp_email,))
+    conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_sender_name', ?)", (smtp_sender_name,))
+    if smtp_password:
+        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_password', ?)", (smtp_password,))
+    conn.commit()
+    conn.close()
+
+    flash("✅ Đã lưu cấu hình Gửi Email tự động trả kết quả cho User!", "success")
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
+@app.route('/admin/email-test', methods=['POST'])
+@admin_required
+def test_email_config():
+    """API kiểm tra kết nối Gmail SMTP và gửi 1 email test tới hộp thư chỉ định."""
+    data = request.get_json(silent=True) or {}
+    test_to = (data.get('to_email') or get_current_user_email() or 'mlhang@hcmus.edu.vn').strip()
+    smtp_email = (data.get('smtp_email') or '').strip()
+    smtp_password = (data.get('smtp_password') or '').strip()
+    smtp_sender_name = (data.get('smtp_sender_name') or 'Hệ thống Phòng máy B4.2 - Phòng QTTB').strip()
+
+    conn = get_db_connection()
+    saved_cfg = get_email_settings(conn=conn)
+    conn.close()
+
+    effective_cfg = {
+        'enabled': True,
+        'email': smtp_email or saved_cfg['email'],
+        'password': smtp_password or saved_cfg['password'],
+        'sender_name': smtp_sender_name or saved_cfg['sender_name']
+    }
+
+    sample_rec = {
+        'requester_name': get_current_user_name() or 'Quản trị viên QTTB',
+        'department': 'Phòng Quản trị Thiết bị',
+        'room': '5.1',
+        'day_of_week': 2,
+        'start_period': 1,
+        'end_period': 5,
+        'subject_name': 'Kiểm tra hệ thống gửi Email tự động',
+        'class_code': 'TEST-B42',
+        'purpose': 'Kiểm tra kết nối SMTP trả kết quả tự động cho giảng viên',
+        'study_period': datetime.date.today().strftime('%d/%m/%Y'),
+        'email': test_to
+    }
+    subject, html_body, text_body = build_request_notification_email(
+        req_type='booking',
+        record=sample_rec,
+        new_status='Processing',
+        admin_note='Đây là email kiểm tra kết nối từ Hệ thống Quản lý Phòng máy B4.2. Cấu hình SMTP hoạt động tốt!',
+        dashboard_url=url_for('my_dashboard', _external=True)
+    )
+    ok, msg = send_smtp_email_sync(test_to, subject, html_body, text_body, email_cfg=effective_cfg)
+    return jsonify({'success': ok, 'message': msg})
+
+
 @app.route('/admin/approve-cancellation/<int:cancellation_id>', methods=['POST'])
 @admin_required
 def approve_cancellation(cancellation_id):
-    """Cập nhật trạng thái thông báo nghỉ gấp (Đã tiếp nhận / Đã duyệt)."""
+    """Cập nhật trạng thái thông báo nghỉ gấp (Đã tiếp nhận / Đã duyệt) và gửi email thông báo cho giảng viên."""
     new_status = request.form.get('status', 'Approved')
     if new_status not in ('Pending', 'Processing', 'Approved'):
         new_status = 'Approved'
+    admin_note = request.form.get('admin_note', '').strip()
+
     conn = get_db_connection()
-    conn.execute("UPDATE cancellations SET status = ? WHERE id = ?", (new_status, cancellation_id))
-    conn.commit()
+    rec = conn.execute("SELECT * FROM cancellations WHERE id = ?", (cancellation_id,)).fetchone()
+    email_suffix = ""
+    if rec:
+        final_note = admin_note if admin_note else (rec['admin_note'] or '')
+        conn.execute(
+            "UPDATE cancellations SET status = ?, admin_note = ? WHERE id = ?",
+            (new_status, final_note, cancellation_id)
+        )
+        conn.commit()
+        email_suffix = notify_user_on_status_change('cancellation', rec, new_status, admin_note=final_note, conn=conn)
     conn.close()
-    
+
     status_label = "Đã tiếp nhận" if new_status == 'Processing' else ("Đã duyệt" if new_status == 'Approved' else "Chờ xử lý")
-    flash(f"Đã cập nhật trạng thái báo nghỉ: {status_label}.", "success")
+    flash(f"Đã cập nhật trạng thái báo nghỉ: {status_label}.{email_suffix}", "success")
     return redirect(url_for('admin_panel', tab='cancellations'))
 
 @app.route('/admin/delete-cancellation/<int:cancellation_id>', methods=['POST'])
@@ -2055,18 +2466,28 @@ def bulk_delete_cancellations():
 @app.route('/admin/process-request/<int:request_id>', methods=['POST'])
 @admin_required
 def process_request(request_id):
-    """Đánh dấu Đã tiếp nhận yêu cầu mượn phòng."""
+    """Đánh dấu Đã tiếp nhận yêu cầu mượn phòng và gửi email thông báo cho người gửi."""
+    admin_note = request.form.get('admin_note', '').strip()
     conn = get_db_connection()
-    conn.execute("UPDATE booking_requests SET status = 'Processing' WHERE id = ?", (request_id,))
-    conn.commit()
+    req = conn.execute("SELECT * FROM booking_requests WHERE id = ?", (request_id,)).fetchone()
+    email_suffix = ""
+    if req:
+        final_note = admin_note if admin_note else (req['admin_note'] or '')
+        conn.execute(
+            "UPDATE booking_requests SET status = 'Processing', admin_note = ? WHERE id = ?",
+            (final_note, request_id)
+        )
+        conn.commit()
+        email_suffix = notify_user_on_status_change('booking', req, 'Processing', admin_note=final_note, conn=conn)
     conn.close()
-    flash("Đã cập nhật trạng thái yêu cầu mượn phòng: Đã tiếp nhận.", "info")
+    flash(f"Đã cập nhật trạng thái yêu cầu mượn phòng: Đã tiếp nhận.{email_suffix}", "info")
     return redirect(url_for('admin_panel', tab='requests'))
 
 @app.route('/admin/approve/<int:request_id>', methods=['POST'])
 @admin_required
 def approve_request(request_id):
-    """Xử lý Duyệt yêu cầu mượn phòng (Lưu vết và thêm vào TKB nếu chưa thêm)."""
+    """Xử lý Duyệt yêu cầu mượn phòng (Lưu vết, thêm vào TKB và gửi email thông báo)."""
+    admin_note = request.form.get('admin_note', '').strip()
     conn = get_db_connection()
     req = conn.execute("SELECT * FROM booking_requests WHERE id = ?", (request_id,)).fetchone()
     
@@ -2082,9 +2503,14 @@ def approve_request(request_id):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
             ''', (req['room'], req['day_of_week'], req['start_period'], req['end_period'], class_code, subject_name, department, study_period))
         
-        conn.execute("UPDATE booking_requests SET status = 'Approved' WHERE id = ?", (request_id,))
+        final_note = admin_note if admin_note else (req['admin_note'] or '')
+        conn.execute(
+            "UPDATE booking_requests SET status = 'Approved', admin_note = ? WHERE id = ?",
+            (final_note, request_id)
+        )
         conn.commit()
-        flash(f"Đã duyệt yêu cầu của {req['requester_name']} vào phòng {req['room']}.", "success")
+        email_suffix = notify_user_on_status_change('booking', req, 'Approved', admin_note=final_note, conn=conn)
+        flash(f"Đã duyệt yêu cầu của {req['requester_name']} vào phòng {req['room']}.{email_suffix}", "success")
         
     conn.close()
     return redirect(url_for('admin_panel', tab='requests'))
@@ -2092,14 +2518,19 @@ def approve_request(request_id):
 @app.route('/admin/reject/<int:request_id>', methods=['POST'])
 @admin_required
 def reject_request(request_id):
-    """Xử lý Từ chối yêu cầu mượn phòng."""
-    admin_note = request.form.get('admin_note', '')
+    """Xử lý Từ chối yêu cầu mượn phòng và gửi email thông báo lý do."""
+    admin_note = request.form.get('admin_note', '').strip()
     conn = get_db_connection()
-    conn.execute("UPDATE booking_requests SET status = 'Rejected', admin_note = ? WHERE id = ?", (admin_note, request_id))
-    conn.commit()
+    req = conn.execute("SELECT * FROM booking_requests WHERE id = ?", (request_id,)).fetchone()
+    email_suffix = ""
+    if req:
+        final_note = admin_note if admin_note else (req['admin_note'] or '')
+        conn.execute("UPDATE booking_requests SET status = 'Rejected', admin_note = ? WHERE id = ?", (final_note, request_id))
+        conn.commit()
+        email_suffix = notify_user_on_status_change('booking', req, 'Rejected', admin_note=final_note, conn=conn)
     conn.close()
     
-    flash("Đã từ chối yêu cầu mượn phòng.", "warning")
+    flash(f"Đã từ chối yêu cầu mượn phòng.{email_suffix}", "warning")
     return redirect(url_for('admin_panel', tab='requests'))
 
 @app.route('/admin/delete-request/<int:request_id>', methods=['POST'])
@@ -2328,17 +2759,23 @@ def import_schedule():
 @admin_required
 def update_issue_status(issue_id):
     new_status = request.form.get('status')
+    admin_note = request.form.get('admin_note', '').strip()
     if new_status in ['Pending', 'Processing', 'Resolved', 'Approved', 'Đã tiếp nhận', 'Đã khắc phục', 'Đã duyệt']:
         if new_status == 'Đã tiếp nhận':
             new_status = 'Processing'
         elif new_status in ('Đã khắc phục', 'Đã duyệt', 'Approved'):
             new_status = 'Resolved'
         conn = get_db_connection()
-        conn.execute('UPDATE issue_reports SET status = ? WHERE id = ?', (new_status, issue_id))
-        conn.commit()
+        iss = conn.execute("SELECT * FROM issue_reports WHERE id = ?", (issue_id,)).fetchone()
+        email_suffix = ""
+        if iss:
+            final_note = admin_note if admin_note else (iss['admin_note'] or '')
+            conn.execute('UPDATE issue_reports SET status = ?, admin_note = ? WHERE id = ?', (new_status, final_note, issue_id))
+            conn.commit()
+            email_suffix = notify_user_on_status_change('issue', iss, new_status, admin_note=final_note, conn=conn)
         conn.close()
         status_label = "Đã tiếp nhận" if new_status == 'Processing' else ("Đã duyệt" if new_status == 'Resolved' else "Chờ xử lý")
-        flash(f"Đã cập nhật trạng thái sự cố: {status_label}.", "success")
+        flash(f"Đã cập nhật trạng thái sự cố: {status_label}.{email_suffix}", "success")
     
     return redirect(url_for('admin_panel', tab='issues'))
 
