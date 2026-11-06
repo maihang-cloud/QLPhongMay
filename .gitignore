@@ -3,7 +3,8 @@ lab_schedule.db
 *.db
 *.sqlite3
 
-# Bỏ qua thư mục nháp, log, file nén và file lưu mã bí mật
+# Bỏ qua thư mục nháp, ghi chú cá nhân, log, file nén và file lưu mã bí mật
+Note/
 test_debug/
 __pycache__/
 *.pyc
