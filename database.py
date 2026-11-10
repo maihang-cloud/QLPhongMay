@@ -191,9 +191,16 @@ def init_db():
             priority TEXT DEFAULT 'normal',
             status TEXT DEFAULT 'in_progress',
             created_by TEXT DEFAULT 'Admin',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_date TEXT DEFAULT NULL
         )
     ''')
+
+    # Migration an toàn: Thêm cột completed_date cho work_logs nếu chưa có
+    try:
+        cursor.execute("ALTER TABLE work_logs ADD COLUMN completed_date TEXT DEFAULT NULL")
+    except Exception:
+        pass
 
     # 9. Bảng Checklist Deploy hệ thống 8 phòng máy theo từng đợt (SOP Acronis & Clonezilla)
     cursor.execute('''

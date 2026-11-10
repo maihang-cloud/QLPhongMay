@@ -47,18 +47,24 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '').strip()
 
-# Tự động đọc từ file "gg clent id code.txt" khi chạy thử ở máy cá nhân (file này đã được chặn trong .gitignore)
-_local_secret_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gg clent id code.txt')
-if (not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET) and os.path.exists(_local_secret_file):
-    try:
-        with open(_local_secret_file, 'r', encoding='utf-8') as _f:
-            for _line in _f:
-                if _line.lower().startswith('client id:'):
-                    GOOGLE_CLIENT_ID = _line.split(':', 1)[1].strip()
-                elif _line.lower().startswith('client secret:'):
-                    GOOGLE_CLIENT_SECRET = _line.split(':', 1)[1].strip()
-    except Exception:
-        pass
+# Tự động đọc từ file "gg client id code.txt" hoặc "gg clent id code.txt" khi chạy thử ở máy cá nhân
+_possible_secret_files = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gg client id code.txt'),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gg clent id code.txt'),
+]
+for _sec_file in _possible_secret_files:
+    if (not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET) and os.path.exists(_sec_file):
+        try:
+            with open(_sec_file, 'r', encoding='utf-8') as _f:
+                for _line in _f:
+                    if _line.lower().startswith('client id:'):
+                        GOOGLE_CLIENT_ID = _line.split(':', 1)[1].strip()
+                    elif _line.lower().startswith('client secret:'):
+                        GOOGLE_CLIENT_SECRET = _line.split(':', 1)[1].strip()
+        except Exception:
+            pass
+    if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+        break
 
 # Khai báo danh sách Quản trị viên
 ADMIN_EMAILS = [
@@ -1419,8 +1425,14 @@ def admin_panel():
     wl_in_progress = sum(1 for r in all_work_logs if r['status'] == 'in_progress')
     wl_pending = sum(1 for r in all_work_logs if r['status'] == 'pending')
 
+    enriched_work_logs = []
+    for r in all_work_logs:
+        d = dict(r)
+        d['duration_info'] = calculate_worklog_duration(d.get('work_date'), d.get('completed_date'), d.get('status'))
+        enriched_work_logs.append(d)
+
     worklog_data = {
-        'records': [dict(r) for r in all_work_logs],
+        'records': enriched_work_logs,
         'total_count': wl_total,
         'completed_count': wl_completed,
         'in_progress_count': wl_in_progress,
@@ -1901,12 +1913,16 @@ def add_overtime():
 @app.route('/admin/overtime/toggle-status/<int:ot_id>', methods=['POST'])
 @admin_required
 def toggle_overtime_status(ot_id):
-    """Chuyển đổi trạng thái Đã làm <-> Chưa tới hạn cho ca tăng ca."""
+    """Cập nhật trạng thái Đã làm <-> Chưa tới hạn cho ca tăng ca từ Dropdown."""
     current_month = request.args.get('ot_month', '').strip()
     conn = get_db_connection()
     row = conn.execute("SELECT status, staff_name, ot_date FROM overtime_records WHERE id = ?", (ot_id,)).fetchone()
     if row:
-        new_status = 'Completed' if row['status'] != 'Completed' else 'Pending'
+        requested_status = (request.form.get('status') or '').strip()
+        if requested_status in ('Pending', 'Completed'):
+            new_status = requested_status
+        else:
+            new_status = 'Completed' if row['status'] != 'Completed' else 'Pending'
         conn.execute("UPDATE overtime_records SET status = ? WHERE id = ?", (new_status, ot_id))
         conn.commit()
         st_text = "Đã làm" if new_status == 'Completed' else "Chưa tới hạn"
@@ -1954,12 +1970,12 @@ def export_overtime_excel():
 # ==========================================
 
 WORKLOG_CATEGORY_LABELS = {
-    'server_net': '🌐 Server / Router / Switch',
-    'vmware': '💿 VMware / OS / Image',
-    'support': '🛠️ Hỗ trợ GV (PM / Phần cứng)',
-    'booking': '📩 Xử lý Mượn phòng máy',
-    'process': '⚙️ Cải tiến Quy trình QTTB',
-    'office': '📁 Công việc Văn phòng khác'
+    'server_net': 'Server / Router / Switch',
+    'vmware': 'VMware / OS / Image',
+    'support': 'Hỗ trợ GV (PM / Phần cứng)',
+    'booking': 'Xử lý Mượn phòng máy',
+    'process': 'Cải tiến Quy trình QTTB',
+    'office': 'Công việc Văn phòng khác'
 }
 
 WORKLOG_STATUS_LABELS = {
@@ -1974,6 +1990,51 @@ WORKLOG_PRIORITY_LABELS = {
     'normal': 'Bình thường'
 }
 
+def calculate_worklog_duration(work_date_str, completed_date_str, status):
+    """
+    Tính số ngày xử lý công việc giữa work_date và completed_date.
+    Trả về dict gồm:
+      - days: số ngày (int) hoặc None
+      - label: text hiển thị ('Trong ngày', '1 ngày', '3 ngày', 'Đang xử lý (2 ngày)', v.v.)
+      - badge_class: class màu badge
+    """
+    if not work_date_str:
+        return {'days': None, 'label': '—', 'badge_class': 'text-muted'}
+
+    try:
+        start_d = datetime.datetime.strptime(work_date_str[:10], '%Y-%m-%d').date()
+    except Exception:
+        return {'days': None, 'label': '—', 'badge_class': 'text-muted'}
+
+    if status == 'completed':
+        if completed_date_str:
+            try:
+                end_d = datetime.datetime.strptime(completed_date_str[:10], '%Y-%m-%d').date()
+            except Exception:
+                end_d = start_d
+        else:
+            # Nếu chưa lưu completed_date (dữ liệu cũ), mặc định lấy work_date để là xong trong ngày
+            end_d = start_d
+
+        diff = (end_d - start_d).days
+        if diff <= 0:
+            return {'days': 0, 'label': 'Trong ngày', 'badge_class': 'bg-success bg-opacity-10 text-success border border-success'}
+        elif diff == 1:
+            return {'days': 1, 'label': '1 ngày', 'badge_class': 'bg-primary bg-opacity-10 text-primary border border-primary'}
+        else:
+            return {'days': diff, 'label': f"{diff} ngày", 'badge_class': 'bg-info bg-opacity-15 text-dark border border-info'}
+    else:
+        # Đang làm (in_progress hoặc pending)
+        today = datetime.date.today()
+        elapsed = (today - start_d).days
+        if elapsed <= 0:
+            return {'days': 0, 'label': 'Hôm nay', 'badge_class': 'bg-light text-secondary border'}
+        elif elapsed == 1:
+            return {'days': 1, 'label': '1 ngày qua', 'badge_class': 'bg-warning bg-opacity-15 text-dark border border-warning'}
+        else:
+            return {'days': elapsed, 'label': f"{elapsed} ngày qua", 'badge_class': 'bg-warning bg-opacity-25 text-danger border border-warning'}
+
+
 @app.route('/admin/worklog/add', methods=['POST'])
 @admin_required
 def add_worklog():
@@ -1987,6 +2048,8 @@ def add_worklog():
     priority = (request.form.get('priority') or 'normal').strip()
     status = (request.form.get('status') or 'in_progress').strip()
     created_by = get_current_user_email() or 'Admin'
+    today_iso = datetime.date.today().strftime('%Y-%m-%d')
+    completed_date = today_iso if status == 'completed' else None
 
     if not content:
         flash("⚠️ Vui lòng nhập nội dung công việc!", "warning")
@@ -1994,9 +2057,9 @@ def add_worklog():
 
     conn = get_db_connection()
     conn.execute('''
-        INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by))
+        INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by, completed_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by, completed_date))
     conn.commit()
     conn.close()
 
@@ -2021,13 +2084,20 @@ def edit_worklog(log_id):
         flash("⚠️ Nội dung công việc không được để trống!", "warning")
         return redirect(url_for('admin_panel', tab='worklog'))
 
+    today_iso = datetime.date.today().strftime('%Y-%m-%d')
     conn = get_db_connection()
+    row = conn.execute("SELECT status, completed_date FROM work_logs WHERE id = ?", (log_id,)).fetchone()
+    if status == 'completed':
+        completed_date = (row['completed_date'] if row and row['completed_date'] else today_iso)
+    else:
+        completed_date = None
+
     conn.execute('''
         UPDATE work_logs
         SET work_date = ?, shift_name = ?, category = ?, target_rooms = ?,
-            content = ?, notes = ?, priority = ?, status = ?
+            content = ?, notes = ?, priority = ?, status = ?, completed_date = ?
         WHERE id = ?
-    ''', (work_date, shift_name, category, target_rooms, content, notes, priority, status, log_id))
+    ''', (work_date, shift_name, category, target_rooms, content, notes, priority, status, completed_date, log_id))
     conn.commit()
     conn.close()
 
@@ -2038,20 +2108,32 @@ def edit_worklog(log_id):
 @app.route('/admin/worklog/toggle-status/<int:log_id>', methods=['POST'])
 @admin_required
 def toggle_worklog_status(log_id):
-    """Đổi nhanh trạng thái công việc (Đang xử lý -> Hoàn thành -> Chờ thực hiện)."""
+    """Cập nhật trạng thái công việc từ Dropdown (Đang xử lý <-> Hoàn thành)."""
     conn = get_db_connection()
-    row = conn.execute("SELECT status FROM work_logs WHERE id = ?", (log_id,)).fetchone()
+    row = conn.execute("SELECT status, work_date, completed_date FROM work_logs WHERE id = ?", (log_id,)).fetchone()
     if row:
         cur = row['status'] or 'in_progress'
-        if cur == 'in_progress':
-            nxt = 'completed'
-        elif cur == 'completed':
-            nxt = 'pending'
+        requested_status = (request.form.get('status') or '').strip()
+        today_iso = datetime.date.today().strftime('%Y-%m-%d')
+
+        if requested_status in ('in_progress', 'completed'):
+            nxt = requested_status
         else:
-            nxt = 'in_progress'
-        conn.execute("UPDATE work_logs SET status = ? WHERE id = ?", (nxt, log_id))
+            nxt = 'completed' if cur != 'completed' else 'in_progress'
+
+        if nxt == 'completed':
+            completed_date = today_iso
+        else:
+            completed_date = None
+
+        conn.execute("UPDATE work_logs SET status = ?, completed_date = ? WHERE id = ?", (nxt, completed_date, log_id))
         conn.commit()
-        flash(f"🔄 Đã chuyển trạng thái công việc sang '{WORKLOG_STATUS_LABELS.get(nxt, nxt)}'!", "success")
+
+        if nxt == 'completed':
+            dur = calculate_worklog_duration(row['work_date'], completed_date, 'completed')
+            flash(f"✅ Đã chuyển trạng thái sang 'Hoàn thành' (Thời gian xử lý: {dur['label']})!", "success")
+        else:
+            flash(f"🔄 Đã chuyển trạng thái công việc sang '{WORKLOG_STATUS_LABELS.get(nxt, nxt)}'!", "success")
     conn.close()
     return redirect(url_for('admin_panel', tab='worklog'))
 
@@ -2129,7 +2211,7 @@ def export_worklog_excel():
     headers = [
         "STT", "Ngày thực hiện", "Ca làm việc", "Danh mục công việc",
         "Phòng máy / Phạm vi", "Nội dung công việc chi tiết",
-        "Ghi chú (Notes)", "Mức ưu tiên", "Trạng thái"
+        "Ghi chú (Notes)", "Mức ưu tiên", "Trạng thái", "Số ngày xử lý"
     ]
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=4, column=col_idx, value=h)
@@ -2144,6 +2226,7 @@ def export_worklog_excel():
         cat_label = WORKLOG_CATEGORY_LABELS.get(r['category'], r['category'])
         pri_label = WORKLOG_PRIORITY_LABELS.get(r['priority'], r['priority'])
         st_label = WORKLOG_STATUS_LABELS.get(r['status'], r['status'])
+        dur_info = calculate_worklog_duration(r['work_date'], r['completed_date'], r['status'])
 
         row_vals = [
             (idx, align_center, font_body),
@@ -2154,7 +2237,8 @@ def export_worklog_excel():
             (r['content'], align_left, font_body),
             (r['notes'] or '', align_left, font_body),
             (pri_label, align_center, font_body),
-            (st_label, align_center, font_bold)
+            (st_label, align_center, font_bold),
+            (dur_info['label'], align_center, font_body)
         ]
         for c_idx, (val, al, fn) in enumerate(row_vals, 1):
             c = ws.cell(row=row_num, column=c_idx, value=val)
@@ -2165,7 +2249,7 @@ def export_worklog_excel():
                 c.fill = fill_note_cell
         ws.row_dimensions[row_num].height = 26
 
-    col_widths = [6, 14, 13, 28, 20, 44, 38, 14, 16]
+    col_widths = [6, 14, 13, 28, 20, 44, 38, 14, 16, 16]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -2413,7 +2497,7 @@ def test_email_config():
 @app.route('/admin/approve-cancellation/<int:cancellation_id>', methods=['POST'])
 @admin_required
 def approve_cancellation(cancellation_id):
-    """Cập nhật trạng thái thông báo nghỉ gấp (Đã tiếp nhận / Đã duyệt) và gửi email thông báo cho giảng viên."""
+    """Cập nhật trạng thái thông báo nghỉ gấp (Chờ xử lý / Đã tiếp nhận / Đã duyệt) từ Dropdown và gửi email thông báo cho giảng viên."""
     new_status = request.form.get('status', 'Approved')
     if new_status not in ('Pending', 'Processing', 'Approved'):
         new_status = 'Approved'
@@ -2429,7 +2513,8 @@ def approve_cancellation(cancellation_id):
             (new_status, final_note, cancellation_id)
         )
         conn.commit()
-        email_suffix = notify_user_on_status_change('cancellation', rec, new_status, admin_note=final_note, conn=conn)
+        if new_status in ('Processing', 'Approved'):
+            email_suffix = notify_user_on_status_change('cancellation', rec, new_status, admin_note=final_note, conn=conn)
     conn.close()
 
     status_label = "Đã tiếp nhận" if new_status == 'Processing' else ("Đã duyệt" if new_status == 'Approved' else "Chờ xử lý")
@@ -2463,36 +2548,20 @@ def bulk_delete_cancellations():
         flash("Chưa có mục nào được chọn để xóa.", "warning")
     return redirect(url_for('admin_panel', tab='cancellations'))
 
-@app.route('/admin/process-request/<int:request_id>', methods=['POST'])
+@app.route('/admin/update-request-status/<int:request_id>', methods=['POST'])
 @admin_required
-def process_request(request_id):
-    """Đánh dấu Đã tiếp nhận yêu cầu mượn phòng và gửi email thông báo cho người gửi."""
+def update_request_status(request_id):
+    """Cập nhật trạng thái yêu cầu mượn phòng (Chờ xử lý / Đã tiếp nhận / Đã duyệt / Từ chối) từ Dropdown và gửi email."""
+    new_status = (request.form.get('status') or 'Processing').strip()
+    if new_status not in ('Pending', 'Processing', 'Approved', 'Rejected'):
+        new_status = 'Processing'
     admin_note = request.form.get('admin_note', '').strip()
+
     conn = get_db_connection()
     req = conn.execute("SELECT * FROM booking_requests WHERE id = ?", (request_id,)).fetchone()
     email_suffix = ""
     if req:
-        final_note = admin_note if admin_note else (req['admin_note'] or '')
-        conn.execute(
-            "UPDATE booking_requests SET status = 'Processing', admin_note = ? WHERE id = ?",
-            (final_note, request_id)
-        )
-        conn.commit()
-        email_suffix = notify_user_on_status_change('booking', req, 'Processing', admin_note=final_note, conn=conn)
-    conn.close()
-    flash(f"Đã cập nhật trạng thái yêu cầu mượn phòng: Đã tiếp nhận.{email_suffix}", "info")
-    return redirect(url_for('admin_panel', tab='requests'))
-
-@app.route('/admin/approve/<int:request_id>', methods=['POST'])
-@admin_required
-def approve_request(request_id):
-    """Xử lý Duyệt yêu cầu mượn phòng (Lưu vết, thêm vào TKB và gửi email thông báo)."""
-    admin_note = request.form.get('admin_note', '').strip()
-    conn = get_db_connection()
-    req = conn.execute("SELECT * FROM booking_requests WHERE id = ?", (request_id,)).fetchone()
-    
-    if req:
-        if req['status'] != 'Approved':
+        if new_status == 'Approved' and req['status'] != 'Approved':
             class_code = req['class_code'] if req['class_code'] else 'MƯỢN PHÒNG'
             subject_name = req['subject_name'] if req['subject_name'] else req['purpose']
             department = req['department'] if req['department'] else req['requester_name']
@@ -2502,35 +2571,25 @@ def approve_request(request_id):
                 INSERT INTO schedules (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks, is_ended_early)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
             ''', (req['room'], req['day_of_week'], req['start_period'], req['end_period'], class_code, subject_name, department, study_period))
-        
+
         final_note = admin_note if admin_note else (req['admin_note'] or '')
         conn.execute(
-            "UPDATE booking_requests SET status = 'Approved', admin_note = ? WHERE id = ?",
-            (final_note, request_id)
+            "UPDATE booking_requests SET status = ?, admin_note = ? WHERE id = ?",
+            (new_status, final_note, request_id)
         )
         conn.commit()
-        email_suffix = notify_user_on_status_change('booking', req, 'Approved', admin_note=final_note, conn=conn)
-        flash(f"Đã duyệt yêu cầu của {req['requester_name']} vào phòng {req['room']}.{email_suffix}", "success")
-        
-    conn.close()
-    return redirect(url_for('admin_panel', tab='requests'))
+        if new_status in ('Processing', 'Approved', 'Rejected'):
+            email_suffix = notify_user_on_status_change('booking', req, new_status, admin_note=final_note, conn=conn)
 
-@app.route('/admin/reject/<int:request_id>', methods=['POST'])
-@admin_required
-def reject_request(request_id):
-    """Xử lý Từ chối yêu cầu mượn phòng và gửi email thông báo lý do."""
-    admin_note = request.form.get('admin_note', '').strip()
-    conn = get_db_connection()
-    req = conn.execute("SELECT * FROM booking_requests WHERE id = ?", (request_id,)).fetchone()
-    email_suffix = ""
-    if req:
-        final_note = admin_note if admin_note else (req['admin_note'] or '')
-        conn.execute("UPDATE booking_requests SET status = 'Rejected', admin_note = ? WHERE id = ?", (final_note, request_id))
-        conn.commit()
-        email_suffix = notify_user_on_status_change('booking', req, 'Rejected', admin_note=final_note, conn=conn)
     conn.close()
-    
-    flash(f"Đã từ chối yêu cầu mượn phòng.{email_suffix}", "warning")
+    status_map = {
+        'Pending': ('Chờ xử lý', 'secondary'),
+        'Processing': ('Đã tiếp nhận', 'info'),
+        'Approved': ('Đã duyệt', 'success'),
+        'Rejected': ('Từ chối', 'warning')
+    }
+    st_label, flash_cat = status_map.get(new_status, ('Đã cập nhật', 'info'))
+    flash(f"Đã cập nhật trạng thái yêu cầu mượn phòng sang '{st_label}'.{email_suffix}", flash_cat)
     return redirect(url_for('admin_panel', tab='requests'))
 
 @app.route('/admin/delete-request/<int:request_id>', methods=['POST'])
@@ -2796,7 +2855,8 @@ def update_issue_status(issue_id):
             final_note = admin_note if admin_note else (iss['admin_note'] or '')
             conn.execute('UPDATE issue_reports SET status = ?, admin_note = ? WHERE id = ?', (new_status, final_note, issue_id))
             conn.commit()
-            email_suffix = notify_user_on_status_change('issue', iss, new_status, admin_note=final_note, conn=conn)
+            if new_status in ('Processing', 'Resolved'):
+                email_suffix = notify_user_on_status_change('issue', iss, new_status, admin_note=final_note, conn=conn)
         conn.close()
         status_label = "Đã tiếp nhận" if new_status == 'Processing' else ("Đã duyệt" if new_status == 'Resolved' else "Chờ xử lý")
         flash(f"Đã cập nhật trạng thái sự cố: {status_label}.{email_suffix}", "success")

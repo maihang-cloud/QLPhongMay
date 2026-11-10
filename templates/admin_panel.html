@@ -1038,51 +1038,24 @@
                             <div class="text-muted mt-1" style="font-size: 0.7rem;"><i class="bi bi-clock me-1"></i>Gửi lúc: {{ req['created_at'] }}</div>
                         {% endif %}
                     </div>
-                    <div class="d-flex flex-wrap gap-1">
-                        <button type="button"
-                                class="btn btn-sm {% if req_status == 'Processing' %}btn-info text-dark fw-bold{% else %}btn-outline-info text-dark fw-semibold{% endif %} flex-fill py-1"
-                                style="font-size: 0.74rem;"
-                                data-action="{{ url_for('process_request', request_id=req['id']) }}"
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top gap-2">
+                        <select class="form-select form-select-sm rounded-pill fw-bold shadow-none flex-grow-1"
+                                style="font-size: 0.76rem; cursor: pointer; {% if req_status == 'Approved' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% elif req_status == 'Processing' %}background-color: #CFFAFE; color: #0E7490; border-color: #67E8F9;{% elif req_status == 'Rejected' %}background-color: #FEE2E2; color: #B91C1C; border-color: #FCA5A5;{% else %}background-color: #FEF3C7; color: #B45309; border-color: #FDE68A;{% endif %}"
+                                data-current="{{ req_status }}"
+                                data-action="{{ url_for('update_request_status', request_id=req['id']) }}"
                                 data-type="booking"
-                                data-status="Processing"
-                                data-status-label="👀 Đã tiếp nhận yêu cầu mượn phòng"
                                 data-user="{{ req['requester_name'] }}"
                                 data-email="{{ req['email'] or '' }}"
                                 data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
                                 data-note="{{ req['admin_note'] or '' }}"
-                                onclick="openStatusReplyModal(this)">
-                            Đã tiếp nhận
-                        </button>
-                        <button type="button"
-                                class="btn btn-sm {% if req_status == 'Approved' %}btn-success fw-bold{% else %}btn-outline-success fw-semibold{% endif %} flex-fill py-1"
-                                style="font-size: 0.74rem;"
-                                data-action="{{ url_for('approve_request', request_id=req['id']) }}"
-                                data-type="booking"
-                                data-status="Approved"
-                                data-status-label="✅ Duyệt yêu cầu mượn phòng"
-                                data-user="{{ req['requester_name'] }}"
-                                data-email="{{ req['email'] or '' }}"
-                                data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
-                                data-note="{{ req['admin_note'] or '' }}"
-                                onclick="openStatusReplyModal(this)">
-                            Đã duyệt
-                        </button>
-                        <button type="button"
-                                class="btn btn-sm {% if req_status == 'Rejected' %}btn-danger fw-bold{% else %}btn-outline-danger fw-semibold{% endif %} flex-fill py-1"
-                                style="font-size: 0.74rem;"
-                                data-action="{{ url_for('reject_request', request_id=req['id']) }}"
-                                data-type="booking"
-                                data-status="Rejected"
-                                data-status-label="❌ Từ chối yêu cầu mượn phòng"
-                                data-user="{{ req['requester_name'] }}"
-                                data-email="{{ req['email'] or '' }}"
-                                data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
-                                data-note="{{ req['admin_note'] or '' }}"
-                                onclick="openStatusReplyModal(this)">
-                            Từ chối
-                        </button>
+                                onchange="handleAdminStatusDropdownChange(this)">
+                            <option value="Pending" {% if req_status == 'Pending' %}selected{% endif %}>⏳ Chờ xử lý</option>
+                            <option value="Processing" {% if req_status == 'Processing' %}selected{% endif %}>👀 Đã tiếp nhận</option>
+                            <option value="Approved" {% if req_status == 'Approved' %}selected{% endif %}>✅ Đã duyệt</option>
+                            <option value="Rejected" {% if req_status == 'Rejected' %}selected{% endif %}>❌ Từ chối</option>
+                        </select>
                         <form action="{{ url_for('delete_request', request_id=req['id']) }}" method="POST" class="m-0" onsubmit="return confirm('Xóa vĩnh viễn yêu cầu mượn phòng này?');">
-                            <button type="submit" class="btn btn-sm btn-outline-secondary text-danger py-1 px-2" title="Xóa"><i class="bi bi-trash"></i></button>
+                            <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill py-1 px-3" title="Xóa"><i class="bi bi-trash"></i></button>
                         </form>
                     </div>
                 </div>
@@ -1107,8 +1080,8 @@
                             <th>Phòng</th>
                             <th>Thời gian</th>
                             <th>Mục đích & Phần mềm</th>
-                            <th>Trạng thái</th>
-                            <th class="text-center pe-3">Thao tác</th>
+                            <th class="text-center" style="width: 175px;">Trạng thái</th>
+                            <th class="text-center pe-3" style="width: 85px;">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1145,74 +1118,38 @@
                                 <strong>Thứ {{ req['day_of_week'] }}</strong><br>
                                 <span class="text-muted small">Tiết {{ req['start_period'] }} - {{ req['end_period'] }}</span>
                             </td>
-                            <td class="text-muted small" style="max-width: 230px;">
+                            <td class="text-muted small" style="max-width: 240px;">
                                 <strong>Mục đích:</strong> {{ req['purpose'] }}
                                 {% if req['software_required'] %}
                                     <br><strong>Phần mềm:</strong> <span class="text-danger">{{ req['software_required'] }}</span>
                                 {% endif %}
                             </td>
-                            <td>
-                                {% if req_status == 'Processing' %}
-                                    <span class="badge bg-info bg-opacity-15 text-dark border border-info"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
-                                {% elif req_status == 'Approved' %}
-                                    <span class="badge bg-success bg-opacity-15 text-success border border-success"><i class="bi bi-check-circle me-1"></i>Đã duyệt</span>
-                                {% elif req_status == 'Rejected' %}
-                                    <span class="badge bg-danger bg-opacity-15 text-danger border border-danger"><i class="bi bi-x-circle me-1"></i>Từ chối</span>
-                                {% else %}
-                                    <span class="badge bg-warning bg-opacity-15 text-dark border border-warning"><i class="bi bi-hourglass-split me-1"></i>Chờ xử lý</span>
-                                {% endif %}
+                            <td class="text-center">
+                                <select class="form-select form-select-sm rounded-pill fw-bold shadow-none mx-auto"
+                                        style="font-size: 0.75rem; min-width: 145px; cursor: pointer; {% if req_status == 'Approved' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% elif req_status == 'Processing' %}background-color: #CFFAFE; color: #0E7490; border-color: #67E8F9;{% elif req_status == 'Rejected' %}background-color: #FEE2E2; color: #B91C1C; border-color: #FCA5A5;{% else %}background-color: #FEF3C7; color: #B45309; border-color: #FDE68A;{% endif %}"
+                                        data-current="{{ req_status }}"
+                                        data-action="{{ url_for('update_request_status', request_id=req['id']) }}"
+                                        data-type="booking"
+                                        data-user="{{ req['requester_name'] }}"
+                                        data-email="{{ req['email'] or '' }}"
+                                        data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
+                                        data-note="{{ req['admin_note'] or '' }}"
+                                        onchange="handleAdminStatusDropdownChange(this)">
+                                    <option value="Pending" {% if req_status == 'Pending' %}selected{% endif %}>⏳ Chờ xử lý</option>
+                                    <option value="Processing" {% if req_status == 'Processing' %}selected{% endif %}>👀 Đã tiếp nhận</option>
+                                    <option value="Approved" {% if req_status == 'Approved' %}selected{% endif %}>✅ Đã duyệt</option>
+                                    <option value="Rejected" {% if req_status == 'Rejected' %}selected{% endif %}>❌ Từ chối</option>
+                                </select>
                                 {% if req['admin_note'] %}
-                                    <div class="text-muted mt-1" style="font-size: 0.72rem; max-width: 150px;">💬 {{ req['admin_note'] }}</div>
+                                    <div class="text-muted mt-1 text-start" style="font-size: 0.71rem; max-width: 165px; margin: 0 auto;">💬 {{ req['admin_note'] }}</div>
                                 {% endif %}
                             </td>
                             <td class="text-center pe-3 text-nowrap">
-                                <div class="d-inline-flex align-items-center gap-1">
-                                    <button type="button"
-                                            class="btn btn-sm {% if req_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark{% endif %} py-1 px-2"
-                                            style="font-size: 0.75rem;"
-                                            data-action="{{ url_for('process_request', request_id=req['id']) }}"
-                                            data-type="booking"
-                                            data-status="Processing"
-                                            data-status-label="👀 Đã tiếp nhận yêu cầu mượn phòng"
-                                            data-user="{{ req['requester_name'] }}"
-                                            data-email="{{ req['email'] or '' }}"
-                                            data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
-                                            data-note="{{ req['admin_note'] or '' }}"
-                                            onclick="openStatusReplyModal(this)">
-                                        Đã tiếp nhận
+                                <form action="{{ url_for('delete_request', request_id=req['id']) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Xóa vĩnh viễn yêu cầu mượn phòng này?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-2 py-1 px-2 fw-semibold" style="font-size: 0.74rem;" title="Xóa yêu cầu">
+                                        <i class="bi bi-trash"></i> Xóa
                                     </button>
-                                    <button type="button"
-                                            class="btn btn-sm {% if req_status == 'Approved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %} py-1 px-2"
-                                            style="font-size: 0.75rem;"
-                                            data-action="{{ url_for('approve_request', request_id=req['id']) }}"
-                                            data-type="booking"
-                                            data-status="Approved"
-                                            data-status-label="✅ Duyệt yêu cầu mượn phòng"
-                                            data-user="{{ req['requester_name'] }}"
-                                            data-email="{{ req['email'] or '' }}"
-                                            data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
-                                            data-note="{{ req['admin_note'] or '' }}"
-                                            onclick="openStatusReplyModal(this)">
-                                        Đã duyệt
-                                    </button>
-                                    <button type="button"
-                                            class="btn btn-sm {% if req_status == 'Rejected' %}btn-danger fw-bold shadow-sm{% else %}btn-outline-danger{% endif %} py-1 px-2"
-                                            style="font-size: 0.75rem;"
-                                            data-action="{{ url_for('reject_request', request_id=req['id']) }}"
-                                            data-type="booking"
-                                            data-status="Rejected"
-                                            data-status-label="❌ Từ chối yêu cầu mượn phòng"
-                                            data-user="{{ req['requester_name'] }}"
-                                            data-email="{{ req['email'] or '' }}"
-                                            data-summary="Phòng {{ req['room'] }} • Thứ {{ req['day_of_week'] }} (Tiết {{ req['start_period'] }}-{{ req['end_period'] }}) • {{ req['subject_name'] or req['purpose'] }}"
-                                            data-note="{{ req['admin_note'] or '' }}"
-                                            onclick="openStatusReplyModal(this)">
-                                        Từ chối
-                                    </button>
-                                    <form action="{{ url_for('delete_request', request_id=req['id']) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Xóa vĩnh viễn yêu cầu mượn phòng này?');">
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary border-0 text-danger py-1 px-2" title="Xóa yêu cầu"><i class="bi bi-trash"></i></button>
-                                    </form>
-                                </div>
+                                </form>
                             </td>
                         </tr>
                         {% else %}
@@ -1443,28 +1380,25 @@
                                     </button>
                                 </td>
                                 <td class="text-nowrap">
-                                    {% if row['is_ended_early'] %}
-                                        <span class="badge rounded-pill bg-danger text-white px-2 py-1 shadow-sm">🔒 Đã KT sớm (Khóa cửa)</span>
-                                    {% elif row['door_open'] %}
-                                        <span class="badge rounded-pill bg-success bg-opacity-10 text-success border border-success px-2 py-1">🔓 Đang học (Mở cửa)</span>
-                                    {% else %}
-                                        <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary border border-secondary px-2 py-1">🔒 Khóa cửa (Ngoài đợt)</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-center pe-3 text-nowrap">
-                                    <form action="{{ url_for('toggle_early_end', schedule_id=row['id']) }}" method="POST" class="d-inline">
+                                    <form action="{{ url_for('toggle_early_end', schedule_id=row['id']) }}" method="POST" class="m-0">
                                         <input type="hidden" name="return_tab" value="schedules">
                                         <input type="hidden" name="schedule_filter" value="{{ schedule_filter }}">
-                                        {% if row['is_ended_early'] %}
-                                            <button type="submit" class="btn btn-sm btn-outline-primary fw-semibold me-1 bg-white py-0 px-2" style="font-size: 0.74rem;" title="Khôi phục lại lịch học bình thường">
-                                                ↺ Mở lại lịch
-                                            </button>
-                                        {% else %}
-                                            <button type="submit" class="btn btn-sm btn-outline-danger fw-semibold me-1 py-0 px-2" style="font-size: 0.74rem;" onclick="return confirm('Đánh dấu môn {{ row['subject_name']|e }} (P.{{ row['room'] }}) kết thúc sớm? Hệ thống sẽ báo Khóa cửa phòng và giải phóng phòng trống.');" title="Đánh dấu giảng viên kết thúc môn sớm">
-                                                ⏹ Kết thúc sớm
-                                            </button>
-                                        {% endif %}
+                                        <select class="form-select form-select-sm rounded-pill fw-bold shadow-none"
+                                                style="font-size: 0.74rem; min-width: 155px; cursor: pointer; {% if row['is_ended_early'] %}background-color: #FEE2E2; color: #B91C1C; border-color: #FCA5A5;{% elif row['door_open'] %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% else %}background-color: #F1F5F9; color: #475569; border-color: #CBD5E1;{% endif %}"
+                                                data-current="{{ 'locked' if row['is_ended_early'] else 'open' }}"
+                                                data-subject="{{ row['subject_name']|e }}"
+                                                data-room="{{ row['room'] }}"
+                                                onchange="handleScheduleDoorDropdownChange(this)">
+                                            <option value="open" {% if not row['is_ended_early'] %}selected{% endif %}>
+                                                {% if row['door_open'] %}🔓 Đang học (Mở cửa){% else %}🔒 Khóa cửa (Ngoài đợt){% endif %}
+                                            </option>
+                                            <option value="locked" {% if row['is_ended_early'] %}selected{% endif %}>
+                                                🔒 Đã KT sớm (Khóa cửa)
+                                            </option>
+                                        </select>
                                     </form>
+                                </td>
+                                <td class="text-center pe-3 text-nowrap">
                                     <form action="{{ url_for('delete_schedule', schedule_id=row['id']) }}" method="POST" class="d-inline" onsubmit="return confirm('Xóa vĩnh viễn môn «{{ row['subject_name']|e }}» (Lớp {{ row['class_code']|e }}, P.{{ row['room'] }}) khỏi Lịch học?');">
                                         <input type="hidden" name="schedule_filter" value="{{ schedule_filter }}">
                                         <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2 fw-semibold" style="font-size: 0.74rem;" title="Xóa môn học này (Giáo vụ hủy môn)">
@@ -1797,37 +1731,23 @@
                             <div class="text-dark fw-semibold mt-1 small">💬 Phản hồi QTTB: {{ issue.admin_note }}</div>
                         {% endif %}
                     </div>
-                    <div class="d-flex flex-wrap gap-1 mt-2">
-                        <button type="button"
-                                class="btn btn-sm {% if iss_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark fw-semibold{% endif %} flex-fill py-1"
-                                style="font-size: 0.74rem;"
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top gap-2 mt-2">
+                        <select class="form-select form-select-sm rounded-pill fw-bold shadow-none flex-grow-1"
+                                style="font-size: 0.76rem; cursor: pointer; {% if iss_status == 'Resolved' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% elif iss_status == 'Processing' %}background-color: #CFFAFE; color: #0E7490; border-color: #67E8F9;{% else %}background-color: #FEF3C7; color: #B45309; border-color: #FDE68A;{% endif %}"
+                                data-current="{{ iss_status }}"
                                 data-action="{{ url_for('update_issue_status', issue_id=issue.id) }}"
                                 data-type="issue"
-                                data-status="Processing"
-                                data-status-label="👀 Đã tiếp nhận báo cáo sự cố"
                                 data-user="{{ issue.reporter_name }}"
                                 data-email="{{ issue.email or '' }}"
                                 data-summary="Phòng {{ issue.room }} • Máy {{ issue.machine_number }} • {{ issue.issue_category }} ({{ issue.description }})"
                                 data-note="{{ issue.admin_note or '' }}"
-                                onclick="openStatusReplyModal(this)">
-                            Đã tiếp nhận
-                        </button>
-                        <button type="button"
-                                class="btn btn-sm {% if iss_status == 'Resolved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success fw-semibold{% endif %} flex-fill py-1"
-                                style="font-size: 0.74rem;"
-                                data-action="{{ url_for('update_issue_status', issue_id=issue.id) }}"
-                                data-type="issue"
-                                data-status="Resolved"
-                                data-status-label="✅ Đã xử lý / Đã duyệt sự cố"
-                                data-user="{{ issue.reporter_name }}"
-                                data-email="{{ issue.email or '' }}"
-                                data-summary="Phòng {{ issue.room }} • Máy {{ issue.machine_number }} • {{ issue.issue_category }} ({{ issue.description }})"
-                                data-note="{{ issue.admin_note or '' }}"
-                                onclick="openStatusReplyModal(this)">
-                            Đã duyệt
-                        </button>
+                                onchange="handleAdminStatusDropdownChange(this)">
+                            <option value="Pending" {% if iss_status == 'Pending' %}selected{% endif %}>⏳ Chờ xử lý</option>
+                            <option value="Processing" {% if iss_status == 'Processing' %}selected{% endif %}>👀 Đã tiếp nhận</option>
+                            <option value="Resolved" {% if iss_status == 'Resolved' %}selected{% endif %}>✅ Đã duyệt</option>
+                        </select>
                         <form action="{{ url_for('delete_issue', issue_id=issue.id) }}" method="POST" class="m-0" onsubmit="return confirm('Xóa vĩnh viễn báo cáo sự cố này?');">
-                            <button type="submit" class="btn btn-sm btn-outline-secondary text-danger py-1 px-2" title="Xóa"><i class="bi bi-trash"></i></button>
+                            <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill py-1 px-3" title="Xóa"><i class="bi bi-trash"></i></button>
                         </form>
                     </div>
                 </div>
@@ -1851,8 +1771,8 @@
                             <th style="width: 95px;">Vị trí</th>
                             <th style="width: 145px;">Phân loại</th>
                             <th>Mô tả</th>
-                            <th style="width: 125px;">Trạng thái</th>
-                            <th class="text-center pe-3" style="width: 215px;">Thao tác</th>
+                            <th class="text-center" style="width: 170px;">Trạng thái</th>
+                            <th class="text-center pe-3" style="width: 85px;">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1888,49 +1808,28 @@
                                     <div class="text-muted mt-1" style="font-size: 0.72rem;">💬 {{ issue.admin_note }}</div>
                                 {% endif %}
                             </td>
-                            <td>
-                                {% if iss_status == "Processing" %}
-                                    <span class="badge bg-info bg-opacity-15 text-dark border border-info"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
-                                {% elif iss_status == "Resolved" %}
-                                    <span class="badge bg-success bg-opacity-15 text-success border border-success"><i class="bi bi-check-circle me-1"></i>Đã duyệt</span>
-                                {% else %}
-                                    <span class="badge bg-warning bg-opacity-15 text-dark border border-warning"><i class="bi bi-hourglass-split me-1"></i>Chờ xử lý</span>
-                                {% endif %}
+                            <td class="text-center">
+                                <select class="form-select form-select-sm rounded-pill fw-bold shadow-none mx-auto"
+                                        style="font-size: 0.75rem; min-width: 145px; cursor: pointer; {% if iss_status == 'Resolved' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% elif iss_status == 'Processing' %}background-color: #CFFAFE; color: #0E7490; border-color: #67E8F9;{% else %}background-color: #FEF3C7; color: #B45309; border-color: #FDE68A;{% endif %}"
+                                        data-current="{{ iss_status }}"
+                                        data-action="{{ url_for('update_issue_status', issue_id=issue.id) }}"
+                                        data-type="issue"
+                                        data-user="{{ issue.reporter_name }}"
+                                        data-email="{{ issue.email or '' }}"
+                                        data-summary="Phòng {{ issue.room }} • Máy {{ issue.machine_number }} • {{ issue.issue_category }} ({{ issue.description }})"
+                                        data-note="{{ issue.admin_note or '' }}"
+                                        onchange="handleAdminStatusDropdownChange(this)">
+                                    <option value="Pending" {% if iss_status == 'Pending' %}selected{% endif %}>⏳ Chờ xử lý</option>
+                                    <option value="Processing" {% if iss_status == 'Processing' %}selected{% endif %}>👀 Đã tiếp nhận</option>
+                                    <option value="Resolved" {% if iss_status == 'Resolved' %}selected{% endif %}>✅ Đã duyệt</option>
+                                </select>
                             </td>
                             <td class="text-center pe-3 text-nowrap">
-                                <div class="d-inline-flex align-items-center gap-1">
-                                    <button type="button"
-                                            class="btn btn-sm {% if iss_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark{% endif %} py-1 px-2"
-                                            style="font-size: 0.75rem;"
-                                            data-action="{{ url_for('update_issue_status', issue_id=issue.id) }}"
-                                            data-type="issue"
-                                            data-status="Processing"
-                                            data-status-label="👀 Đã tiếp nhận báo cáo sự cố"
-                                            data-user="{{ issue.reporter_name }}"
-                                            data-email="{{ issue.email or '' }}"
-                                            data-summary="Phòng {{ issue.room }} • Máy {{ issue.machine_number }} • {{ issue.issue_category }} ({{ issue.description }})"
-                                            data-note="{{ issue.admin_note or '' }}"
-                                            onclick="openStatusReplyModal(this)">
-                                        Đã tiếp nhận
+                                <form action="{{ url_for('delete_issue', issue_id=issue.id) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Xóa vĩnh viễn báo cáo sự cố này?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-2 py-1 px-2 fw-semibold" style="font-size: 0.74rem;" title="Xóa sự cố">
+                                        <i class="bi bi-trash"></i> Xóa
                                     </button>
-                                    <button type="button"
-                                            class="btn btn-sm {% if iss_status == 'Resolved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %} py-1 px-2"
-                                            style="font-size: 0.75rem;"
-                                            data-action="{{ url_for('update_issue_status', issue_id=issue.id) }}"
-                                            data-type="issue"
-                                            data-status="Resolved"
-                                            data-status-label="✅ Đã xử lý / Đã duyệt sự cố"
-                                            data-user="{{ issue.reporter_name }}"
-                                            data-email="{{ issue.email or '' }}"
-                                            data-summary="Phòng {{ issue.room }} • Máy {{ issue.machine_number }} • {{ issue.issue_category }} ({{ issue.description }})"
-                                            data-note="{{ issue.admin_note or '' }}"
-                                            onclick="openStatusReplyModal(this)">
-                                        Đã duyệt
-                                    </button>
-                                    <form action="{{ url_for('delete_issue', issue_id=issue.id) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Xóa vĩnh viễn báo cáo sự cố này?');">
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary border-0 text-danger py-1 px-2" title="Xóa sự cố"><i class="bi bi-trash"></i></button>
-                                    </form>
-                                </div>
+                                </form>
                             </td>
                         </tr>
                         {% else %}
@@ -2135,37 +2034,23 @@
                         {% if req['admin_note'] %}<div class="text-dark fw-semibold mt-1">💬 Phản hồi QTTB: {{ req['admin_note'] }}</div>{% endif %}
                     </div>
                     {% endif %}
-                    <div class="d-flex flex-wrap gap-1 mt-2">
-                        <button type="button"
-                                class="btn btn-sm {% if can_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark fw-semibold{% endif %} flex-fill py-1"
-                                style="font-size: 0.74rem;"
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top gap-2 mt-2">
+                        <select class="form-select form-select-sm rounded-pill fw-bold shadow-none flex-grow-1"
+                                style="font-size: 0.76rem; cursor: pointer; {% if can_status == 'Approved' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% elif can_status == 'Processing' %}background-color: #CFFAFE; color: #0E7490; border-color: #67E8F9;{% else %}background-color: #FEF3C7; color: #B45309; border-color: #FDE68A;{% endif %}"
+                                data-current="{{ can_status }}"
                                 data-action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}"
                                 data-type="cancellation"
-                                data-status="Processing"
-                                data-status-label="👀 Đã tiếp nhận thông báo nghỉ gấp"
                                 data-user="{{ req['teacher_name'] }}"
                                 data-email="{{ req['email'] or '' }}"
                                 data-summary="Phòng {{ req['room'] }} • Ngày {{ req['cancel_date'] }} ({{ req['period'] }}) • {{ req['reason'] or 'Báo nghỉ' }}"
                                 data-note="{{ req['admin_note'] or '' }}"
-                                onclick="openStatusReplyModal(this)">
-                            Đã tiếp nhận
-                        </button>
-                        <button type="button"
-                                class="btn btn-sm {% if can_status == 'Approved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success fw-semibold{% endif %} flex-fill py-1"
-                                style="font-size: 0.74rem;"
-                                data-action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}"
-                                data-type="cancellation"
-                                data-status="Approved"
-                                data-status-label="✅ Xác nhận & Duyệt thông báo nghỉ"
-                                data-user="{{ req['teacher_name'] }}"
-                                data-email="{{ req['email'] or '' }}"
-                                data-summary="Phòng {{ req['room'] }} • Ngày {{ req['cancel_date'] }} ({{ req['period'] }}) • {{ req['reason'] or 'Báo nghỉ' }}"
-                                data-note="{{ req['admin_note'] or '' }}"
-                                onclick="openStatusReplyModal(this)">
-                            Đã duyệt
-                        </button>
+                                onchange="handleAdminStatusDropdownChange(this)">
+                            <option value="Pending" {% if can_status == 'Pending' %}selected{% endif %}>⏳ Chờ xử lý</option>
+                            <option value="Processing" {% if can_status == 'Processing' %}selected{% endif %}>👀 Đã tiếp nhận</option>
+                            <option value="Approved" {% if can_status == 'Approved' %}selected{% endif %}>✅ Đã duyệt</option>
+                        </select>
                         <form action="{{ url_for('delete_cancellation', cancellation_id=req['id']) }}" method="POST" class="m-0" onsubmit="return confirm('Xóa vĩnh viễn thông báo nghỉ này?');">
-                            <button type="submit" class="btn btn-sm btn-outline-secondary text-danger py-1 px-2" title="Xóa"><i class="bi bi-trash"></i></button>
+                            <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill py-1 px-3" title="Xóa"><i class="bi bi-trash"></i></button>
                         </form>
                     </div>
                 </div>
@@ -2190,8 +2075,8 @@
                             <th>Ngày nghỉ</th>
                             <th>Ca / Tiết</th>
                             <th>Lịch học bù / Lý do</th>
-                            <th>Trạng thái</th>
-                            <th class="text-center pe-3">Thao tác</th>
+                            <th class="text-center" style="width: 170px;">Trạng thái</th>
+                            <th class="text-center pe-3" style="width: 85px;">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2220,49 +2105,28 @@
                                     <div class="text-dark mt-1" style="font-size: 0.72rem;">💬 {{ req['admin_note'] }}</div>
                                 {% endif %}
                             </td>
-                            <td>
-                                {% if can_status == 'Processing' %}
-                                    <span class="badge bg-info bg-opacity-15 text-dark border border-info"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
-                                {% elif can_status == 'Approved' %}
-                                    <span class="badge bg-success bg-opacity-15 text-success border border-success"><i class="bi bi-check-circle me-1"></i>Đã duyệt</span>
-                                {% else %}
-                                    <span class="badge bg-warning bg-opacity-15 text-dark border border-warning"><i class="bi bi-hourglass-split me-1"></i>Chờ xử lý</span>
-                                {% endif %}
+                            <td class="text-center">
+                                <select class="form-select form-select-sm rounded-pill fw-bold shadow-none mx-auto"
+                                        style="font-size: 0.75rem; min-width: 145px; cursor: pointer; {% if can_status == 'Approved' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% elif can_status == 'Processing' %}background-color: #CFFAFE; color: #0E7490; border-color: #67E8F9;{% else %}background-color: #FEF3C7; color: #B45309; border-color: #FDE68A;{% endif %}"
+                                        data-current="{{ can_status }}"
+                                        data-action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}"
+                                        data-type="cancellation"
+                                        data-user="{{ req['teacher_name'] }}"
+                                        data-email="{{ req['email'] or '' }}"
+                                        data-summary="Phòng {{ req['room'] }} • Ngày {{ req['cancel_date'] }} ({{ req['period'] }}) • {{ req['reason'] or 'Báo nghỉ' }}"
+                                        data-note="{{ req['admin_note'] or '' }}"
+                                        onchange="handleAdminStatusDropdownChange(this)">
+                                    <option value="Pending" {% if can_status == 'Pending' %}selected{% endif %}>⏳ Chờ xử lý</option>
+                                    <option value="Processing" {% if can_status == 'Processing' %}selected{% endif %}>👀 Đã tiếp nhận</option>
+                                    <option value="Approved" {% if can_status == 'Approved' %}selected{% endif %}>✅ Đã duyệt</option>
+                                </select>
                             </td>
                             <td class="text-center pe-3 text-nowrap">
-                                <div class="d-inline-flex align-items-center gap-1">
-                                    <button type="button"
-                                            class="btn btn-sm {% if can_status == 'Processing' %}btn-info text-dark fw-bold shadow-sm{% else %}btn-outline-info text-dark{% endif %} py-1 px-2"
-                                            style="font-size: 0.75rem;"
-                                            data-action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}"
-                                            data-type="cancellation"
-                                            data-status="Processing"
-                                            data-status-label="👀 Đã tiếp nhận thông báo nghỉ gấp"
-                                            data-user="{{ req['teacher_name'] }}"
-                                            data-email="{{ req['email'] or '' }}"
-                                            data-summary="Phòng {{ req['room'] }} • Ngày {{ req['cancel_date'] }} ({{ req['period'] }}) • {{ req['reason'] or 'Báo nghỉ' }}"
-                                            data-note="{{ req['admin_note'] or '' }}"
-                                            onclick="openStatusReplyModal(this)">
-                                        Đã tiếp nhận
+                                <form action="{{ url_for('delete_cancellation', cancellation_id=req['id']) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Xóa vĩnh viễn thông báo nghỉ này?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-2 py-1 px-2 fw-semibold" style="font-size: 0.74rem;" title="Xóa thông báo">
+                                        <i class="bi bi-trash"></i> Xóa
                                     </button>
-                                    <button type="button"
-                                            class="btn btn-sm {% if can_status == 'Approved' %}btn-success fw-bold shadow-sm{% else %}btn-outline-success{% endif %} py-1 px-2"
-                                            style="font-size: 0.75rem;"
-                                            data-action="{{ url_for('approve_cancellation', cancellation_id=req['id']) }}"
-                                            data-type="cancellation"
-                                            data-status="Approved"
-                                            data-status-label="✅ Xác nhận & Duyệt thông báo nghỉ"
-                                            data-user="{{ req['teacher_name'] }}"
-                                            data-email="{{ req['email'] or '' }}"
-                                            data-summary="Phòng {{ req['room'] }} • Ngày {{ req['cancel_date'] }} ({{ req['period'] }}) • {{ req['reason'] or 'Báo nghỉ' }}"
-                                            data-note="{{ req['admin_note'] or '' }}"
-                                            onclick="openStatusReplyModal(this)">
-                                        Đã duyệt
-                                    </button>
-                                    <form action="{{ url_for('delete_cancellation', cancellation_id=req['id']) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Xóa vĩnh viễn thông báo nghỉ này?');">
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary border-0 text-danger py-1 px-2" title="Xóa thông báo"><i class="bi bi-trash"></i></button>
-                                    </form>
-                                </div>
+                                </form>
                             </td>
                         </tr>
                         {% else %}
@@ -2377,14 +2241,15 @@
                             <th class="text-muted small fw-bold" style="width: 18%;">NHÂN SỰ</th>
                             <th class="text-muted small fw-bold" style="width: 18%;">BỘ PHẬN / VỊ TRÍ</th>
                             <th class="text-muted small fw-bold" style="width: 15%;">KHUNG GIỜ &amp; SỐ GIỜ</th>
-                            <th class="text-muted small fw-bold" style="width: 20%;">NỘI DUNG / LÝ DO TĂNG CA</th>
-                            <th class="text-center text-muted small fw-bold" style="width: 15%;">TRẠNG THÁI &amp; THAO TÁC</th>
+                            <th class="text-muted small fw-bold" style="width: 18%;">NỘI DUNG / LÝ DO TĂNG CA</th>
+                            <th class="text-center text-muted small fw-bold" style="width: 10%;">TRẠNG THÁI</th>
+                            <th class="text-center text-muted small fw-bold pe-3" style="width: 7%;">THAO TÁC</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if ot_data['records']|length == 0 %}
                         <tr>
-                            <td colspan="6" class="text-center py-5 text-muted">
+                            <td colspan="7" class="text-center py-5 text-muted">
                                 <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary opacity-50"></i>
                                 Chưa có dữ liệu tăng ca nào trong kỳ này. Bấm <strong>"Thêm Ca Tăng Ca Mới"</strong> để ghi nhận lịch trình.
                             </td>
@@ -2443,24 +2308,22 @@
                                 </div>
                             </td>
                             <td class="text-center">
-                                <div class="d-flex align-items-center justify-content-center gap-2">
-                                    <form method="POST" action="{{ url_for('toggle_overtime_status', ot_id=r['id'], ot_month=ot_data['selected_month']) }}" class="m-0">
-                                        {% if r['status'] == 'Completed' %}
-                                            <button type="submit" class="btn btn-success btn-sm rounded-pill px-3 py-1 fw-bold shadow-none" title="Bấm để đổi sang Chưa tới hạn">
-                                                <i class="bi bi-check-circle-fill me-1"></i>Đã làm
-                                            </button>
-                                        {% else %}
-                                            <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-3 py-1 fw-bold text-dark shadow-none" title="Bấm để xác nhận Đã làm">
-                                                <i class="bi bi-hourglass-split me-1 text-warning"></i>Chưa tới hạn
-                                            </button>
-                                        {% endif %}
-                                    </form>
-                                    <form method="POST" action="{{ url_for('delete_overtime', ot_id=r['id'], ot_month=ot_data['selected_month']) }}" class="m-0" onsubmit="return confirm('Bạn có chắc muốn xóa ca tăng ca của {{ r['staff_name'] }} vào ngày {{ r['ot_date'] }}?');">
-                                        <button type="submit" class="btn btn-outline-danger btn-sm rounded-circle p-1" style="width: 28px; height: 28px;" title="Xóa">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
+                                <form method="POST" action="{{ url_for('toggle_overtime_status', ot_id=r['id'], ot_month=ot_data['selected_month']) }}" class="m-0">
+                                    <select name="status"
+                                            class="form-select form-select-sm rounded-pill fw-bold shadow-none mx-auto"
+                                            style="font-size: 0.75rem; min-width: 132px; cursor: pointer; {% if r['status'] == 'Completed' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% else %}background-color: #FEF3C7; color: #B45309; border-color: #FDE68A;{% endif %}"
+                                            onchange="this.form.submit()">
+                                        <option value="Pending" {% if r['status'] != 'Completed' %}selected{% endif %}>⏳ Chưa tới hạn</option>
+                                        <option value="Completed" {% if r['status'] == 'Completed' %}selected{% endif %}>✅ Đã làm</option>
+                                    </select>
+                                </form>
+                            </td>
+                            <td class="text-center pe-3">
+                                <form method="POST" action="{{ url_for('delete_overtime', ot_id=r['id'], ot_month=ot_data['selected_month']) }}" class="m-0 d-inline" onsubmit="return confirm('Bạn có chắc muốn xóa ca tăng ca của {{ r['staff_name'] }} vào ngày {{ r['ot_date'] }}?');">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm rounded-2 py-1 px-2 fw-semibold" style="font-size: 0.74rem;" title="Xóa">
+                                        <i class="bi bi-trash"></i> Xóa
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                         {% endfor %}
@@ -2504,13 +2367,13 @@
                 </div>
                 <div class="d-flex justify-content-between align-items-center pt-2 border-top gap-2">
                     <form method="POST" action="{{ url_for('toggle_overtime_status', ot_id=r['id'], ot_month=ot_data['selected_month']) }}" class="m-0 flex-grow-1">
-                        <button type="submit" class="btn btn-light btn-sm border w-100 fw-bold rounded-pill">
-                            {% if r['status'] == 'Completed' %}
-                                <i class="bi bi-arrow-counterclockwise me-1 text-warning"></i>Đổi thành Chưa tới hạn
-                            {% else %}
-                                <i class="bi bi-check-circle-fill me-1 text-success"></i>Xác nhận Đã làm
-                            {% endif %}
-                        </button>
+                        <select name="status"
+                                class="form-select form-select-sm rounded-pill fw-bold shadow-none w-100"
+                                style="font-size: 0.76rem; cursor: pointer; {% if r['status'] == 'Completed' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% else %}background-color: #FEF3C7; color: #B45309; border-color: #FDE68A;{% endif %}"
+                                onchange="this.form.submit()">
+                            <option value="Pending" {% if r['status'] != 'Completed' %}selected{% endif %}>⏳ Chưa tới hạn</option>
+                            <option value="Completed" {% if r['status'] == 'Completed' %}selected{% endif %}>✅ Đã làm</option>
+                        </select>
                     </form>
                     <form method="POST" action="{{ url_for('delete_overtime', ot_id=r['id'], ot_month=ot_data['selected_month']) }}" class="m-0" onsubmit="return confirm('Bạn có chắc muốn xóa?');">
                         <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3">
@@ -2535,7 +2398,7 @@
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
                     <div>
                         <h5 class="fw-bold mb-1 d-flex align-items-center gap-2">
-                            <span>📋 Sổ Nhật Ký Công Việc &amp; Quy Trình Deploy Phòng Máy</span>
+                            <span>Sổ Nhật Ký Công Việc &amp; Quy Trình Deploy Phòng Máy</span>
                         </h5>
                         <p class="mb-0 small" style="color: #CCFBF1;">
                             Quản lý vận hành 8 phòng máy (5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.5, 6.6), hạ tầng Server/Switch/Router, VMware &amp; Checklist Deploy Acronis + Clonezilla
@@ -2544,11 +2407,11 @@
                     <div class="d-flex flex-wrap gap-2 bg-dark bg-opacity-25 p-1 rounded-3 border border-light border-opacity-25">
                         <button type="button" id="btnSubViewDaily" onclick="switchWorklogSubView('daily')"
                                 class="btn btn-sm fw-bold rounded-2 px-3 py-2 {% if wl_subview != 'deploy' %}bg-white text-dark shadow-sm{% else %}text-white{% endif %}">
-                            📋 Nhật ký công việc ({{ worklog_data['total_count'] }})
+                            Nhật ký công việc ({{ worklog_data['total_count'] }})
                         </button>
                         <button type="button" id="btnSubViewDeploy" onclick="switchWorklogSubView('deploy')"
                                 class="btn btn-sm fw-bold rounded-2 px-3 py-2 {% if wl_subview == 'deploy' %}bg-white text-dark shadow-sm{% else %}text-white{% endif %}">
-                            🚀 Checklist Deploy 8 Phòng Máy (SOP)
+                            Checklist Deploy 8 Phòng Máy (SOP)
                         </button>
                     </div>
                 </div>
@@ -2560,34 +2423,27 @@
         <!-- ===================================================== -->
         <div id="wlDailySection" class="{% if wl_subview == 'deploy' %}d-none{% endif %}">
 
-            <!-- 4 THẺ CHỈ SỐ KPI NHẬT KÝ -->
+            <!-- 3 THẺ CHỈ SỐ KPI NHẬT KÝ -->
             <div class="row g-2 g-md-3 mb-3">
-                <div class="col-6 col-lg-3">
+                <div class="col-12 col-md-4">
                     <div class="dash-kpi-card" style="border-left: 4px solid #0F2942;">
-                        <div class="dash-kpi-title">📋 TỔNG ĐẦU VIỆC</div>
+                        <div class="dash-kpi-title">TỔNG ĐẦU VIỆC</div>
                         <div class="dash-kpi-val" style="color: #0F2942;">{{ worklog_data['total_count'] }} <span class="fs-6 fw-semibold text-muted">việc</span></div>
                         <div class="dash-kpi-sub">Hệ thống 8 phòng máy &amp; Văn phòng</div>
                     </div>
                 </div>
-                <div class="col-6 col-lg-3">
+                <div class="col-6 col-md-4">
                     <div class="dash-kpi-card" style="border-left: 4px solid #10b981;">
-                        <div class="dash-kpi-title">✅ ĐÃ HOÀN THÀNH</div>
+                        <div class="dash-kpi-title">ĐÃ HOÀN THÀNH</div>
                         <div class="dash-kpi-val text-success">{{ worklog_data['completed_count'] }} <span class="fs-6 fw-semibold text-muted">việc</span></div>
                         <div class="dash-kpi-sub">Đã nghiệm thu &amp; lưu nhật ký</div>
                     </div>
                 </div>
-                <div class="col-6 col-lg-3">
+                <div class="col-6 col-md-4">
                     <div class="dash-kpi-card" style="border-left: 4px solid #0D9488;">
-                        <div class="dash-kpi-title">🔄 ĐANG XỬ LÝ / THEO DÕI</div>
-                        <div class="dash-kpi-val text-primary">{{ worklog_data['in_progress_count'] }} <span class="fs-6 fw-semibold text-muted">việc</span></div>
-                        <div class="dash-kpi-sub">Đang test VMware, cấu hình mạng...</div>
-                    </div>
-                </div>
-                <div class="col-6 col-lg-3">
-                    <div class="dash-kpi-card" style="border-left: 4px solid #f59e0b;">
-                        <div class="dash-kpi-title">⏳ CHỜ THỰC HIỆN</div>
-                        <div class="dash-kpi-val text-warning">{{ worklog_data['pending_count'] }} <span class="fs-6 fw-semibold text-dark">việc</span></div>
-                        <div class="dash-kpi-sub">Kế hoạch / bàn giao ca tiếp theo</div>
+                        <div class="dash-kpi-title">ĐANG XỬ LÝ / THEO DÕI</div>
+                        <div class="dash-kpi-val text-primary">{{ worklog_data['in_progress_count'] + worklog_data['pending_count'] }} <span class="fs-6 fw-semibold text-muted">việc</span></div>
+                        <div class="dash-kpi-sub">Đang kiểm thử VMware, cấu hình mạng...</div>
                     </div>
                 </div>
             </div>
@@ -2601,32 +2457,32 @@
                             Tất cả ({{ worklog_data['total_count'] }})
                         </button>
                         <button type="button" class="schedule-filter-pill" data-wl-cat="server_net" onclick="filterWorklogCategory('server_net', this)">
-                            🌐 Server / Switch / Router
+                            Server / Switch / Router
                         </button>
                         <button type="button" class="schedule-filter-pill" data-wl-cat="vmware" onclick="filterWorklogCategory('vmware', this)">
-                            💿 VMware / OS / Image
+                            VMware / OS / Image
                         </button>
                         <button type="button" class="schedule-filter-pill" data-wl-cat="support" onclick="filterWorklogCategory('support', this)">
-                            🛠️ Hỗ trợ GV (PM/Cứng)
+                            Hỗ trợ GV (PM/Cứng)
                         </button>
                         <button type="button" class="schedule-filter-pill" data-wl-cat="booking" onclick="filterWorklogCategory('booking', this)">
-                            📩 Mượn phòng
+                            Mượn phòng
                         </button>
                         <button type="button" class="schedule-filter-pill" data-wl-cat="process" onclick="filterWorklogCategory('process', this)">
-                            ⚙️ Cải tiến quy trình
+                            Cải tiến quy trình
                         </button>
                         <button type="button" class="schedule-filter-pill" data-wl-cat="office" onclick="filterWorklogCategory('office', this)">
-                            📁 Văn phòng
+                            Văn phòng
                         </button>
                     </div>
 
                     <!-- Nút Xuất Excel & Thêm Công Việc Mới -->
                     <div class="d-flex flex-wrap gap-2">
                         <a href="{{ url_for('export_worklog_excel') }}" class="btn btn-outline-success btn-sm fw-bold rounded-3 px-3 py-2 shadow-sm">
-                            📥 Xuất Excel (.xlsx)
+                            Xuất Excel (.xlsx)
                         </a>
                         <button type="button" class="btn btn-primary btn-sm fw-bold rounded-3 px-3 py-2 shadow-sm" onclick="openAddWorklogModal()">
-                            ➕ Thêm công việc mới
+                            + Thêm công việc mới
                         </button>
                     </div>
                 </div>
@@ -2635,14 +2491,14 @@
                 <div class="row g-2 align-items-center">
                     <div class="col-12 col-md-4">
                         <div class="input-group input-group-sm">
-                            <span class="input-group-text bg-light border-end-0">🔍</span>
+                            <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-search"></i></span>
                             <input type="text" id="searchInput-worklogs" class="form-control bg-light border-start-0"
                                    placeholder="Tìm theo nội dung công việc, ghi chú, phòng..." oninput="applyWorklogFilters()">
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
                         <select id="roomFilter-worklogs" class="form-select form-select-sm bg-light fw-semibold" onchange="applyWorklogFilters()">
-                            <option value="all">🏫 Tất cả phòng</option>
+                            <option value="all">Tất cả phòng</option>
                             <option value="5.1">Phòng 5.1</option>
                             <option value="5.2">Phòng 5.2</option>
                             <option value="5.3">Phòng 5.3</option>
@@ -2657,10 +2513,9 @@
                     </div>
                     <div class="col-6 col-md-2">
                         <select id="statusFilter-worklogs" class="form-select form-select-sm bg-light fw-semibold" onchange="applyWorklogFilters()">
-                            <option value="all">📌 Mọi trạng thái</option>
-                            <option value="in_progress">🔄 Đang xử lý</option>
-                            <option value="completed">✅ Hoàn thành</option>
-                            <option value="pending">⏳ Chờ thực hiện</option>
+                            <option value="all">Mọi trạng thái</option>
+                            <option value="in_progress">Đang xử lý</option>
+                            <option value="completed">Hoàn thành</option>
                         </select>
                     </div>
                     <div class="col-12 col-md-4 d-flex justify-content-md-end align-items-center gap-2">
@@ -2673,7 +2528,7 @@
                         <form action="{{ url_for('bulk_delete_worklogs') }}" method="POST" class="m-0" onsubmit="return confirmBulkDelete('worklogs', 'công việc trong Nhật ký')">
                             <div id="bulkHiddenInputs-worklogs"></div>
                             <button type="submit" id="btnBulkDelete-worklogs" class="btn btn-outline-danger btn-sm fw-bold rounded-3 px-3" disabled>
-                                🗑️ Xóa đã chọn (<span id="selectedCount-worklogs">0</span>)
+                                Xóa đã chọn (<span id="selectedCount-worklogs">0</span>)
                             </button>
                         </form>
                     </div>
@@ -2681,12 +2536,12 @@
             </div>
 
             {% set cat_badge_map = {
-                'server_net': ('🌐 Server / Mạng', '#DBEAFE', '#1E40AF'),
-                'vmware': ('💿 VMware / Image', '#F3E8FF', '#6B21A8'),
-                'support': ('🛠️ Hỗ trợ GV', '#FEF3C7', '#92400E'),
-                'booking': ('📩 Mượn phòng', '#DCFCE7', '#166534'),
-                'process': ('⚙️ Cải tiến quy trình', '#CCFBF1', '#115E59'),
-                'office': ('📁 Văn phòng', '#F1F5F9', '#334155')
+                'server_net': ('Server / Mạng', '#DBEAFE', '#1E40AF'),
+                'vmware': ('VMware / Image', '#F3E8FF', '#6B21A8'),
+                'support': ('Hỗ trợ GV', '#FEF3C7', '#92400E'),
+                'booking': ('Mượn phòng', '#DCFCE7', '#166534'),
+                'process': ('Cải tiến quy trình', '#CCFBF1', '#115E59'),
+                'office': ('Văn phòng', '#F1F5F9', '#334155')
             } %}
 
             <!-- BẢNG DANH SÁCH NHẬT KÝ CÔNG VIỆC (DESKTOP) -->
@@ -2699,26 +2554,26 @@
                                     <input class="form-check-input" type="checkbox" id="selectAllDesktop-worklogs"
                                            onchange="toggleSelectAll('worklogs', this.checked)" title="Chọn xóa tất cả">
                                 </th>
-                                <th class="text-muted small fw-bold" style="width: 11%;">NGÀY / CA</th>
-                                <th class="text-muted small fw-bold" style="width: 14%;">DANH MỤC</th>
-                                <th class="text-muted small fw-bold" style="width: 12%;">PHÒNG MÁY</th>
-                                <th class="text-muted small fw-bold" style="width: 24%;">NỘI DUNG CÔNG VIỆC</th>
-                                <th class="text-muted small fw-bold" style="width: 21%; color: #0D9488 !important;">📌 CỘT GHI CHÚ (NOTES)</th>
-                                <th class="text-center text-muted small fw-bold" style="width: 10%;">TRẠNG THÁI</th>
-                                <th class="text-center text-muted small fw-bold pe-3" style="width: 8%;">SỬA / XÓA</th>
+                                <th class="text-muted small fw-bold" style="width: 10%;">NGÀY / CA</th>
+                                <th class="text-muted small fw-bold" style="width: 13%;">DANH MỤC</th>
+                                <th class="text-muted small fw-bold" style="width: 11%;">PHÒNG MÁY</th>
+                                <th class="text-muted small fw-bold" style="width: 22%;">NỘI DUNG CÔNG VIỆC</th>
+                                <th class="text-muted small fw-bold" style="width: 18%; color: #0D9488 !important;">GHI CHÚ (NOTES)</th>
+                                <th class="text-center text-muted small fw-bold" style="width: 11%;">TRẠNG THÁI</th>
+                                <th class="text-center text-muted small fw-bold" style="width: 8%;">SỐ NGÀY</th>
+                                <th class="text-center text-muted small fw-bold pe-3" style="width: 7%;">SỬA / XÓA</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% if worklog_data['records']|length == 0 %}
                             <tr>
-                                <td colspan="8" class="text-center py-5 text-muted">
-                                    <i class="bi bi-journal-check fs-1 d-block mb-2 text-secondary opacity-50"></i>
-                                    Chưa có công việc nào trong Nhật ký. Bấm <strong>"➕ Thêm công việc mới"</strong> để bắt đầu ghi nhận.
+                                <td colspan="9" class="text-center py-5 text-muted">
+                                    Chưa có công việc nào trong Nhật ký. Bấm <strong>"+ Thêm công việc mới"</strong> để bắt đầu ghi nhận.
                                 </td>
                             </tr>
                             {% endif %}
                             {% for w in worklog_data['records'] %}
-                            {% set cat_info = cat_badge_map.get(w['category'], ('📋 Khác', '#F1F5F9', '#334155')) %}
+                            {% set cat_info = cat_badge_map.get(w['category'], ('Khác', '#F1F5F9', '#334155')) %}
                             <tr class="admin-list-item-worklogs"
                                 data-category="{{ w['category'] }}"
                                 data-status="{{ w['status'] }}"
@@ -2746,11 +2601,11 @@
                                     </span>
                                     <div class="mt-1">
                                         {% if w['priority'] == 'urgent' %}
-                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle" style="font-size: 0.68rem;">🔥 Khẩn cấp</span>
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle" style="font-size: 0.68rem;">Khẩn cấp</span>
                                         {% elif w['priority'] == 'high' %}
-                                            <span class="badge bg-warning bg-opacity-15 text-dark border border-warning-subtle" style="font-size: 0.68rem;">⚡ Ưu tiên cao</span>
+                                            <span class="badge bg-warning bg-opacity-15 text-dark border border-warning-subtle" style="font-size: 0.68rem;">Ưu tiên cao</span>
                                         {% else %}
-                                            <span class="text-muted" style="font-size: 0.7rem;">• Bình thường</span>
+                                            <span class="text-muted" style="font-size: 0.7rem;">Bình thường</span>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -2773,28 +2628,34 @@
                                 <td>
                                     {% if w['notes'] and w['notes'].strip() %}
                                         <div class="wl-note-box">
-                                            📌 {{ w['notes'] }}
+                                            {{ w['notes'] }}
                                         </div>
                                     {% else %}
-                                        <span class="text-muted fst-italic small">— Không có ghi chú —</span>
+                                        <span class="text-muted fst-italic small">—</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-center">
                                     <form method="POST" action="{{ url_for('toggle_worklog_status', log_id=w['id']) }}" class="m-0">
-                                        {% if w['status'] == 'completed' %}
-                                            <button type="submit" class="btn btn-success btn-sm rounded-pill px-2 py-1 fw-bold shadow-none" style="font-size: 0.74rem;" title="Bấm để chuyển trạng thái">
-                                                ✅ Hoàn thành
-                                            </button>
-                                        {% elif w['status'] == 'in_progress' %}
-                                            <button type="submit" class="btn btn-sm rounded-pill px-2 py-1 fw-bold shadow-none" style="background-color: #F0FDFA; color: #0D9488; border: 1px solid #99F6E4; font-size: 0.74rem;" title="Bấm để chuyển sang Hoàn thành">
-                                                🔄 Đang xử lý
-                                            </button>
-                                        {% else %}
-                                            <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-2 py-1 fw-bold text-dark shadow-none" style="font-size: 0.74rem;" title="Bấm để chuyển sang Đang xử lý">
-                                                ⏳ Chờ làm
-                                            </button>
-                                        {% endif %}
+                                        <select name="status"
+                                                class="form-select form-select-sm rounded-pill fw-bold shadow-none mx-auto"
+                                                style="font-size: 0.75rem; min-width: 122px; cursor: pointer; {% if w['status'] == 'completed' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% else %}background-color: #F0FDFA; color: #0D9488; border-color: #99F6E4;{% endif %}"
+                                                onchange="this.form.submit()">
+                                            <option value="in_progress" {% if w['status'] != 'completed' %}selected{% endif %}>Đang xử lý</option>
+                                            <option value="completed" {% if w['status'] == 'completed' %}selected{% endif %}>Hoàn thành</option>
+                                        </select>
                                     </form>
+                                </td>
+                                <td class="text-center">
+                                    {% set dur = w['duration_info'] %}
+                                    {% if w['status'] == 'completed' %}
+                                        <span class="badge rounded-pill px-2 py-1 fw-bold {{ dur['badge_class'] }}" style="font-size: 0.73rem;" title="Bắt đầu: {{ w['work_date'] }} • Xong: {{ w['completed_date'] or w['work_date'] }}">
+                                            {{ dur['label'] }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge rounded-pill px-2 py-1 {{ dur['badge_class'] }}" style="font-size: 0.7rem;" title="Bắt đầu: {{ w['work_date'] }}">
+                                            {{ dur['label'] }}
+                                        </span>
+                                    {% endif %}
                                 </td>
                                 <td class="text-center pe-3">
                                     <div class="d-flex justify-content-center gap-1">
@@ -2810,12 +2671,12 @@
                                                 data-priority="{{ w['priority'] }}"
                                                 data-status="{{ w['status'] }}"
                                                 onclick="openEditWorklogModal(this)" title="Sửa công việc & ghi chú">
-                                            ✏️ Sửa
+                                            Sửa
                                         </button>
                                         <form method="POST" action="{{ url_for('delete_worklog', log_id=w['id']) }}" class="m-0"
                                               onsubmit="return confirm('Bạn có chắc chắn muốn xóa công việc này khỏi Nhật ký?');">
                                             <button type="submit" class="btn btn-outline-danger btn-sm rounded-2 px-2 py-1 fw-bold" style="font-size: 0.74rem;" title="Xóa">
-                                                🗑️
+                                                Xóa
                                             </button>
                                         </form>
                                     </div>
@@ -2835,7 +2696,7 @@
                     </div>
                 {% endif %}
                 {% for w in worklog_data['records'] %}
-                {% set cat_info = cat_badge_map.get(w['category'], ('📋 Khác', '#F1F5F9', '#334155')) %}
+                {% set cat_info = cat_badge_map.get(w['category'], ('Khác', '#F1F5F9', '#334155')) %}
                 <div class="mobile-action-card admin-list-item-worklogs"
                      data-category="{{ w['category'] }}"
                      data-status="{{ w['status'] }}"
@@ -2867,18 +2728,32 @@
                     </div>
 
                     <div class="wl-note-box mb-2">
-                        <strong>📌 Ghi chú:</strong> {{ w['notes'] if (w['notes'] and w['notes'].strip()) else 'Chưa có ghi chú' }}
+                        <strong>Ghi chú:</strong> {{ w['notes'] if (w['notes'] and w['notes'].strip()) else '—' }}
+                    </div>
+
+                    {% set dur = w['duration_info'] %}
+                    <div class="d-flex align-items-center justify-content-between mb-2 p-1 px-2 rounded-2 bg-light border small">
+                        <span class="text-muted fw-semibold" style="font-size: 0.75rem;">Số ngày xử lý:</span>
+                        {% if w['status'] == 'completed' %}
+                            <span class="badge rounded-pill px-2 py-1 fw-bold {{ dur['badge_class'] }}" style="font-size: 0.72rem;">
+                                {{ dur['label'] }}
+                            </span>
+                        {% else %}
+                            <span class="badge rounded-pill px-2 py-1 {{ dur['badge_class'] }}" style="font-size: 0.7rem;">
+                                {{ dur['label'] }}
+                            </span>
+                        {% endif %}
                     </div>
 
                     <div class="d-flex justify-content-between align-items-center pt-2 border-top gap-2">
                         <form method="POST" action="{{ url_for('toggle_worklog_status', log_id=w['id']) }}" class="m-0">
-                            {% if w['status'] == 'completed' %}
-                                <button type="submit" class="btn btn-success btn-sm rounded-pill px-3 fw-bold" style="font-size: 0.74rem;">✅ Hoàn thành</button>
-                            {% elif w['status'] == 'in_progress' %}
-                                <button type="submit" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold" style="font-size: 0.74rem;">🔄 Đang xử lý</button>
-                            {% else %}
-                                <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-3 fw-bold text-dark" style="font-size: 0.74rem;">⏳ Chờ làm</button>
-                            {% endif %}
+                            <select name="status"
+                                    class="form-select form-select-sm rounded-pill fw-bold shadow-none"
+                                    style="font-size: 0.75rem; min-width: 125px; cursor: pointer; {% if w['status'] == 'completed' %}background-color: #DCFCE7; color: #15803D; border-color: #86EFAC;{% else %}background-color: #F0FDFA; color: #0D9488; border-color: #99F6E4;{% endif %}"
+                                    onchange="this.form.submit()">
+                                <option value="in_progress" {% if w['status'] != 'completed' %}selected{% endif %}>Đang xử lý</option>
+                                <option value="completed" {% if w['status'] == 'completed' %}selected{% endif %}>Hoàn thành</option>
+                            </select>
                         </form>
                         <div class="d-flex gap-1">
                             <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold"
@@ -2893,12 +2768,12 @@
                                     data-priority="{{ w['priority'] }}"
                                     data-status="{{ w['status'] }}"
                                     onclick="openEditWorklogModal(this)">
-                                ✏️ Sửa
+                                Sửa
                             </button>
                             <form method="POST" action="{{ url_for('delete_worklog', log_id=w['id']) }}" class="m-0"
                                   onsubmit="return confirm('Xóa công việc này khỏi Nhật ký?');">
                                 <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3" style="font-size: 0.74rem;">
-                                    🗑️ Xóa
+                                    Xóa
                                 </button>
                             </form>
                         </div>
@@ -2909,7 +2784,7 @@
         </div>
 
         <!-- ===================================================== -->
-        <!-- PHÂN KHU 2: 🚀 CHECKLIST DEPLOY 8 PHÒNG MÁY (SOP 23 BƯỚC) -->
+        <!-- PHÂN KHU 2: CHECKLIST DEPLOY 8 PHÒNG MÁY (SOP 23 BƯỚC) -->
         <!-- ===================================================== -->
         <div id="wlDeploySection" class="{% if wl_subview != 'deploy' %}d-none{% endif %}">
 
@@ -2917,7 +2792,7 @@
             <div class="card border-0 shadow-sm rounded-4 p-3 mb-3 bg-white">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div class="d-flex flex-wrap align-items-center gap-2">
-                        <span class="fw-bold text-primary small">🎯 ĐỢT DEPLOY / HỌC KỲ:</span>
+                        <span class="fw-bold text-primary small">ĐỢT DEPLOY / HỌC KỲ:</span>
                         <select id="deployCampaignSelect" class="form-select form-select-sm fw-bold border-primary-subtle"
                                 style="min-width: 260px; color: #0F2942;" onchange="changeDeployCampaign(this.value)">
                             {% for c_name in deploy_data['campaigns'] %}
@@ -2928,14 +2803,14 @@
                         </select>
                         <button type="button" class="btn btn-outline-primary btn-sm fw-bold rounded-3"
                                 data-bs-toggle="modal" data-bs-target="#addDeployCampaignModal">
-                            ➕ Tạo đợt mới
+                            + Tạo đợt mới
                         </button>
                         {% if deploy_data['campaigns']|length > 1 %}
                         <form action="{{ url_for('delete_deploy_campaign') }}" method="POST" class="m-0"
                               onsubmit="return confirm('Bạn có chắc chắn muốn xóa đợt triển khai «{{ deploy_data['selected_campaign'] }}» không?');">
                             <input type="hidden" name="campaign_name" value="{{ deploy_data['selected_campaign'] }}">
                             <button type="submit" class="btn btn-outline-danger btn-sm fw-bold rounded-3" title="Xóa đợt triển khai đang chọn">
-                                🗑️ Xóa đợt này
+                                Xóa đợt này
                             </button>
                         </form>
                         {% endif %}
@@ -2952,12 +2827,12 @@
             <div class="card border-0 shadow-sm rounded-4 p-3 mb-3 bg-white">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                     <span class="fw-bold small" style="color: #0F2942;">
-                        🖥️ CHỌN PHÒNG MÁY ĐANG TRIỂN KHAI (BẤM VÀO PHÒNG ĐỂ TÍCH CHECKLIST TRỰC TIẾP):
+                        CHỌN PHÒNG MÁY ĐANG TRIỂN KHAI (BẤM VÀO PHÒNG ĐỂ TÍCH CHECKLIST TRỰC TIẾP):
                     </span>
                     <button type="button" class="btn btn-sm fw-bold py-1 px-2"
                             style="background-color: #F0FDFA; color: #0D9488; border: 1px solid #99F6E4; font-size: 0.75rem;"
                             onclick="copyPhaseAToAll8Rooms()">
-                        ⚡ Đánh dấu xong Phần A (Master Image) cho cả 8 phòng
+                        Đánh dấu xong Phần A (Master Image) cho cả 8 phòng
                     </button>
                 </div>
                 <div class="deploy-rooms-grid" id="deployRoomsGrid"></div>
@@ -2981,13 +2856,13 @@
                     </div>
                     <div class="d-flex flex-wrap gap-2">
                         <button type="button" class="btn btn-white bg-white border btn-sm fw-bold rounded-3" onclick="completePhaseACurrentRoom()">
-                            ⚡ Xong Phần A (Phòng này)
+                            Xong Phần A (Phòng này)
                         </button>
                         <button type="button" class="btn btn-success btn-sm fw-bold rounded-3" onclick="completeAllStepsCurrentRoom()">
-                            ✅ Hoàn tất 100% phòng này
+                            Hoàn tất 100% phòng này
                         </button>
                         <button type="button" class="btn btn-outline-danger btn-sm fw-bold rounded-3" onclick="resetCurrentRoomSteps()">
-                            🔄 Reset phòng này
+                            Reset phòng này
                         </button>
                     </div>
                 </div>
@@ -3000,7 +2875,7 @@
                     <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 bg-white">
                         <div class="p-3 text-white d-flex justify-content-between align-items-center" style="background-color: #0F2942;">
                             <div class="fw-bold small">
-                                🅰️ PHẦN A: RECOVERY ACRONIS LÊN 2 MÁY MẪU (SV &amp; GV) &amp; TẠO IMAGE
+                                PHẦN A: RECOVERY ACRONIS LÊN 2 MÁY MẪU (SV &amp; GV) &amp; TẠO IMAGE
                             </div>
                             <span class="badge rounded-pill" style="background: rgba(255,255,255,0.2); color: #2DD4BF;" id="deployPhaseACountBadge">0/11</span>
                         </div>
@@ -3013,7 +2888,7 @@
                     <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 bg-white">
                         <div class="p-3 text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%);">
                             <div class="fw-bold small">
-                                🅱️ PHẦN B: DEPLOY CLONEZILLA LITE SERVER &amp; CẤU HÌNH MÁY GV
+                                PHẦN B: DEPLOY CLONEZILLA LITE SERVER &amp; CẤU HÌNH MÁY GV
                             </div>
                             <span class="badge rounded-pill" style="background: rgba(255,255,255,0.2); color: #99F6E4;" id="deployPhaseBCountBadge">0/12</span>
                         </div>
@@ -3027,7 +2902,7 @@
                 <div class="row g-2 align-items-center">
                     <div class="col-12 col-md-auto">
                         <label class="fw-bold small mb-0" style="color: #92400E;">
-                            📌 Ghi chú triển khai <span id="deployNoteRoomLabel">Phòng 5.1</span>:
+                            Ghi chú triển khai <span id="deployNoteRoomLabel">Phòng 5.1</span>:
                         </label>
                     </div>
                     <div class="col-12 col-md">
@@ -3037,10 +2912,10 @@
                     </div>
                     <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
                         <button type="button" class="btn btn-warning btn-sm fw-bold text-dark rounded-3 px-3" onclick="saveCurrentRoomDeployState(true)">
-                            💾 Lưu ghi chú
+                            Lưu ghi chú
                         </button>
                         <button type="button" class="btn btn-sm fw-bold text-white rounded-3 px-3" style="background-color: #0F2942;" onclick="logCurrentRoomDeployToWorklog()">
-                            📝 Ghi kết quả vào Nhật ký công việc
+                            Ghi kết quả vào Nhật ký công việc
                         </button>
                     </div>
                 </div>
@@ -3059,7 +2934,7 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
             <div class="modal-header border-0 text-white" style="background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%);">
-                <h5 class="modal-title fw-bold" id="worklogModalTitle">➕ Thêm Công Việc Thường Nhật Mới</h5>
+                <h5 class="modal-title fw-bold" id="worklogModalTitle">Thêm Công Việc Thường Nhật Mới</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="worklogForm" action="{{ url_for('add_worklog') }}" method="POST">
@@ -3072,18 +2947,18 @@
                         <div class="col-6 col-md-4">
                             <label class="form-label text-dark small fw-bold mb-1">2. Ca làm việc *</label>
                             <select class="form-select border-0 bg-white shadow-sm fw-semibold" name="shift_name" id="wl_shift_name">
-                                <option value="Ca sáng">🌅 Ca sáng (07:30 - 11:30)</option>
-                                <option value="Ca chiều">🌇 Ca chiều (13:00 - 17:00)</option>
-                                <option value="Cả ngày">☀️ Cả ngày</option>
-                                <option value="Ngoài giờ / OT">🌙 Ngoài giờ / Tăng ca</option>
+                                <option value="Ca sáng">Ca sáng (07:30 - 11:30)</option>
+                                <option value="Ca chiều">Ca chiều (13:00 - 17:00)</option>
+                                <option value="Cả ngày">Cả ngày</option>
+                                <option value="Ngoài giờ / OT">Ngoài giờ / Tăng ca</option>
                             </select>
                         </div>
                         <div class="col-6 col-md-4">
                             <label class="form-label text-dark small fw-bold mb-1">3. Mức độ ưu tiên</label>
                             <select class="form-select border-0 bg-white shadow-sm fw-semibold" name="priority" id="wl_priority">
-                                <option value="normal">🟢 Bình thường</option>
-                                <option value="high">⚡ Ưu tiên cao</option>
-                                <option value="urgent">🔥 Khẩn cấp</option>
+                                <option value="normal">Bình thường</option>
+                                <option value="high">Ưu tiên cao</option>
+                                <option value="urgent">Khẩn cấp</option>
                             </select>
                         </div>
                     </div>
@@ -3092,20 +2967,19 @@
                         <div class="col-12 col-md-7">
                             <label class="form-label text-dark small fw-bold mb-1">4. Danh mục công việc *</label>
                             <select class="form-select border-0 bg-white shadow-sm fw-semibold" name="category" id="wl_category">
-                                <option value="server_net">🌐 Quản lý Server, Cấu hình Router &amp; Switch</option>
-                                <option value="vmware">💿 Kiểm thử OS / Phần mềm trên VMware &amp; Deploy Image</option>
-                                <option value="support">🛠️ Hỗ trợ Giảng viên (Phần mềm &amp; Phần cứng)</option>
-                                <option value="booking">📩 Xử lý đăng ký mượn phòng máy</option>
-                                <option value="process">⚙️ Cải tiến quy trình quản lý phòng máy</option>
-                                <option value="office">📁 Công việc văn phòng &amp; Hành chính khác</option>
+                                <option value="server_net">Quản lý Server, Cấu hình Router &amp; Switch</option>
+                                <option value="vmware">Kiểm thử OS / Phần mềm trên VMware &amp; Deploy Image</option>
+                                <option value="support">Hỗ trợ Giảng viên (Phần mềm &amp; Phần cứng)</option>
+                                <option value="booking">Xử lý đăng ký mượn phòng máy</option>
+                                <option value="process">Cải tiến quy trình quản lý phòng máy</option>
+                                <option value="office">Công việc văn phòng &amp; Hành chính khác</option>
                             </select>
                         </div>
                         <div class="col-12 col-md-5">
                             <label class="form-label text-dark small fw-bold mb-1">5. Trạng thái xử lý *</label>
                             <select class="form-select border-0 bg-white shadow-sm fw-semibold" name="status" id="wl_status">
-                                <option value="in_progress">🔄 Đang xử lý / Theo dõi</option>
-                                <option value="completed">✅ Đã hoàn thành</option>
-                                <option value="pending">⏳ Chờ thực hiện</option>
+                                <option value="in_progress">Đang xử lý</option>
+                                <option value="completed">Hoàn thành</option>
                             </select>
                         </div>
                     </div>
@@ -3132,7 +3006,7 @@
                     <!-- Cột Ghi chú bổ sung -->
                     <div class="p-3 rounded-3" style="background-color: #FFFBEB; border: 1.5px solid #FCD34D;">
                         <label class="form-label small fw-bold mb-1" style="color: #92400E;">
-                            📌 8. Cột Ghi chú bổ sung (Thông số kỹ thuật, IP/Port, đường dẫn file Image, lưu ý bàn giao...)
+                            8. Cột Ghi chú bổ sung (Thông số kỹ thuật, IP/Port, đường dẫn file Image, lưu ý bàn giao...)
                         </label>
                         <textarea class="form-control bg-white border-warning" name="notes" id="wl_notes" rows="2"
                                   placeholder="VD: Đã backup file Acronis vào NAS, máy số 12 cần thay cáp mạng, pass ổ Z: giaovien..."></textarea>
@@ -3141,7 +3015,7 @@
                 <div class="modal-footer bg-white border-0 py-3">
                     <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Hủy</button>
                     <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" id="worklogSubmitBtn">
-                        💾 Lưu vào Nhật ký công việc
+                        Lưu vào Nhật ký công việc
                     </button>
                 </div>
             </form>
@@ -3154,7 +3028,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow rounded-4">
             <div class="modal-header text-white border-0" style="background-color: #0F2942;">
-                <h6 class="modal-title fw-bold">🚀 Khởi Tạo Đợt Deploy Hệ Thống Mới</h6>
+                <h6 class="modal-title fw-bold">Khởi Tạo Đợt Deploy Hệ Thống Mới</h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form action="{{ url_for('add_deploy_campaign') }}" method="POST">
@@ -3168,7 +3042,7 @@
                 </div>
                 <div class="modal-footer bg-white border-0">
                     <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Hủy</button>
-                    <button type="submit" class="btn btn-sm btn-primary fw-bold px-3">🚀 Tạo đợt mới</button>
+                    <button type="submit" class="btn btn-sm btn-primary fw-bold px-3">Tạo đợt mới</button>
                 </div>
             </form>
         </div>
@@ -3245,20 +3119,10 @@
                     <!-- 5. Trạng thái -->
                     <div class="mb-2">
                         <label class="form-label text-muted small fw-bold d-block">Trạng thái ca trực *</label>
-                        <div class="d-flex gap-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="status" id="ot_status_pending" value="Pending" checked>
-                                <label class="form-check-label small fw-semibold" for="ot_status_pending">
-                                    <span class="text-warning">⏳ Chưa tới hạn</span> (Lên lịch trước)
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="status" id="ot_status_completed" value="Completed">
-                                <label class="form-check-label small fw-semibold" for="ot_status_completed">
-                                    <span class="text-success">✅ Đã làm</span> (Đã hoàn thành)
-                                </label>
-                            </div>
-                        </div>
+                        <select class="form-select border-0 py-2 shadow-none fw-semibold" name="status" required>
+                            <option value="Pending">⏳ Chưa tới hạn (Lên lịch trước)</option>
+                            <option value="Completed">✅ Đã làm (Đã hoàn thành)</option>
+                        </select>
                     </div>
                 </div>
                 <div class="modal-footer bg-white border-0 py-3">
@@ -4188,8 +4052,8 @@
     function openAddWorklogModal() {
         const form = document.getElementById('worklogForm');
         form.action = "{{ url_for('add_worklog') }}";
-        document.getElementById('worklogModalTitle').textContent = '➕ Thêm Công Việc Thường Nhật Mới';
-        document.getElementById('worklogSubmitBtn').textContent = '💾 Lưu vào Nhật ký công việc';
+        document.getElementById('worklogModalTitle').textContent = 'Thêm Công Việc Thường Nhật Mới';
+        document.getElementById('worklogSubmitBtn').textContent = 'Lưu vào Nhật ký công việc';
 
         document.getElementById('wl_work_date').value = "{{ today_date_str }}";
         document.getElementById('wl_shift_name').value = 'Ca sáng';
@@ -4209,8 +4073,8 @@
         const id = btnEl.getAttribute('data-id');
         const form = document.getElementById('worklogForm');
         form.action = `/admin/worklog/edit/${id}`;
-        document.getElementById('worklogModalTitle').textContent = `✏️ Chỉnh Sửa Công Việc #${id}`;
-        document.getElementById('worklogSubmitBtn').textContent = '💾 Lưu Cập Nhật';
+        document.getElementById('worklogModalTitle').textContent = `Chỉnh Sửa Công Việc #${id}`;
+        document.getElementById('worklogSubmitBtn').textContent = 'Lưu Cập Nhật';
 
         document.getElementById('wl_work_date').value = btnEl.getAttribute('data-date') || "{{ today_date_str }}";
         document.getElementById('wl_shift_name').value = btnEl.getAttribute('data-shift') || 'Ca sáng';
@@ -4309,7 +4173,7 @@
             return `
                 <div class="deploy-room-card ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}" onclick="selectDeployRoom('${r}')">
                     <div class="fw-bold" style="color: #0F2942; font-size: 0.86rem;">
-                        ${isDone ? '✅ ' : ''}Phòng ${r}
+                        Phòng ${r}
                     </div>
                     <div class="fw-bold mt-1" style="font-size: 0.74rem; color: ${isDone ? '#15803D' : (isActive ? '#0D9488' : '#64748B')};">
                         ${doneCount}/${totalSteps} bước (${pct}%)
@@ -4324,7 +4188,7 @@
 
         const summaryBadge = document.getElementById('overallDeploySummaryBadge');
         if (summaryBadge) {
-            summaryBadge.textContent = `🏆 Tổng tiến độ đợt này: ${completedRoomsCount} / 8 phòng hoàn tất 100%`;
+            summaryBadge.textContent = `Tổng tiến độ đợt này: ${completedRoomsCount} / 8 phòng hoàn tất 100%`;
         }
 
         const curState = deployRoomStateMap[activeDeployRoom] || { checked: [], notes: '', updated_at: '' };
@@ -4553,15 +4417,70 @@
         }
     };
 
-    function openStatusReplyModal(btnEl) {
-        const actionUrl = btnEl.getAttribute('data-action') || '';
-        const reqType = btnEl.getAttribute('data-type') || 'booking';
-        const status = btnEl.getAttribute('data-status') || 'Processing';
-        const statusLabel = btnEl.getAttribute('data-status-label') || 'Cập nhật trạng thái';
-        const userName = btnEl.getAttribute('data-user') || 'Giảng viên';
-        const userEmail = btnEl.getAttribute('data-email') || '';
-        const summary = btnEl.getAttribute('data-summary') || '';
-        const existingNote = btnEl.getAttribute('data-note') || '';
+    const STATUS_DROPDOWN_LABELS = {
+        booking: {
+            Pending: '⏳ Chờ xử lý yêu cầu mượn phòng',
+            Processing: '👀 Đã tiếp nhận yêu cầu mượn phòng',
+            Approved: '✅ Duyệt yêu cầu mượn phòng',
+            Rejected: '❌ Từ chối yêu cầu mượn phòng'
+        },
+        issue: {
+            Pending: '⏳ Chờ xử lý sự cố',
+            Processing: '👀 Đã tiếp nhận báo cáo sự cố',
+            Resolved: '✅ Đã xử lý / Đã duyệt sự cố'
+        },
+        cancellation: {
+            Pending: '⏳ Chờ xử lý thông báo nghỉ',
+            Processing: '👀 Đã tiếp nhận thông báo nghỉ gấp',
+            Approved: '✅ Xác nhận & Duyệt thông báo nghỉ'
+        }
+    };
+
+    function handleScheduleDoorDropdownChange(selectEl) {
+        const curVal = selectEl.getAttribute('data-current') || 'open';
+        const newVal = selectEl.value;
+        const subject = selectEl.getAttribute('data-subject') || 'Môn học';
+        const room = selectEl.getAttribute('data-room') || '';
+
+        if (newVal === 'locked') {
+            if (!confirm(`Đánh dấu môn "${subject}" (P.${room}) kết thúc sớm? Hệ thống sẽ báo Khóa cửa phòng và giải phóng phòng trống.`)) {
+                selectEl.value = curVal;
+                return;
+            }
+        }
+        selectEl.form.submit();
+    }
+
+    function handleAdminStatusDropdownChange(selectEl) {
+        const actionUrl = selectEl.getAttribute('data-action') || '';
+        const reqType = selectEl.getAttribute('data-type') || 'booking';
+        const prevStatus = selectEl.getAttribute('data-current') || 'Pending';
+        const status = selectEl.value;
+        const userName = selectEl.getAttribute('data-user') || 'Giảng viên';
+        const userEmail = selectEl.getAttribute('data-email') || '';
+        const summary = selectEl.getAttribute('data-summary') || '';
+        const existingNote = selectEl.getAttribute('data-note') || '';
+
+        // Nếu chọn về Chờ xử lý (Pending), gửi form cập nhật trực tiếp không cần mở modal trả kết quả email
+        if (status === 'Pending') {
+            const tempForm = document.createElement('form');
+            tempForm.method = 'POST';
+            tempForm.action = actionUrl;
+            const stInput = document.createElement('input');
+            stInput.type = 'hidden';
+            stInput.name = 'status';
+            stInput.value = 'Pending';
+            tempForm.appendChild(stInput);
+            document.body.appendChild(tempForm);
+            tempForm.submit();
+            return;
+        }
+
+        // Khôi phục lại giá trị hiển thị của select phòng trường hợp Admin đóng Modal hủy thao tác
+        selectEl.value = prevStatus;
+
+        const typeLabels = STATUS_DROPDOWN_LABELS[reqType] || {};
+        const statusLabel = typeLabels[status] || 'Cập nhật trạng thái';
 
         currentReplyContext = { actionUrl, reqType, status, statusLabel, userName, userEmail, summary };
 
