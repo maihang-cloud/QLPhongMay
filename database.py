@@ -143,6 +143,7 @@ def init_db():
     cursor.execute("UPDATE schedules SET num_weeks = 15 WHERE num_weeks IS NULL")
     cursor.execute("UPDATE schedules SET is_ended_early = 0 WHERE is_ended_early IS NULL")
     cursor.execute("UPDATE schedules SET study_period = '28/09/2026' WHERE study_period LIKE '2026-09-28%'")
+    cursor.execute("UPDATE work_logs SET status = 'in_progress' WHERE status = 'pending'")
 
     # 6. Bảng lưu cấu hình hệ thống & Trạng thái mạng 8 phòng máy (B42Lab NetAgent)
     cursor.execute('''

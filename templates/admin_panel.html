@@ -698,9 +698,9 @@
         <button class="nav-link {% if active_tab == 'worklog' %}active{% endif %}" id="worklog-tab" data-bs-toggle="tab" data-bs-target="#worklog" type="button" role="tab">
             <span class="tab-icon">📋</span>
             <span class="fw-bold">Nhật ký Công việc &amp; 🚀 Checklist Deploy 8 Phòng Máy</span>
-            {% if worklog_data['in_progress_count'] + worklog_data['pending_count'] > 0 %}
+            {% if worklog_data['in_progress_count'] > 0 %}
                 <span class="badge rounded-pill bg-warning text-dark ms-1" style="font-size: 0.7rem;">
-                    {{ worklog_data['in_progress_count'] + worklog_data['pending_count'] }} đang làm
+                    {{ worklog_data['in_progress_count'] }} đang làm
                 </span>
             {% endif %}
         </button>
@@ -2442,7 +2442,7 @@
                 <div class="col-6 col-md-4">
                     <div class="dash-kpi-card" style="border-left: 4px solid #0D9488;">
                         <div class="dash-kpi-title">ĐANG XỬ LÝ / THEO DÕI</div>
-                        <div class="dash-kpi-val text-primary">{{ worklog_data['in_progress_count'] + worklog_data['pending_count'] }} <span class="fs-6 fw-semibold text-muted">việc</span></div>
+                        <div class="dash-kpi-val text-primary">{{ worklog_data['in_progress_count'] }} <span class="fs-6 fw-semibold text-muted">việc</span></div>
                         <div class="dash-kpi-sub">Đang kiểm thử VMware, cấu hình mạng...</div>
                     </div>
                 </div>

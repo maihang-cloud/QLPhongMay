@@ -1418,12 +1418,11 @@ def admin_panel():
         'staff_count': len(ot_staff_set)
     }
 
-    # 6. Dữ liệu Tab 📋 Nhật ký công việc (Work Log) & 🚀 Checklist Deploy 8 Phòng Máy (SOP)
+    # 6. Dữ liệu Tab Nhật ký công việc (Work Log) & Checklist Deploy 8 Phòng Máy (SOP)
     all_work_logs = conn.execute("SELECT * FROM work_logs ORDER BY work_date DESC, id DESC").fetchall()
     wl_total = len(all_work_logs)
     wl_completed = sum(1 for r in all_work_logs if r['status'] == 'completed')
-    wl_in_progress = sum(1 for r in all_work_logs if r['status'] == 'in_progress')
-    wl_pending = sum(1 for r in all_work_logs if r['status'] == 'pending')
+    wl_in_progress = wl_total - wl_completed
 
     enriched_work_logs = []
     for r in all_work_logs:
@@ -1435,13 +1434,11 @@ def admin_panel():
         'records': enriched_work_logs,
         'total_count': wl_total,
         'completed_count': wl_completed,
-        'in_progress_count': wl_in_progress,
-        'pending_count': wl_pending
+        'in_progress_count': wl_in_progress
     }
 
     # Chuẩn bị dữ liệu Checklist Deploy 8 Phòng Máy
     default_campaign = "HK1 (2026-2027) - Deploy Hệ thống chuẩn"
-    conn.execute("DELETE FROM deployment_checklists WHERE campaign_name LIKE '%?%'")
     camp_rows = conn.execute(
         "SELECT campaign_name FROM deployment_checklists GROUP BY campaign_name ORDER BY MAX(id) DESC"
     ).fetchall()
@@ -1980,8 +1977,7 @@ WORKLOG_CATEGORY_LABELS = {
 
 WORKLOG_STATUS_LABELS = {
     'completed': 'Hoàn thành',
-    'in_progress': 'Đang xử lý',
-    'pending': 'Chờ thực hiện'
+    'in_progress': 'Đang xử lý'
 }
 
 WORKLOG_PRIORITY_LABELS = {
@@ -2841,13 +2837,11 @@ def import_schedule():
 @app.route('/update_issue_status/<int:issue_id>', methods=['POST'])
 @admin_required
 def update_issue_status(issue_id):
-    new_status = request.form.get('status')
+    new_status = (request.form.get('status') or 'Pending').strip()
+    if new_status == 'Approved':
+        new_status = 'Resolved'
     admin_note = request.form.get('admin_note', '').strip()
-    if new_status in ['Pending', 'Processing', 'Resolved', 'Approved', 'Đã tiếp nhận', 'Đã khắc phục', 'Đã duyệt']:
-        if new_status == 'Đã tiếp nhận':
-            new_status = 'Processing'
-        elif new_status in ('Đã khắc phục', 'Đã duyệt', 'Approved'):
-            new_status = 'Resolved'
+    if new_status in ('Pending', 'Processing', 'Resolved'):
         conn = get_db_connection()
         iss = conn.execute("SELECT * FROM issue_reports WHERE id = ?", (issue_id,)).fetchone()
         email_suffix = ""
