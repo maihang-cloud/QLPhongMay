@@ -74,7 +74,7 @@ ADMIN_EMAILS = [
 ]
 
 # Tùy chọn: Giới hạn tên miền email được phép đăng nhập (Để danh sách rỗng [] nếu cho phép mọi tài khoản Google)
-ALLOWED_EMAIL_DOMAINS = ["hcmus.edu.vn"]  # Ví dụ: ["hcmus.edu.vn", "student.hcmus.edu.vn"]
+ALLOWED_EMAIL_DOMAINS = ["hcmus.edu.vn", "gmail.com"]
 
 
 def get_current_user_email():
