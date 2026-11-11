@@ -270,7 +270,15 @@
                             <a class="nav-link fw-bold" style="color: #2DD4BF !important;" href="{{ url_for('admin_panel') }}"><i class="bi bi-shield-lock me-1"></i>Admin Dashboard</a>
                             <a class="nav-link small" style="color: #FCA5A5 !important;" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-1"></i>Đăng xuất ({{ current_user_email }})</a>
                         {% elif current_user_email %}
-                            <span class="nav-link text-white-50 small py-1"><i class="bi bi-person-circle me-1"></i>{{ current_user_name or current_user_email }}</span>
+                            <span class="nav-link text-white-50 small py-1">
+                                <i class="bi bi-person-circle me-1"></i>{{ current_user_name or current_user_email }}
+                                {% if not is_user_verified %}
+                                    <span class="badge bg-warning text-dark ms-1" style="font-size: 0.65rem;">Chưa kích hoạt</span>
+                                {% endif %}
+                            </span>
+                            {% if not is_user_verified %}
+                                <a class="nav-link small fw-bold text-warning" href="{{ url_for('verify_passcode_page') }}"><i class="bi bi-key-fill me-1"></i>Nhập Passcode Giảng viên</a>
+                            {% endif %}
                             <a class="nav-link small" style="color: #FCA5A5 !important;" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-1"></i>Đăng xuất</a>
                         {% else %}
                             <a class="nav-link fw-bold" style="color: #2DD4BF !important;" href="{{ url_for('login_page') }}"><i class="bi bi-google me-1"></i>Đăng nhập</a>
@@ -287,9 +295,23 @@
                     <div class="dropdown d-inline-block">
                         <button class="btn btn-header-user btn-sm rounded-pill fw-bold dropdown-toggle px-3 text-nowrap" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-person-circle me-1"></i>{{ current_user_name or current_user_email }}
+                            {% if not is_user_verified %}
+                                <span class="badge bg-warning text-dark ms-1" style="font-size: 0.65rem;">Chưa kích hoạt</span>
+                            {% endif %}
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2" aria-labelledby="userMenu">
-                            <li class="px-3 py-1 text-muted small border-bottom">{{ current_user_email }}</li>
+                            <li class="px-3 py-1 text-muted small border-bottom">
+                                {{ current_user_email }}
+                                {% if is_user_verified %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle d-block mt-1 py-1"><i class="bi bi-check-circle me-1"></i>Giảng viên đã xác minh</span>
+                                {% else %}
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle d-block mt-1 py-1"><i class="bi bi-exclamation-circle me-1"></i>Chưa nhập Passcode</span>
+                                {% endif %}
+                            </li>
+                            {% if not is_user_verified %}
+                            <li><a class="dropdown-item fw-bold text-primary mt-1" href="{{ url_for('verify_passcode_page') }}"><i class="bi bi-key-fill me-2 text-warning"></i>Nhập Passcode Giảng viên</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
                             {% if current_user_email in ADMIN_EMAILS %}
                             <li><a class="dropdown-item mt-1" href="{{ url_for('admin_panel') }}"><i class="bi bi-shield-lock me-2 text-primary"></i>Trang Quản trị</a></li>
                             <li><hr class="dropdown-divider"></li>
@@ -303,6 +325,16 @@
             </div>
         </div>
     </nav>
+
+    {% if current_user_email and not is_user_verified %}
+    <div class="alert alert-warning mb-0 text-center py-2 rounded-0 border-0 small d-flex align-items-center justify-content-center gap-2" style="background-color: #FEF3C7; color: #92400E;">
+        <i class="bi bi-shield-exclamation text-warning fs-6"></i>
+        <span>Tài khoản cá nhân (<strong>{{ current_user_email }}</strong>) chưa kích hoạt tư cách Giảng viên.</span>
+        <a href="{{ url_for('verify_passcode_page') }}" class="btn btn-warning btn-sm py-0 px-2.5 rounded-pill fw-bold text-dark text-decoration-none shadow-sm" style="font-size: 0.75rem;">
+            <i class="bi bi-key-fill me-1"></i>Nhập Passcode ngay
+        </a>
+    </div>
+    {% endif %}
 
     <!-- FLASH MESSAGES (As Toasts) -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3">

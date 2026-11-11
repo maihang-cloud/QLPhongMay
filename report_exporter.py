@@ -54,25 +54,21 @@ def get_schedule_ca_slots(start_period, end_period):
         return [1]
 
     slots = []
-    # Xét buổi sáng (Tiết 1 -> 5)
+    # Xét buổi sáng (Tiết 1 -> 5, ranh giới tách 2 ca tại tiết 3.5)
     if start < 5.5:
-        if start <= 1.5 and end >= 4.5:
+        if start < 3.5 and end > 3.5:
             slots.extend([1, 2])
         elif start >= 3.0:
             slots.append(2)
         else:
             slots.append(1)
 
-    # Xét buổi chiều (Tiết 6 -> 10)
+    # Xét buổi chiều (Tiết 6 -> 10, ranh giới tách 2 ca tại tiết 8.5)
     if end > 5.5:
-        if start <= 6.5 and end >= 9.5:
+        if start < 8.5 and end > 8.5:
             slots.extend([3, 4])
         elif start >= 8.0:
             slots.append(4)
-        elif start >= 5.5:
-            slots.append(3)
-        elif end >= 8.5:
-            slots.extend([3, 4])
         else:
             slots.append(3)
 

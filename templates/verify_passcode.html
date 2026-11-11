@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Xác minh Giảng viên - B42Lab{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 72vh;">
+    <div class="col-md-8 col-lg-6 col-xl-5">
+        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+            <div class="card-header text-white text-center py-4 border-0" style="background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%);">
+                <div class="d-inline-flex align-items-center justify-content-center bg-white bg-opacity-10 rounded-circle mb-3" style="width: 70px; height: 70px;">
+                    <i class="bi bi-shield-check display-6 text-white"></i>
+                </div>
+                <h4 class="fw-bold mb-1">Xác Minh Tư Cách Giảng Viên</h4>
+                <p class="mb-0 opacity-75 small">Bảo mật hệ thống Phòng máy tính B4.2 - Phòng QTTB</p>
+            </div>
+
+            <div class="card-body p-4 p-md-5">
+                <div class="text-center mb-4">
+                    <span class="badge bg-light text-dark border px-3 py-2 rounded-pill small fw-semibold">
+                        <i class="bi bi-google text-danger me-1"></i>{{ user_email }}
+                    </span>
+                    <h6 class="fw-bold mt-2 text-dark">Xin chào Quý Thầy/Cô {{ user_name }}</h6>
+                </div>
+
+                <div class="alert alert-info border-0 rounded-3 small mb-4" style="background-color: #F0FDF4; border-left: 4px solid #10B981 !important; color: #065F46;">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-info-circle-fill fs-5 flex-shrink-0 text-success mt-1"></i>
+                        <div>
+                            <strong>Xác thực tài khoản cá nhân:</strong><br>
+                            Để phòng tránh người lạ spam đặt phòng máy và bảo vệ an toàn dữ liệu, Quý Thầy/Cô sử dụng <code>@gmail.com</code> vui lòng nhập <strong>Mã Passcode Giảng viên</strong> được Phòng QTTB cung cấp.
+                            <div class="mt-1 text-muted" style="font-size: 0.78rem;">
+                                💡 Quý Thầy/Cô chỉ cần nhập <strong>1 lần duy nhất</strong>. Hệ thống sẽ tự động ghi nhớ tài khoản cho mọi lần truy cập sau.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if error_message %}
+                <div class="alert alert-danger border-0 rounded-3 small mb-4 d-flex align-items-center gap-2">
+                    <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0"></i>
+                    <div>{{ error_message }}</div>
+                </div>
+                {% endif %}
+
+                <form method="POST" action="{{ url_for('verify_passcode_page') }}">
+                    <input type="hidden" name="next" value="{{ next_url }}">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark small mb-1" for="teacherPasscodeInput">
+                            <i class="bi bi-key-fill text-teal me-1" style="color: #0D9488;"></i>Mã Passcode Giảng viên:
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0 text-muted">
+                                <i class="bi bi-lock"></i>
+                            </span>
+                            <input type="password" 
+                                   class="form-control bg-white border-start-0 border-end-0 fw-semibold font-monospace" 
+                                   id="teacherPasscodeInput" 
+                                   name="passcode" 
+                                   placeholder="Nhập passcode admin đã cung cấp" 
+                                   title="Nhập passcode admin đã cung cấp" 
+                                   required 
+                                   autofocus 
+                                   autocomplete="off">
+                            <button class="btn btn-outline-secondary border-start-0 bg-white" 
+                                    type="button" 
+                                    id="togglePasscodeBtn" 
+                                    onclick="togglePasscodeVisibility()" 
+                                    title="Ẩn / Hiện mã passcode">
+                                <i class="bi bi-eye" id="togglePasscodeIcon"></i>
+                            </button>
+                        </div>
+                        <div class="form-text text-muted small" style="font-size: 0.76rem;">
+                            Mã có phân biệt chữ hoa, chữ thường và ký tự đặc biệt.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100 rounded-pill fw-bold shadow-sm py-2.5 mt-3 d-flex align-items-center justify-content-center gap-2" style="background-color: #0D9488; border-color: #0D9488;">
+                        <i class="bi bi-check2-circle fs-5"></i>
+                        <span>Xác Minh &amp; Kích Hoạt Quyền</span>
+                    </button>
+                </form>
+
+                <div class="mt-4 p-3 rounded-3 bg-light border">
+                    <div class="fw-bold small text-dark mb-1">
+                        <i class="bi bi-question-circle text-primary me-1"></i>Chưa nhận được mã Passcode?
+                    </div>
+                    <div class="text-muted small" style="line-height: 1.5; font-size: 0.78rem;">
+                        Quý Thầy/Cô vui lòng liên hệ Bộ phận Kỹ thuật Phòng máy B4.2 để nhận mã Passcode giảng viên:
+                        <ul class="mb-0 ps-3 mt-1">
+                            <li><strong>Phòng trực:</strong> Phòng B4.2, Tòa nhà B - Cơ sở 2</li>
+                            <li><strong>Hotline:</strong> (028) 3835 4403 (Thầy Hân / Cô Hằng)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top small text-muted">
+                    <a href="{{ url_for('logout') }}" class="text-danger text-decoration-none">
+                        <i class="bi bi-box-arrow-right me-1"></i>Đăng xuất / Đổi tài khoản
+                    </a>
+                    <a href="{{ url_for('home_page') }}" class="text-secondary text-decoration-none">
+                        <i class="bi bi-house me-1"></i>Về Trang chủ
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePasscodeVisibility() {
+    const input = document.getElementById('teacherPasscodeInput');
+    const icon = document.getElementById('togglePasscodeIcon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+</script>
+{% endblock %}

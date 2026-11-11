@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}Đăng ký mượn phòng máy - Cơ sở 2{% endblock %}
 
 {% block content %}
@@ -926,6 +926,14 @@ function submitCart() {
     .then(data => {
         if (data.success) {
             window.location.href = data.redirect_url;
+        } else if (data.blocked) {
+            alert(data.message);
+            window.location.href = "{{ url_for('login_page') }}";
+        } else if (data.require_verification) {
+            alert(data.message);
+            window.location.href = "{{ url_for('verify_passcode_page') }}";
+        } else if (data.rate_limited) {
+            alert(data.message);
         } else {
             alert("Có lỗi xảy ra: " + data.message);
         }

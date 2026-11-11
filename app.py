@@ -91,24 +91,184 @@ def get_current_user_name():
     return name
 
 
+DEFAULT_TEACHER_PASSCODE = "QttB@2026"
+RATE_LIMIT_MAX_REQUESTS = 2
+RATE_LIMIT_WINDOW_SECONDS = 60
+
+
+def is_user_blocked(email=None, conn=None):
+    """Kiểm tra tài khoản email có nằm trong danh sách bị khóa vĩnh viễn (Block User) hay không."""
+    target_email = (email if email is not None else get_current_user_email() or '').strip().lower()
+    if not target_email:
+        return False
+    if target_email in [e.lower() for e in ADMIN_EMAILS]:
+        return False
+
+    close_after = False
+    if conn is None:
+        conn = get_db_connection()
+        close_after = True
+    row = conn.execute("SELECT id FROM blocked_users WHERE LOWER(email) = LOWER(?)", (target_email,)).fetchone()
+    if close_after:
+        conn.close()
+    return bool(row)
+
+
+def check_submission_rate_limit(email=None, conn=None):
+    """Giới hạn tốc độ gửi (Rate Limiting): Mỗi tài khoản chỉ được gửi tối đa 2 đơn trong vòng 1 phút (60 giây).
+    Trả về (allowed: bool, retry_after_seconds: int).
+    """
+    target_email = (email if email is not None else get_current_user_email() or '').strip().lower()
+    if not target_email:
+        return False, RATE_LIMIT_WINDOW_SECONDS
+
+    now_ts = time.time()
+    cutoff_ts = now_ts - RATE_LIMIT_WINDOW_SECONDS
+
+    close_after = False
+    if conn is None:
+        conn = get_db_connection()
+        close_after = True
+
+    # Dọn dẹp các log cũ quá 60 giây
+    conn.execute("DELETE FROM submission_rate_logs WHERE created_ts < ?", (cutoff_ts,))
+    conn.commit()
+
+    rows = conn.execute(
+        "SELECT created_ts FROM submission_rate_logs WHERE LOWER(email) = LOWER(?) AND created_ts >= ? ORDER BY created_ts ASC",
+        (target_email, cutoff_ts)
+    ).fetchall()
+
+    if close_after:
+        conn.close()
+
+    if len(rows) >= RATE_LIMIT_MAX_REQUESTS:
+        oldest_ts = float(rows[0]['created_ts'])
+        retry_after = max(1, int(round((oldest_ts + RATE_LIMIT_WINDOW_SECONDS) - now_ts)))
+        return False, retry_after
+
+    return True, 0
+
+
+def record_submission_rate_log(email=None, action_type='submit', conn=None):
+    """Ghi nhận 1 lượt gửi đơn vào bảng kiểm soát tần suất (Rate Limiting)."""
+    target_email = (email if email is not None else get_current_user_email() or '').strip().lower()
+    if not target_email:
+        return
+    close_after = False
+    if conn is None:
+        conn = get_db_connection()
+        close_after = True
+    conn.execute(
+        "INSERT INTO submission_rate_logs (email, action_type, created_ts) VALUES (?, ?, ?)",
+        (target_email, action_type, time.time())
+    )
+    if close_after:
+        conn.commit()
+        conn.close()
+
+
+def get_teacher_passcode(conn=None):
+    """Lấy mã passcode nội bộ dành cho Thầy/Cô dùng Gmail cá nhân."""
+    close_after = False
+    if conn is None:
+        conn = get_db_connection()
+        close_after = True
+    row = conn.execute("SELECT value FROM system_settings WHERE key = 'teacher_passcode'").fetchone()
+    if close_after:
+        conn.close()
+    return row['value'] if (row and row['value']) else DEFAULT_TEACHER_PASSCODE
+
+
+def is_current_user_verified(conn=None):
+    """Kiểm tra tài khoản hiện tại đã được xác thực tư cách Giảng viên hay chưa.
+    - Tài khoản @hcmus.edu.vn hoặc ADMIN_EMAILS: Tự động hợp lệ (Trusted).
+    - Tài khoản @gmail.com hoặc domain khác: Phải có trong bảng verified_users (đã nhập Passcode).
+    """
+    email = get_current_user_email()
+    if not email:
+        return False
+    if email in ADMIN_EMAILS:
+        return True
+    domain = email.split('@')[-1].lower()
+    if domain == 'hcmus.edu.vn':
+        return True
+
+    close_after = False
+    if conn is None:
+        conn = get_db_connection()
+        close_after = True
+    row = conn.execute("SELECT id FROM verified_users WHERE LOWER(email) = LOWER(?)", (email,)).fetchone()
+    if close_after:
+        conn.close()
+
+    is_ver = bool(row)
+    session['is_verified'] = is_ver
+    return is_ver
+
+
+@app.before_request
+def enforce_blocked_users():
+    """Tự động kiểm tra và ngắt phiên truy cập ngay lập tức nếu tài khoản đang đăng nhập bị Admin khóa."""
+    if request.endpoint in ('static', 'logout', 'login_page'):
+        return None
+    email = get_current_user_email()
+    if email and is_user_blocked(email):
+        session.clear()
+        msg = f"Tài khoản ({email}) đã bị Quản trị viên khóa quyền truy cập hệ thống vĩnh viễn."
+        if request.is_json or request.path.startswith('/submit_bulk_booking'):
+            return jsonify({'success': False, 'blocked': True, 'message': msg}), 403
+        flash(msg, "danger")
+        return redirect(url_for('login_page'))
+    return None
+
+
 @app.context_processor
 def inject_user_info():
+    email = get_current_user_email()
+    is_verified = is_current_user_verified() if email else False
+    is_gmail = email.lower().endswith('@gmail.com') if email else False
     return dict(
         ADMIN_EMAILS=ADMIN_EMAILS,
-        current_user_email=get_current_user_email(),
-        current_user_name=get_current_user_name()
+        current_user_email=email,
+        current_user_name=get_current_user_name(),
+        is_user_verified=is_verified,
+        is_user_gmail=is_gmail
     )
 
 
 def login_required(f):
-    """Yêu cầu đăng nhập Google trước khi thực hiện thao tác."""
+    """Yêu cầu đăng nhập Google trước khi thực hiện thao tác.
+    Đồng thời kiểm tra tài khoản bị khóa và yêu cầu tài khoản (@gmail.com) xác minh Mã Passcode Giảng viên."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not get_current_user_email():
+        email = get_current_user_email()
+        if not email:
             if request.is_json or request.path.startswith('/submit_bulk_booking'):
                 return jsonify({'success': False, 'message': 'Vui lòng đăng nhập bằng tài khoản Google trước khi gửi yêu cầu.'}), 401
             flash("Vui lòng đăng nhập bằng tài khoản Google để tiếp tục.", "warning")
             return redirect(url_for('login_page', next=request.url))
+
+        # Kiểm tra tài khoản có bị khóa vĩnh viễn hay không
+        if is_user_blocked(email):
+            session.clear()
+            msg = f"Tài khoản ({email}) đã bị Quản trị viên khóa quyền truy cập hệ thống."
+            if request.is_json or request.path.startswith('/submit_bulk_booking'):
+                return jsonify({'success': False, 'blocked': True, 'message': msg}), 403
+            flash(msg, "danger")
+            return redirect(url_for('login_page'))
+
+        # Kiểm tra xác thực Giảng viên đối với tài khoản Gmail cá nhân
+        if not is_current_user_verified():
+            if request.is_json or request.path.startswith('/submit_bulk_booking'):
+                return jsonify({
+                    'success': False,
+                    'require_verification': True,
+                    'message': 'Tài khoản cá nhân chưa xác minh Mã Passcode Giảng viên. Vui lòng xác minh để tiếp tục.'
+                }), 403
+            flash("Tài khoản Gmail của Quý Thầy/Cô cần xác minh Mã Passcode Giảng viên trước khi thực hiện thao tác.", "warning")
+            return redirect(url_for('verify_passcode_page', next=request.url))
+
         return f(*args, **kwargs)
     return decorated_function
 
@@ -541,11 +701,21 @@ def google_callback():
                 flash(f"Vui lòng sử dụng email thuộc tên miền được phép ({', '.join(ALLOWED_EMAIL_DOMAINS)}).", "danger")
                 return redirect(url_for('login_page'))
 
+        if is_user_blocked(email):
+            flash(f"Tài khoản ({email}) đã bị Quản trị viên khóa quyền truy cập hệ thống vĩnh viễn. Vui lòng liên hệ Phòng QTTB.", "danger")
+            return redirect(url_for('login_page'))
+
         session['user_email'] = email
         session['user_name'] = name or email.split('@')[0]
 
         next_url = session.pop('next_url', None) or url_for('home_page')
         flash(f"Xin chào {session['user_name']} ({email})!", "success")
+
+        # Kiểm tra nếu tài khoản cá nhân chưa xác minh thì chuyển hướng nhập Passcode
+        if not is_current_user_verified():
+            flash("Quý Thầy/Cô sử dụng tài khoản cá nhân (@gmail.com) vui lòng nhập Mã Passcode Giảng viên do Phòng QTTB cung cấp (chỉ nhập một lần duy nhất).", "info")
+            return redirect(url_for('verify_passcode_page', next=next_url))
+
         return redirect(next_url)
 
     except Exception as e:
@@ -558,6 +728,51 @@ def logout():
     session.clear()
     flash("Đã đăng xuất khỏi hệ thống.", "success")
     return redirect(url_for('home_page'))
+
+
+@app.route('/xac-minh-giang-vien', methods=['GET', 'POST'])
+def verify_passcode_page():
+    """Trang xác thực mã Passcode dành cho Thầy/Cô sử dụng tài khoản Gmail cá nhân."""
+    user_email = get_current_user_email()
+    if not user_email:
+        flash("Vui lòng đăng nhập Google trước khi thực hiện xác minh.", "warning")
+        return redirect(url_for('login_page', next=request.url))
+
+    next_url = request.args.get('next') or request.form.get('next') or url_for('home_page')
+
+    # Nếu tài khoản đã xác minh rồi thì chuyển tiếp luôn
+    if is_current_user_verified():
+        flash("Tài khoản của Quý Thầy/Cô đã được xác minh thành công trước đó.", "info")
+        return redirect(next_url)
+
+    error_message = None
+
+    if request.method == 'POST':
+        passcode = (request.form.get('passcode') or '').strip()
+        expected_passcode = get_teacher_passcode()
+
+        if passcode == expected_passcode:
+            conn = get_db_connection()
+            user_name = get_current_user_name()
+            conn.execute(
+                "INSERT OR REPLACE INTO verified_users (email, full_name, verified_by) VALUES (?, ?, 'passcode')",
+                (user_email.lower(), user_name)
+            )
+            conn.commit()
+            conn.close()
+            session['is_verified'] = True
+            flash("Xác minh thành công! Quý Thầy/Cô hiện có toàn quyền đăng ký mượn phòng máy và gửi thông tin.", "success")
+            return redirect(next_url)
+        else:
+            error_message = "Mã Passcode không chính xác! Quý Thầy/Cô vui lòng kiểm tra lại hoặc liên hệ Bộ phận Phòng máy B4.2 (Phòng QTTB) để nhận mã."
+
+    return render_template(
+        'verify_passcode.html',
+        user_email=user_email,
+        user_name=get_current_user_name(),
+        next_url=next_url,
+        error_message=error_message
+    )
 
 
 # ==========================================
@@ -746,6 +961,12 @@ def report_page():
 @app.route('/submit_issue', methods=['POST'])
 @login_required
 def submit_issue():
+    user_email = get_current_user_email()
+    allowed, retry_after = check_submission_rate_limit(user_email)
+    if not allowed:
+        flash(f"⚠️ Giới hạn tốc độ gửi: Mỗi tài khoản chỉ được gửi tối đa 2 đơn trong vòng 1 phút để chống spam. Vui lòng đợi {retry_after} giây nữa trước khi gửi tiếp.", "danger")
+        return redirect(url_for('report_page'))
+
     reporter_name = request.form.get('reporter_name') or get_current_user_name()
     department = request.form.get('department')
     room = request.form.get('room')
@@ -755,11 +976,11 @@ def submit_issue():
     
     conn = get_db_connection()
     try:
-        user_email = get_current_user_email()
         conn.execute('''
         INSERT INTO issue_reports (reporter_name, department, room, machine_number, issue_category, description, email)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', (reporter_name, department, room, machine_number, issue_category, description, user_email))
+        record_submission_rate_log(user_email, action_type='issue', conn=conn)
         conn.commit()
         flash("Gửi báo cáo sự cố thành công! Bộ phận QTTB sẽ nhanh chóng xử lý.", "success")
     except Exception as e:
@@ -811,6 +1032,12 @@ def home_page():
 @login_required
 def submit_booking():
     """Xử lý data khi User gửi form mượn phòng."""
+    user_email = get_current_user_email()
+    allowed, retry_after = check_submission_rate_limit(user_email)
+    if not allowed:
+        flash(f"⚠️ Giới hạn tốc độ gửi: Mỗi tài khoản chỉ được gửi tối đa 2 đơn trong vòng 1 phút để chống spam. Vui lòng đợi {retry_after} giây nữa trước khi gửi tiếp.", "danger")
+        return redirect(url_for('booking_page'))
+
     requester_name = request.form.get('requester_name') or get_current_user_name()
     room = request.form.get('room')
     day_of_week = int(request.form.get('day_of_week')) if request.form.get('day_of_week') else None
@@ -834,11 +1061,11 @@ def submit_booking():
             return redirect(url_for('booking_page'))
 
     conn = get_db_connection()
-    user_email = get_current_user_email()
     conn.execute('''
         INSERT INTO booking_requests (requester_name, room, day_of_week, start_period, end_period, purpose, subject_code, class_code, subject_name, department, study_period, software_required, status, email, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, datetime('now', 'localtime'))
     ''', (requester_name, room, day_of_week, start_period, end_period, purpose, subject_code, class_code, subject_name, department, study_period, software_required, user_email))
+    record_submission_rate_log(user_email, action_type='booking', conn=conn)
     conn.commit()
     conn.close()
     
@@ -861,6 +1088,15 @@ def is_pending_request_active_on_date(pending_row, ref_date):
 @login_required
 def submit_bulk_booking():
     """Xử lý data khi User gửi giỏ hàng đăng ký (nhiều môn)."""
+    user_email = get_current_user_email()
+    allowed, retry_after = check_submission_rate_limit(user_email)
+    if not allowed:
+        return jsonify({
+            'success': False,
+            'rate_limited': True,
+            'message': f'⚠️ Giới hạn tốc độ gửi: Mỗi tài khoản chỉ được gửi tối đa 2 đơn trong vòng 1 phút để chống spam. Vui lòng đợi {retry_after} giây nữa trước khi gửi tiếp.'
+        }), 429
+
     data = request.get_json()
     if not data or not isinstance(data, list):
         return jsonify({'success': False, 'message': 'Dữ liệu không hợp lệ'}), 400
@@ -941,7 +1177,6 @@ def submit_bulk_booking():
         })
 
     # 2. TIẾN HÀNH LƯU VÀO DATABASE
-    user_email = get_current_user_email()
     default_name = get_current_user_name()
     try:
         for item in data:
@@ -966,6 +1201,7 @@ def submit_bulk_booking():
                 item.get('software_required'),
                 user_email
             ))
+        record_submission_rate_log(user_email, action_type='bulk_booking', conn=conn)
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -1040,6 +1276,12 @@ def cancellation_page():
 @login_required
 def submit_cancellation():
     """Xử lý data khi giáo viên báo nghỉ gấp."""
+    user_email = get_current_user_email()
+    allowed, retry_after = check_submission_rate_limit(user_email)
+    if not allowed:
+        flash(f"⚠️ Giới hạn tốc độ gửi: Mỗi tài khoản chỉ được gửi tối đa 2 đơn trong vòng 1 phút để chống spam. Vui lòng đợi {retry_after} giây nữa trước khi gửi tiếp.", "danger")
+        return redirect(url_for('cancellation_page'))
+
     teacher_name = request.form.get('teacher_name') or get_current_user_name()
     room = request.form.get('room')
     cancel_date = request.form.get('cancel_date')
@@ -1047,11 +1289,11 @@ def submit_cancellation():
     reason = request.form.get('reason')
     
     conn = get_db_connection()
-    user_email = get_current_user_email()
     conn.execute('''
         INSERT INTO cancellations (teacher_name, room, cancel_date, period, reason, email)
         VALUES (?, ?, ?, ?, ?, ?)
     ''', (teacher_name, room, cancel_date, period, reason, user_email))
+    record_submission_rate_log(user_email, action_type='cancellation', conn=conn)
     conn.commit()
     conn.close()
     
@@ -1280,32 +1522,12 @@ def admin_panel():
                 pending_issues_by_room[r_code] += 1
 
     room_live_cards = []
-    morning_open, morning_locked, morning_free_rooms = [], [], []
-    afternoon_open, afternoon_locked, afternoon_free_rooms = [], [], []
     online_rooms_count = 0
     offline_rooms_list = []
     last_net_update = ''
 
     for r in rooms:
         r_today_classes = [s for s in all_enriched_schedules if s['room'] == r and int(s['day_of_week']) == display_dow and s['is_in_selected_week']]
-        m_classes = [s for s in r_today_classes if float(s['start_period']) <= 5]
-        a_classes = [s for s in r_today_classes if float(s['end_period']) >= 6]
-
-        # Ca sáng
-        if any(s['door_open'] for s in m_classes) and r not in cancelled_rooms_today:
-            morning_open.append(f"P.{r}")
-        elif m_classes or r in cancelled_rooms_today:
-            morning_locked.append(f"P.{r}")
-        else:
-            morning_free_rooms.append(f"P.{r}")
-
-        # Ca chiều
-        if any(s['door_open'] for s in a_classes) and r not in cancelled_rooms_today:
-            afternoon_open.append(f"P.{r}")
-        elif a_classes or r in cancelled_rooms_today:
-            afternoon_locked.append(f"P.{r}")
-        else:
-            afternoon_free_rooms.append(f"P.{r}")
 
         # Nhãn hoạt động trên thẻ Live Status 8 phòng (luôn ưu tiên hiển thị lịch học/trạng thái cửa)
         open_today = [s for s in r_today_classes if s['door_open']]
@@ -1349,6 +1571,59 @@ def admin_panel():
             'updated_at': net_info.get('updated_at') or ''
         })
 
+    # Gom nhóm các khung tiết Không học / Đóng cửa hôm nay (Ca Sáng & Ca Chiều)
+    today_m_free, today_a_free = get_detailed_free_slots_data(display_dow, ref_date=today)
+
+    def _fmt_p_vn(val):
+        f = float(val)
+        return str(int(f)) if f.is_integer() else str(f).replace('.', ',')
+
+    def _build_closed_groups(slot_items, is_morning=True):
+        grouped = {}
+        for item in slot_items:
+            st = float(item['start_period'])
+            ed = float(item['end_period'])
+            key = (st, ed)
+            room_label = f"P.{item['room']}"
+            if room_label not in grouped.setdefault(key, []):
+                grouped[key].append(room_label)
+
+        full_key = (1.0, 5.0) if is_morning else (6.0, 10.0)
+        for r_cancel in sorted(cancelled_rooms_today):
+            r_lbl = f"P.{r_cancel}"
+            already_listed = any(r_lbl in r_list for r_list in grouped.values())
+            if not already_listed:
+                grouped.setdefault(full_key, []).append(r_lbl)
+
+        sorted_keys = sorted(grouped.keys(), key=lambda k: (1 if (k[1] - k[0]) >= 4.0 else 0, k[0], k[1]))
+        result = []
+        for st, ed in sorted_keys:
+            period_code = f"T{_fmt_p_vn(st)} - {_fmt_p_vn(ed)}"
+            if is_morning:
+                if st == 1.0 and ed == 5.0:
+                    note = "(Đóng nguyên buổi sáng)"
+                elif st == 1.0:
+                    note = "(Đóng nửa đầu ca sáng)"
+                else:
+                    note = "(Đóng nửa sau ca sáng)"
+            else:
+                if st == 6.0 and ed == 10.0:
+                    note = "(Đóng nguyên buổi chiều)"
+                elif st == 6.0:
+                    note = "(Đóng nửa đầu ca chiều)"
+                else:
+                    note = "(Đóng nửa sau ca chiều)"
+            result.append({
+                'period_code': period_code,
+                'rooms': grouped[(st, ed)],
+                'rooms_str': ', '.join(grouped[(st, ed)]),
+                'note': note
+            })
+        return result
+
+    morning_closed_groups = _build_closed_groups(today_m_free, is_morning=True)
+    afternoon_closed_groups = _build_closed_groups(today_a_free, is_morning=False)
+
     dashboard_stats = {
         'room_stats': room_stats,
         'total_ca_used': total_ca_used,
@@ -1360,12 +1635,8 @@ def admin_panel():
         'donut_gradient': donut_gradient,
         'room_live_cards': room_live_cards,
         'display_dow': display_dow,
-        'morning_open': morning_open,
-        'morning_locked': morning_locked,
-        'morning_free_rooms': morning_free_rooms,
-        'afternoon_open': afternoon_open,
-        'afternoon_locked': afternoon_locked,
-        'afternoon_free_rooms': afternoon_free_rooms,
+        'morning_closed_groups': morning_closed_groups,
+        'afternoon_closed_groups': afternoon_closed_groups,
         'online_rooms_count': online_rooms_count,
         'offline_rooms_list': offline_rooms_list,
         'last_net_update': last_net_update,
@@ -1506,6 +1777,12 @@ def admin_panel():
 
     email_config = get_email_settings(conn=conn)
 
+    # Passcode, Danh sách Giảng viên Gmail đã xác minh & Danh sách Tài khoản bị khóa
+    teacher_passcode = get_teacher_passcode(conn=conn)
+    verified_users = conn.execute("SELECT * FROM verified_users ORDER BY id DESC").fetchall()
+    blocked_users = conn.execute("SELECT * FROM blocked_users ORDER BY id DESC").fetchall()
+    blocked_emails = [row['email'].strip().lower() for row in blocked_users if row['email']]
+
     conn.close()
     return render_template(
         'admin_panel.html',
@@ -1536,7 +1813,11 @@ def admin_panel():
         ot_data=ot_data,
         worklog_data=worklog_data,
         deploy_data=deploy_data,
-        email_config=email_config
+        email_config=email_config,
+        teacher_passcode=teacher_passcode,
+        verified_users=verified_users,
+        blocked_users=blocked_users,
+        blocked_emails=blocked_emails
     )
 
 def measure_host_ping_ms(target_ip):
@@ -2488,6 +2769,115 @@ def test_email_config():
     )
     ok, msg = send_smtp_email_sync(test_to, subject, html_body, text_body, email_cfg=effective_cfg)
     return jsonify({'success': ok, 'message': msg})
+
+
+@app.route('/admin/update-teacher-passcode', methods=['POST'])
+@admin_required
+def update_teacher_passcode():
+    """Cập nhật Mã Passcode nội bộ dành cho Thầy/Cô dùng Gmail cá nhân."""
+    new_passcode = (request.form.get('teacher_passcode') or '').strip()
+    return_tab = (request.form.get('return_tab') or 'dashboard').strip()
+    if not new_passcode:
+        flash("Mã Passcode không được để trống.", "warning")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    conn = get_db_connection()
+    conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('teacher_passcode', ?)", (new_passcode,))
+    conn.commit()
+    conn.close()
+    flash(f"Đã cập nhật Mã Passcode Giảng viên thành công: {new_passcode}", "success")
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
+@app.route('/admin/delete-verified-user/<int:user_id>', methods=['POST'])
+@admin_required
+def delete_verified_user(user_id):
+    """Thu hồi quyền Giảng viên của một tài khoản Gmail."""
+    return_tab = (request.form.get('return_tab') or 'dashboard').strip()
+    conn = get_db_connection()
+    row = conn.execute("SELECT email FROM verified_users WHERE id = ?", (user_id,)).fetchone()
+    if row:
+        conn.execute("DELETE FROM verified_users WHERE id = ?", (user_id,))
+        conn.commit()
+        flash(f"Đã thu hồi xác thực Giảng viên của tài khoản {row['email']}.", "info")
+    conn.close()
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
+@app.route('/admin/add-verified-user', methods=['POST'])
+@admin_required
+def add_verified_user():
+    """Admin chủ động thêm xác thực cho tài khoản Giảng viên dùng Gmail."""
+    email = (request.form.get('email') or '').strip().lower()
+    full_name = (request.form.get('full_name') or '').strip()
+    return_tab = (request.form.get('return_tab') or 'dashboard').strip()
+    if not email or '@' not in email:
+        flash("Địa chỉ email không hợp lệ.", "warning")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO verified_users (email, full_name, verified_by) VALUES (?, ?, 'admin')",
+            (email, full_name or email.split('@')[0])
+        )
+        conn.commit()
+        flash(f"Đã cấp quyền Giảng viên thành công cho tài khoản {email}.", "success")
+    except Exception as e:
+        flash(f"Lỗi: {e}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
+@app.route('/admin/block-user', methods=['POST'])
+@admin_required
+def block_user_account():
+    """Khóa tài khoản vĩnh viễn (1-Click Block User) trên trang Admin."""
+    email = (request.form.get('email') or '').strip().lower()
+    reason = (request.form.get('reason') or 'Biểu hiện bất thường / Spam hệ thống').strip()
+    return_tab = (request.form.get('return_tab') or 'requests').strip()
+
+    if not email or '@' not in email:
+        flash("Địa chỉ email cần khóa không hợp lệ.", "warning")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    if email in [e.lower() for e in ADMIN_EMAILS]:
+        flash("Không thể khóa tài khoản Quản trị viên (Admin)!", "danger")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    admin_email = get_current_user_email() or 'Admin'
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO blocked_users (email, reason, blocked_by) VALUES (?, ?, ?)",
+            (email, reason, admin_email)
+        )
+        # Đồng thời thu hồi quyền xác minh Passcode nếu có
+        conn.execute("DELETE FROM verified_users WHERE LOWER(email) = LOWER(?)", (email,))
+        conn.commit()
+        flash(f"🚫 Đã khóa vĩnh viễn tài khoản {email} thành công!", "danger")
+    except Exception as e:
+        flash(f"Lỗi khi khóa tài khoản: {e}", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
+@app.route('/admin/unblock-user/<int:block_id>', methods=['POST'])
+@admin_required
+def unblock_user_account(block_id):
+    """Mở khóa tài khoản đã bị chặn."""
+    return_tab = (request.form.get('return_tab') or 'requests').strip()
+    conn = get_db_connection()
+    row = conn.execute("SELECT email FROM blocked_users WHERE id = ?", (block_id,)).fetchone()
+    if row:
+        conn.execute("DELETE FROM blocked_users WHERE id = ?", (block_id,))
+        conn.commit()
+        flash(f"🔓 Đã mở khóa tài khoản {row['email']} thành công.", "success")
+    conn.close()
+    return redirect(url_for('admin_panel', tab=return_tab))
 
 
 @app.route('/admin/approve-cancellation/<int:cancellation_id>', methods=['POST'])

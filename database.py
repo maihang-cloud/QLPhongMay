@@ -217,12 +217,49 @@ def init_db():
         )
     ''')
 
+    # 10. Bảng Danh sách tài khoản Gmail đã xác minh Mã Passcode Giảng viên
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS verified_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            full_name TEXT,
+            verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            verified_by TEXT DEFAULT 'passcode'
+        )
+    ''')
+
+    # 11. Bảng Danh sách tài khoản bị khóa vĩnh viễn (Block User)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS blocked_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            reason TEXT DEFAULT 'Vi phạm quy định / Spam hệ thống',
+            blocked_by TEXT DEFAULT 'Admin',
+            blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 12. Bảng Lưu vết tần suất gửi đơn để giới hạn tốc độ (Rate Limiting: tối đa 2 đơn / 60 giây)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS submission_rate_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            action_type TEXT DEFAULT 'submit',
+            created_ts REAL NOT NULL
+        )
+    ''')
+
     # Khởi tạo cấu hình mặc định cho B42Lab NetAgent & IP Router 8 phòng máy
     ak_row = cursor.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
     if not ak_row or not ak_row['value']:
         cursor.execute(
             "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('netagent_key', 'b42lab-secret-2026')"
         )
+
+    # Khởi tạo Mã Passcode nội bộ dành cho Thầy/Cô dùng Gmail cá nhân
+    cursor.execute(
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('teacher_passcode', 'QttB@2026')"
+    )
 
     # Khởi tạo cấu hình mặc định cho Hệ thống Gửi Email Thông báo Kết quả (SMTP)
     default_smtp_settings = {
