@@ -1,6 +1,7 @@
 import io
 import re
 import datetime
+from timezone_utils import get_vn_today
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -243,7 +244,7 @@ def filter_schedules_for_report(
         if detected_years:
             req_year = max(detected_years.items(), key=lambda x: x[1])[0]
         else:
-            today = datetime.date.today()
+            today = get_vn_today()
             req_year = f"{today.year} - {today.year + 1}" if today.month >= 8 else f"{today.year - 1} - {today.year}"
 
     target_rows = [item[0] for item in matched_tuples]
@@ -424,7 +425,7 @@ def build_semester_report_excel(
     date_span_str = filter_res['date_span_str']
 
     stats = compute_semester_statistics(target_rows, ROOMS_LIST)
-    today_str = datetime.date.today().strftime('%d/%m/%Y')
+    today_str = get_vn_today().strftime('%d/%m/%Y')
 
     wb = openpyxl.Workbook()
     default_ws = wb.active
@@ -497,7 +498,7 @@ def build_semester_report_excel(
         ws.cell(2, mid_col + 1).alignment = al_center
 
         ws.merge_cells(start_row=3, start_column=mid_col + 1, end_row=3, end_column=max_col)
-        now_dt = datetime.date.today()
+        now_dt = get_vn_today()
         ws.cell(3, mid_col + 1, f"TP. Hồ Chí Minh, ngày {now_dt.day:02d} tháng {now_dt.month:02d} năm {now_dt.year}").font = f_date_italic
         ws.cell(3, mid_col + 1).alignment = al_center
 

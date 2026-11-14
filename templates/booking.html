@@ -19,6 +19,71 @@
         </div>
     </div>
 
+    {% if is_booking_closed and not is_super_admin %}
+    <!-- MÀN HÌNH THÔNG BÁO CỔNG ĐĂNG KÝ TẠM KHÓA DÀNH CHO USER -->
+    <div class="row justify-content-center my-3 py-2">
+        <div class="col-12 col-md-10 col-lg-8 col-xl-7">
+            <div class="card border-0 shadow-sm rounded-4 text-center p-4 p-md-5 bg-white position-relative overflow-hidden">
+                <div class="position-absolute top-0 start-0 w-100" style="height: 5px; background: linear-gradient(90deg, #EF4444, #F59E0B);"></div>
+                
+                <div class="my-3">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle shadow-sm" style="width: 84px; height: 84px; background: #FEF2F2; color: #DC2626;">
+                        <i class="bi bi-lock-fill" style="font-size: 2.6rem;"></i>
+                    </div>
+                </div>
+
+                <h3 class="fw-bold text-dark mb-2">Cổng Đăng Ký Mượn Phòng Tạm Đóng</h3>
+                
+                <p class="text-secondary lead fs-6 px-lg-3 mb-4" style="line-height: 1.65;">
+                    {{ booking_status_cfg['notice'] if (booking_status_cfg and booking_status_cfg['notice']) else 'Hệ thống đang tạm khóa đăng ký mượn phòng để Quản trị viên sắp xếp Thời khóa biểu. Quý Thầy/Cô vui lòng quay lại sau!' }}
+                </p>
+
+                <div class="p-3.5 rounded-3 bg-light border text-start mb-4 small text-muted">
+                    <div class="d-flex align-items-start gap-2 mb-2.5">
+                        <i class="bi bi-info-circle-fill text-primary mt-0.5 fs-6"></i>
+                        <div>
+                            <strong class="text-dark">Mục đích tạm khóa:</strong> Bộ phận Quản trị Thiết bị (QTTB) đang rà soát và sắp xếp Thời khóa biểu chính khóa cho học kỳ mới. Sau khi chốt các ca học cố định, hệ thống sẽ mở cổng để Quý Thầy/Cô đăng ký các phòng còn trống.
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-envelope-paper-fill mt-0.5 fs-6" style="color: #0D9488;"></i>
+                        <div>
+                            <strong class="text-dark">Hỗ trợ khẩn cấp:</strong> Trường hợp có nhu cầu mượn phòng đột xuất phục vụ thi hoặc hội thảo chuyên môn, vui lòng liên hệ trực tiếp phòng B4.2 hoặc gửi email tới <strong>{{ SUPER_ADMIN_EMAIL }}</strong>.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-center gap-2">
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-primary rounded-pill px-4 py-2 fw-semibold">
+                        <i class="bi bi-calendar3 me-1"></i> Xem Thời Khóa Biểu
+                    </a>
+                    <a href="{{ url_for('my_dashboard') }}" class="btn btn-primary rounded-pill px-4 py-2 fw-semibold" style="background-color: #0F2942; border-color: #0F2942;">
+                        <i class="bi bi-person-workspace me-1"></i> Dashboard Của Tôi
+                    </a>
+                </div>
+
+                {% if is_contributor %}
+                <div class="alert alert-info mt-4 mb-0 text-start small rounded-3 border-0 bg-info bg-opacity-10 text-primary">
+                    <i class="bi bi-eye me-1 fw-bold"></i> <strong>Chế độ Contributor:</strong> Cổng đăng ký hiện đang đóng. Chỉ <strong>Super Admin ({{ SUPER_ADMIN_EMAIL }})</strong> mới có quyền bật/mở lại cổng đăng ký tại tab Cấu hình.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+
+    {% if is_booking_closed and is_super_admin %}
+    <div class="alert alert-warning border-0 shadow-sm rounded-4 p-3 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2 small">
+            <span class="badge bg-danger rounded-pill px-2.5 py-1"><i class="bi bi-lock-fill me-1"></i>CỔNG ĐANG KHÓA</span>
+            <span class="text-dark">Cổng đăng ký đang khóa đối với User thường. Bạn đang truy cập với tư cách <strong>Super Admin</strong> (Chế độ xem trước &amp; kiểm tra).</span>
+        </div>
+        <a href="{{ url_for('admin_panel', tab='settings') }}" class="btn btn-sm btn-outline-dark rounded-pill px-3 py-1 fw-bold">
+            <i class="bi bi-sliders me-1"></i> Mở cổng tại Cấu hình
+        </a>
+    </div>
+    {% endif %}
+
     <!-- BỐ CỤC 2 CỘT HIỆN ĐẠI (DESKTOP SPLIT LAYOUT / MOBILE TOP-FIRST) -->
     <div class="row g-3 g-lg-4">
         
@@ -934,6 +999,9 @@ function submitCart() {
             window.location.href = "{{ url_for('verify_passcode_page') }}";
         } else if (data.rate_limited) {
             alert(data.message);
+        } else if (data.booking_closed) {
+            alert(data.message);
+            window.location.reload();
         } else {
             alert("Có lỗi xảy ra: " + data.message);
         }
@@ -944,4 +1012,5 @@ function submitCart() {
     });
 }
 </script>
+{% endif %}
 {% endblock %}

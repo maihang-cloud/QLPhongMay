@@ -14,6 +14,17 @@ from report_exporter import (
     summarize_available_semesters,
     filter_schedules_for_report
 )
+from timezone_utils import (
+    get_vn_today,
+    get_vn_now_str,
+    get_vn_now_iso,
+    get_vn_today_iso,
+    format_vn_datetime
+)
+from monthly_report_generator import (
+    build_monthly_excel_report,
+    build_monthly_word_report
+)
 from functools import wraps
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -66,11 +77,10 @@ for _sec_file in _possible_secret_files:
     if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
         break
 
-# Khai báo danh sách Quản trị viên
+# Khai báo Super Admin mặc định (Toàn quyền quản trị)
+SUPER_ADMIN_EMAIL = "mlhang@hcmus.edu.vn"
 ADMIN_EMAILS = [
-    "mlhang@hcmus.edu.vn",
-    "tthan@hcmus.edu.vn",
-    "nvtinh@hcmus.edu.vn"
+    SUPER_ADMIN_EMAIL
 ]
 
 # Tùy chọn: Giới hạn tên miền email được phép đăng nhập (Để danh sách rỗng [] nếu cho phép mọi tài khoản Google)
@@ -91,6 +101,65 @@ def get_current_user_name():
     return name
 
 
+def get_admin_permissions_list(conn=None):
+    """Lấy danh sách toàn bộ tài khoản phân quyền trong bảng admin_permissions."""
+    close_after = False
+    if conn is None:
+        conn = get_db_connection()
+        close_after = True
+    try:
+        rows = conn.execute(
+            "SELECT * FROM admin_permissions ORDER BY CASE role WHEN 'super_admin' THEN 0 ELSE 1 END, id ASC"
+        ).fetchall()
+    except Exception:
+        rows = []
+    if close_after:
+        conn.close()
+    return rows
+
+
+def get_user_admin_role(email=None, conn=None):
+    """Xác định vai trò quản trị của email:
+    - 'super_admin': Toàn quyền (mlhang@hcmus.edu.vn)
+    - 'contributor': Quyền chỉ xem (Read-only) do Super Admin cấp trong bảng admin_permissions
+    - None: Người dùng bình thường (không có quyền vào trang Quản trị)
+    """
+    target_email = (email if email is not None else get_current_user_email() or '').strip().lower()
+    if not target_email:
+        return None
+    if target_email == SUPER_ADMIN_EMAIL.lower():
+        return 'super_admin'
+
+    close_after = False
+    if conn is None:
+        conn = get_db_connection()
+        close_after = True
+    try:
+        row = conn.execute(
+            "SELECT role FROM admin_permissions WHERE LOWER(email) = LOWER(?)",
+            (target_email,)
+        ).fetchone()
+    except Exception:
+        row = None
+    if close_after:
+        conn.close()
+
+    if row and row['role'] in ('super_admin', 'contributor'):
+        return row['role']
+    return None
+
+
+def get_all_admin_emails(conn=None):
+    """Trả về danh sách các email có quyền truy cập Admin Panel (gồm Super Admin + Contributors)."""
+    rows = get_admin_permissions_list(conn=conn)
+    emails = [SUPER_ADMIN_EMAIL.lower()]
+    for r in rows:
+        em = (r['email'] or '').strip().lower()
+        if em and em not in emails:
+            emails.append(em)
+    return emails
+
+
 DEFAULT_TEACHER_PASSCODE = "QttB@2026"
 RATE_LIMIT_MAX_REQUESTS = 2
 RATE_LIMIT_WINDOW_SECONDS = 60
@@ -101,7 +170,7 @@ def is_user_blocked(email=None, conn=None):
     target_email = (email if email is not None else get_current_user_email() or '').strip().lower()
     if not target_email:
         return False
-    if target_email in [e.lower() for e in ADMIN_EMAILS]:
+    if target_email in get_all_admin_emails(conn=conn):
         return False
 
     close_after = False
@@ -180,15 +249,45 @@ def get_teacher_passcode(conn=None):
     return row['value'] if (row and row['value']) else DEFAULT_TEACHER_PASSCODE
 
 
+def get_booking_status_config(conn=None):
+    """Lấy cấu hình trạng thái Khóa / Mở cổng Đăng ký mượn phòng từ bảng system_settings."""
+    close_after = False
+    if conn is None:
+        conn = get_db_connection()
+        close_after = True
+    try:
+        rows = conn.execute(
+            "SELECT key, value FROM system_settings WHERE key IN ('booking_enabled', 'booking_disabled_notice')"
+        ).fetchall()
+    except Exception:
+        rows = []
+    if close_after:
+        conn.close()
+
+    cfg = {
+        'enabled': True,
+        'notice': 'Hệ thống đang tạm khóa đăng ký mượn phòng để Quản trị viên sắp xếp Thời khóa biểu. Quý Thầy/Cô vui lòng quay lại sau!'
+    }
+    for r in rows:
+        k = str(r['key']).strip()
+        v = str(r['value']).strip() if r['value'] is not None else ''
+        if k == 'booking_enabled':
+            cfg['enabled'] = (v != '0')
+        elif k == 'booking_disabled_notice':
+            if v:
+                cfg['notice'] = v
+    return cfg
+
+
 def is_current_user_verified(conn=None):
     """Kiểm tra tài khoản hiện tại đã được xác thực tư cách Giảng viên hay chưa.
-    - Tài khoản @hcmus.edu.vn hoặc ADMIN_EMAILS: Tự động hợp lệ (Trusted).
+    - Tài khoản @hcmus.edu.vn hoặc có quyền Quản trị (Super Admin / Contributor): Tự động hợp lệ (Trusted).
     - Tài khoản @gmail.com hoặc domain khác: Phải có trong bảng verified_users (đã nhập Passcode).
     """
     email = get_current_user_email()
     if not email:
         return False
-    if email in ADMIN_EMAILS:
+    if get_user_admin_role(email, conn=conn) in ('super_admin', 'contributor'):
         return True
     domain = email.split('@')[-1].lower()
     if domain == 'hcmus.edu.vn':
@@ -226,15 +325,32 @@ def enforce_blocked_users():
 @app.context_processor
 def inject_user_info():
     email = get_current_user_email()
-    is_verified = is_current_user_verified() if email else False
+    conn = get_db_connection()
+    is_verified = is_current_user_verified(conn=conn) if email else False
+    admin_role = get_user_admin_role(email, conn=conn) if email else None
+    all_admins = get_all_admin_emails(conn=conn)
+    booking_status_cfg = get_booking_status_config(conn=conn)
+    conn.close()
     is_gmail = email.lower().endswith('@gmail.com') if email else False
     return dict(
-        ADMIN_EMAILS=ADMIN_EMAILS,
+        SUPER_ADMIN_EMAIL=SUPER_ADMIN_EMAIL,
+        ADMIN_EMAILS=all_admins,
         current_user_email=email,
         current_user_name=get_current_user_name(),
+        current_admin_role=admin_role,
+        is_super_admin=(admin_role == 'super_admin'),
+        is_contributor=(admin_role == 'contributor'),
         is_user_verified=is_verified,
-        is_user_gmail=is_gmail
+        is_user_gmail=is_gmail,
+        booking_status_cfg=booking_status_cfg,
+        is_booking_closed=(not booking_status_cfg['enabled'])
     )
+
+
+@app.template_filter('vn_datetime')
+def jinja_vn_datetime(dt_val, fmt='%H:%M %d/%m/%Y'):
+    """Jinja filter định dạng hiển thị ngày giờ chuẩn Việt Nam."""
+    return format_vn_datetime(dt_val, fmt=fmt)
 
 
 def login_required(f):
@@ -274,16 +390,40 @@ def login_required(f):
 
 
 def admin_required(f):
-    """Yêu cầu tài khoản Google thuộc danh sách ADMIN_EMAILS."""
+    """Kiểm tra quyền truy cập Quản trị (Super Admin & Contributor):
+    - Cho phép cả Super Admin và Contributor xem giao diện Admin Panel, tra cứu và tải file báo cáo (GET / ping).
+    - Nếu là Contributor (chỉ có quyền Xem), chặn mọi thao tác chỉnh sửa / duyệt / xóa / thêm / cấu hình.
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         user_email = get_current_user_email()
         if not user_email:
             flash("Vui lòng đăng nhập bằng tài khoản Google Quản trị viên.", "warning")
             return redirect(url_for('login_page', next=request.url))
-        if user_email not in ADMIN_EMAILS:
-            flash(f"Bạn không có quyền quản trị! (Tài khoản hiện tại: {user_email})", "danger")
+
+        role = get_user_admin_role(user_email)
+        if role not in ('super_admin', 'contributor'):
+            flash(f"Bạn không có quyền truy cập trang Quản trị! (Tài khoản hiện tại: {user_email})", "danger")
             return redirect(url_for('home_page'))
+
+        # Nếu là Contributor (Chỉ xem): chỉ cho phép xem trang, xem trạng thái mạng và xuất báo cáo Excel
+        readonly_allowed_endpoints = {
+            'admin_panel',
+            'api_network_status',
+            'admin_network_ping_now',
+            'export_semester_report',
+            'export_monthly_report_excel',
+            'export_monthly_report_word',
+            'export_overtime_excel',
+            'export_worklog_excel'
+        }
+        if role == 'contributor' and (request.method == 'POST' and request.endpoint not in readonly_allowed_endpoints):
+            msg = "Tài khoản Contributor chỉ có quyền XEM dữ liệu, không có quyền thực hiện thao tác thêm, sửa, duyệt hoặc xóa!"
+            if request.is_json or request.path.startswith('/api/') or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'readonly': True, 'message': msg}), 403
+            flash(f"🔒 {msg}", "warning")
+            return redirect(request.referrer or url_for('admin_panel'))
+
         return f(*args, **kwargs)
     return decorated_function
 
@@ -314,19 +454,21 @@ def get_email_settings(conn=None):
         close_after = True
 
     rows = conn.execute(
-        "SELECT key, value FROM system_settings WHERE key IN ('smtp_enabled', 'smtp_email', 'smtp_password', 'smtp_sender_name')"
+        "SELECT key, value FROM system_settings WHERE key IN ('smtp_enabled', 'smtp_email', 'smtp_password', 'smtp_sender_name', 'admin_notify_enabled')"
     ).fetchall()
     if close_after:
         conn.close()
 
     cfg = {r['key']: (r['value'] or '') for r in rows}
     smtp_enabled = cfg.get('smtp_enabled', '1') == '1'
+    admin_notify_enabled = str(cfg.get('admin_notify_enabled', '1')).strip() != '0'
     smtp_email = (cfg.get('smtp_email') or os.environ.get('SMTP_EMAIL', 'mlhang@hcmus.edu.vn')).strip()
     smtp_password = (cfg.get('smtp_password') or os.environ.get('SMTP_PASSWORD', '')).strip()
     smtp_sender_name = (cfg.get('smtp_sender_name') or 'Hệ thống Phòng máy B4.2 - Phòng QTTB').strip()
 
     return {
         'enabled': smtp_enabled,
+        'admin_notify_enabled': admin_notify_enabled,
         'email': smtp_email,
         'password': smtp_password,
         'sender_name': smtp_sender_name,
@@ -382,7 +524,7 @@ def build_request_notification_email(req_type, record, new_status, admin_note=''
     room = str(rec.get('room') or '').replace('Phòng ', '').replace('P.', '').strip()
     user_email = (rec.get('email') or '').strip()
     note_clean = (admin_note or rec.get('admin_note') or '').strip()
-    now_str = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+    now_str = get_vn_now_str('%H:%M %d/%m/%Y')
 
     if req_type == 'booking':
         user_name = rec.get('requester_name') or user_email.split('@')[0]
@@ -393,7 +535,7 @@ def build_request_notification_email(req_type, record, new_status, admin_note=''
         subject = f"Phản hồi yêu cầu đăng ký mượn phòng máy P.{room} ({day_str}, {period_str}) - Phòng máy tính B4.2"
 
         if new_status == 'Processing':
-            status_badge = "ĐÃ TIẾP NHẬN & ĐANG XỬ LÝ"
+            status_badge = "ĐÃ TIẾP NHẬN"
             badge_bg, badge_color = "#E0F2FE", "#0369A1"
             lead_msg = f"Bộ phận Quản lý Phòng máy (Phòng QTTB) đã tiếp nhận yêu cầu mượn <strong>Phòng {room}</strong> của Quý Thầy/Cô và đang tiến hành kiểm tra lịch phòng / chuẩn bị phần mềm."
         elif new_status == 'Approved':
@@ -403,7 +545,7 @@ def build_request_notification_email(req_type, record, new_status, admin_note=''
         else:
             status_badge = "TỪ CHỐI YÊU CẦU"
             badge_bg, badge_color = "#FEE2E2", "#B91C1C"
-            lead_msg = f"Rất tiếc, yêu cầu đăng ký mượn <strong>Phòng {room}</strong> ({day_str}, {period_str}) hiện chưa thể đáp ứng. Quý Thầy/Cô vui lòng xem chi tiết phản hồi bên dưới."
+            lead_msg = f"Rất tiếc, yêu cầu đăng ký mượn <strong>Phòng {room}</strong> ({day_str}, {period_str}) của Quý Thầy/Cô đã bị <strong>TỪ CHỐI</strong> (thông tin gửi không hợp lệ hoặc trùng lịch). Quý Thầy/Cô vui lòng xem lý do phản hồi bên dưới."
 
         detail_rows = [
             ("Người đăng ký", f"{user_name} ({rec.get('department') or 'Đơn vị'})"),
@@ -420,11 +562,11 @@ def build_request_notification_email(req_type, record, new_status, admin_note=''
         subject = f"Phản hồi yêu cầu báo cáo sự cố kỹ thuật P.{room} (Máy {machine_no}) - Phòng máy tính B4.2"
 
         if new_status == 'Processing':
-            status_badge = "ĐÃ TIẾP NHẬN & ĐANG XỬ LÝ"
+            status_badge = "ĐÃ TIẾP NHẬN"
             badge_bg, badge_color = "#E0F2FE", "#0369A1"
             lead_msg = f"Kỹ thuật viên Phòng máy B4.2 đã tiếp nhận thông tin báo sự cố tại <strong>Phòng {room} (Máy {machine_no})</strong> và đang tiến hành kiểm tra, xử lý."
         else:
-            status_badge = "ĐÃ KHẮC PHỤC / HOÀN TẤT"
+            status_badge = "ĐÃ XONG / ĐÃ KHẮC PHỤC"
             badge_bg, badge_color = "#DCFCE7", "#15803D"
             lead_msg = f"Sự cố kỹ thuật tại <strong>Phòng {room} (Máy {machine_no})</strong> do Quý Thầy/Cô phản ánh đã được Kỹ thuật viên Phòng máy kiểm tra và khắc phục hoàn tất."
 
@@ -443,13 +585,13 @@ def build_request_notification_email(req_type, record, new_status, admin_note=''
         subject = f"Phản hồi yêu cầu thông báo nghỉ học P.{room} (Ngày {cancel_date}) - Phòng máy tính B4.2"
 
         if new_status == 'Processing':
-            status_badge = "ĐÃ TIẾP NHẬN THÔNG BÁO NGHỈ"
+            status_badge = "ĐÃ TIẾP NHẬN"
             badge_bg, badge_color = "#E0F2FE", "#0369A1"
             lead_msg = f"Bộ phận Quản lý Phòng máy B4.2 đã tiếp nhận thông báo nghỉ học tại <strong>Phòng {room}</strong> (Ngày {cancel_date}, {period_str})."
         else:
-            status_badge = "ĐÃ XÁC NHẬN & CẬP NHẬT LỊCH TRỰC"
+            status_badge = "ĐÃ DUYỆT THÔNG BÁO NGHỈ"
             badge_bg, badge_color = "#DCFCE7", "#15803D"
-            lead_msg = f"Thông báo nghỉ học tại <strong>Phòng {room}</strong> (Ngày {cancel_date}, {period_str}) của Quý Thầy/Cô đã được xác nhận và chuyển thông tin tới bộ phận Trực đóng/mở cửa phòng máy."
+            lead_msg = f"Thông báo nghỉ học tại <strong>Phòng {room}</strong> (Ngày {cancel_date}, {period_str}) của Quý Thầy/Cô đã được duyệt và chuyển thông tin tới bộ phận Trực đóng/mở cửa phòng máy."
 
         detail_rows = [
             ("Giảng viên thông báo", str(user_name)),
@@ -603,6 +745,251 @@ def notify_user_on_status_change(req_type, record, new_status, admin_note='', co
     return f" (📧 Đã gửi email thông báo kết quả tới {to_email})"
 
 
+def build_admin_alert_email(req_type, data, admin_panel_url=''):
+    """Tạo tiêu đề, nội dung HTML và Plain-text trang trọng thông báo tức thời cho Admin khi User gửi yêu cầu mới."""
+    now_str = get_vn_now_str('%H:%M %d/%m/%Y')
+
+    if req_type == 'bulk_booking':
+        items = list(data.get('items') or [])
+        requester_name = str(data.get('requester_name') or 'Giảng viên')
+        user_email = str(data.get('email') or '').strip()
+        department = str(data.get('department') or 'Đơn vị')
+        count = len(items)
+
+        subject = f"[ĐƠN MƯỢN NHIỀU PHÒNG MỚI] {requester_name} ({department}) đăng ký {count} môn học"
+        type_title = "ĐƠN ĐĂNG KÝ MƯỢN NHIỀU PHÒNG (GIỎ HÀNG)"
+        lead_msg = f"Giảng viên <strong>{html_lib.escape(requester_name)}</strong> ({html_lib.escape(department)} - <a href='mailto:{html_lib.escape(user_email)}'>{html_lib.escape(user_email)}</a>) vừa gửi đơn đăng ký giỏ hàng gồm <strong>{count} môn học</strong> vào hệ thống."
+
+        table_rows_html = ""
+        table_rows_text = []
+        for idx, it in enumerate(items, 1):
+            r_room = str(it.get('room') or 'Tùy ý').replace('Phòng ', '')
+            r_dow = f"Thứ {it.get('day_of_week')}"
+            r_period = f"Tiết {it.get('start_period'):g} - {it.get('end_period'):g}" if isinstance(it.get('start_period'), (int, float)) else f"Tiết {it.get('start_period')} - {it.get('end_period')}"
+            r_subj = str(it.get('subject_name') or 'Thực hành')
+            r_class = str(it.get('class_code') or '')
+            r_date = str(it.get('study_period') or it.get('study_date') or 'Theo TKB')
+            r_sw = str(it.get('software_required') or '')
+            r_class_html = f" <span style=\"color:#64748B; font-weight:normal;\">({html_lib.escape(r_class)})</span>" if r_class else ""
+
+            table_rows_html += f"""
+            <tr>
+                <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; font-size: 13px; text-align: center; color: #64748B;">{idx}</td>
+                <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; font-size: 13px; font-weight: 700; color: #0F2942;">Phòng {html_lib.escape(r_room)}</td>
+                <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155;">{html_lib.escape(r_dow)} | {html_lib.escape(r_period)}<br><small style="color: #64748B;">({html_lib.escape(r_date)})</small></td>
+                <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #0F172A; font-weight: 600;">{html_lib.escape(r_subj)}{r_class_html}</td>
+                <td style="padding: 8px 10px; border-bottom: 1px solid #E2E8F0; font-size: 12.5px; color: #475569;">{html_lib.escape(r_sw) if r_sw else 'Mặc định'}</td>
+            </tr>
+            """
+            table_rows_text.append(f"{idx}. P.{r_room} | {r_dow} ({r_period}, {r_date}) | {r_subj} | Phần mềm: {r_sw or 'Mặc định'}")
+
+        content_block_html = f"""
+        <div style="margin-top: 18px; border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden;">
+            <div style="background-color: #F8FAFC; padding: 10px 14px; font-size: 12.5px; font-weight: 700; color: #0F2942; border-bottom: 1px solid #E2E8F0; text-transform: uppercase;">
+                DANH SÁCH {count} MÔN HỌC ĐĂNG KÝ
+            </div>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background-color: #F1F5F9; color: #475569; font-size: 12px; text-transform: uppercase;">
+                        <th style="padding: 6px 10px; border-bottom: 1px solid #E2E8F0; text-align: center; width: 40px;">#</th>
+                        <th style="padding: 6px 10px; border-bottom: 1px solid #E2E8F0; text-align: left;">Phòng</th>
+                        <th style="padding: 6px 10px; border-bottom: 1px solid #E2E8F0; text-align: left;">Thời gian</th>
+                        <th style="padding: 6px 10px; border-bottom: 1px solid #E2E8F0; text-align: left;">Môn / Lớp</th>
+                        <th style="padding: 6px 10px; border-bottom: 1px solid #E2E8F0; text-align: left;">Phần mềm</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {table_rows_html}
+                </tbody>
+            </table>
+        </div>
+        """
+        detail_text = "\n".join(table_rows_text)
+
+    else:
+        rec = dict(data)
+        room = str(rec.get('room') or '').replace('Phòng ', '').replace('P.', '').strip()
+        user_email = (rec.get('email') or '').strip()
+
+        if req_type == 'booking':
+            user_name = rec.get('requester_name') or user_email.split('@')[0]
+            type_title = "YÊU CẦU ĐĂNG KÝ MƯỢN PHÒNG MÁY"
+            day_str = f"Thứ {rec.get('day_of_week')}"
+            period_str = f"Tiết {rec.get('start_period'):g} - {rec.get('end_period'):g}" if isinstance(rec.get('start_period'), (int, float)) else f"Tiết {rec.get('start_period')} - {rec.get('end_period')}"
+            subj_info = rec.get('subject_name') or rec.get('purpose') or 'Mượn phòng máy'
+            subject = f"[YÊU CẦU MƯỢN PHÒNG MỚI] P.{room} - GV {user_name} ({day_str}, {period_str})"
+            lead_msg = f"Giảng viên <strong>{html_lib.escape(str(user_name))}</strong> vừa gửi yêu cầu đăng ký mượn <strong>Phòng {room}</strong> qua hệ thống trực tuyến."
+
+            class_suffix = f" - Lớp {rec.get('class_code')}" if rec.get('class_code') else ""
+            software_suffix = f" - Phần mềm yêu cầu: {rec.get('software_required')}" if rec.get('software_required') else ""
+
+            detail_rows = [
+                ("Giảng viên đăng ký", f"{user_name} ({rec.get('department') or 'Đơn vị'})"),
+                ("Email liên hệ", user_email or 'Chưa cung cấp'),
+                ("Phòng máy yêu cầu", f"Phòng {room} - Tòa B4.2"),
+                ("Thời gian đăng ký", f"{day_str} | {period_str} (Tuần/Ngày: {rec.get('study_period') or 'Hiện tại'})"),
+                ("Môn học / Lớp", f"{subj_info}{class_suffix}"),
+                ("Mục đích & Phần mềm", f"{rec.get('purpose') or 'Giảng dạy'}{software_suffix}")
+            ]
+
+        elif req_type == 'cancellation':
+            user_name = rec.get('teacher_name') or user_email.split('@')[0]
+            type_title = "THÔNG BÁO BÁO VẮNG / NGHỈ HỌC ĐỘT XUẤT"
+            cancel_date = rec.get('cancel_date') or ''
+            period_str = rec.get('period') or ''
+            subject = f"[BÁO VẮNG GẤP] P.{room} - GV {user_name} (Ngày {cancel_date}, {period_str})"
+            lead_msg = f"Giảng viên <strong>{html_lib.escape(str(user_name))}</strong> vừa gửi thông báo nghỉ học đột xuất tại <strong>Phòng {room}</strong>."
+
+            detail_rows = [
+                ("Giảng viên báo nghỉ", str(user_name)),
+                ("Email liên hệ", user_email or 'Chưa cung cấp'),
+                ("Phòng máy", f"Phòng {room} - Tòa B4.2"),
+                ("Ngày báo nghỉ", str(cancel_date)),
+                ("Ca / Tiết nghỉ", str(period_str)),
+                ("Lý do báo vắng", str(rec.get('reason') or 'Báo nghỉ đột xuất'))
+            ]
+
+        else:  # issue
+            user_name = rec.get('reporter_name') or user_email.split('@')[0]
+            type_title = "BÁO CÁO SỰ CỐ KỸ THUẬT PHÒNG MÁY"
+            machine_no = rec.get('machine_number') or 'N/A'
+            category = str(rec.get('issue_category') or 'Sự cố kỹ thuật')
+            subject = f"[BÁO CÁO SỰ CỐ MỚI] P.{room} (Máy {machine_no}) - {category}"
+            lead_msg = f"Người dùng <strong>{html_lib.escape(str(user_name))}</strong> vừa gửi báo cáo sự cố kỹ thuật tại <strong>Phòng {room} (Máy số {machine_no})</strong>."
+
+            detail_rows = [
+                ("Người báo sự cố", f"{user_name} ({rec.get('department') or 'Đơn vị'})"),
+                ("Email liên hệ", user_email or 'Chưa cung cấp'),
+                ("Vị trí thiết bị", f"Phòng {room} - Máy số: {machine_no}"),
+                ("Phân loại sự cố", category),
+                ("Mô tả chi tiết", str(rec.get('description') or ''))
+            ]
+
+        rows_html = ""
+        rows_text = []
+        for k, v in detail_rows:
+            rows_html += f"""
+            <tr>
+                <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; color: #475569; font-weight: 600; width: 36%; font-size: 14px;">{html_lib.escape(str(k))}</td>
+                <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; color: #0F172A; font-weight: 500; font-size: 14px;">{html_lib.escape(str(v))}</td>
+            </tr>
+            """
+            rows_text.append(f"- {k}: {v}")
+
+        content_block_html = f"""
+        <div style="margin-top: 18px; border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden;">
+            <div style="background-color: #F8FAFC; padding: 10px 14px; font-size: 12.5px; font-weight: 700; color: #0F2942; border-bottom: 1px solid #E2E8F0; text-transform: uppercase;">
+                THÔNG TIN CHI TIẾT YÊU CẦU MỚI
+            </div>
+            <table style="width: 100%; border-collapse: collapse;">
+                {rows_html}
+            </table>
+        </div>
+        """
+        detail_text = "\n".join(rows_text)
+
+    action_btn_html = ""
+    if admin_panel_url:
+        action_btn_html = f"""
+        <div style="text-align: center; margin-top: 24px;">
+            <a href="{admin_panel_url}" style="display: inline-block; background-color: #0F2942; color: #FFFFFF; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 6px; box-shadow: 0 2px 6px rgba(15, 41, 66, 0.2);">
+                Mở Trang Quản Trị Xử Lý Ngay &rarr;
+            </a>
+        </div>
+        """
+
+    html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin: 0; padding: 20px; background-color: #F1F5F9; font-family: 'Segoe UI', Roboto, Arial, sans-serif; color: #1E293B;">
+    <div style="max-width: 640px; margin: 0 auto; background-color: #FFFFFF; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(15, 41, 66, 0.08); border: 1px solid #E2E8F0;">
+        <div style="background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%); padding: 20px 26px; color: #FFFFFF; text-align: center;">
+            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #99F6E4; font-weight: 700; margin-bottom: 4px;">
+                THÔNG BÁO QUẢN TRỊ VIÊN
+            </div>
+            <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #FFFFFF; letter-spacing: 0.5px;">
+                HỆ THỐNG PHÒNG MÁY TÍNH B4.2
+            </h2>
+        </div>
+
+        <div style="padding: 26px;">
+            <div style="margin-bottom: 16px;">
+                <span style="display: inline-block; background-color: #EFF6FF; color: #1D4ED8; font-weight: 700; font-size: 12.5px; padding: 6px 14px; border-radius: 4px; border: 1px solid #BFDBFE;">
+                    YÊU CẦU MỚI: {type_title}
+                </span>
+                <div style="font-size: 12px; color: #64748B; margin-top: 6px;">Thời gian gửi: {now_str}</div>
+            </div>
+
+            <p style="font-size: 15px; line-height: 1.6; margin-top: 0; color: #0F172A;">
+                Kính gửi <strong>Quản trị viên (Chị Hằng)</strong>,
+            </p>
+            <p style="font-size: 14.5px; line-height: 1.6; color: #334155;">
+                {lead_msg}
+            </p>
+
+            {content_block_html}
+
+            {action_btn_html}
+
+            <div style="margin-top: 26px; padding-top: 16px; border-top: 1px solid #E2E8F0; font-size: 13px; color: #64748B; line-height: 1.5;">
+                * Email này được gửi tự động tới hộp thư Quản trị viên (<code>mlhang@hcmus.edu.vn</code>) để hỗ trợ phản hồi và duyệt đơn cho Giảng viên nhanh nhất.
+            </div>
+        </div>
+
+        <div style="background-color: #0F2942; color: #CBD5E1; padding: 14px 26px; font-size: 12px; line-height: 1.5;">
+            <div style="color: #FFFFFF; font-weight: 700;">
+                Phòng Quản trị Thiết bị - Tòa B4.2 – Cơ sở 2 Linh Trung
+            </div>
+            <div style="color: #94A3B8;">Hệ thống Quản lý Thời khóa biểu &amp; Vận hành Phòng máy tính</div>
+        </div>
+    </div>
+</body>
+</html>"""
+
+    text_body = (
+        f"[THÔNG BÁO QUẢN TRỊ VIÊN] YÊU CẦU MỚI TỪ USER ({type_title})\n\n"
+        f"Thời gian: {now_str}\n"
+        f"{re.sub(r'<[^>]+>', '', lead_msg)}\n\n"
+        f"Thông tin chi tiết:\n{detail_text}\n\n"
+        f"Vào Admin Panel xử lý: {admin_panel_url}\n"
+    )
+
+    return subject, html_body, text_body
+
+
+def notify_admin_on_new_request(req_type, data, conn=None):
+    """Gửi email thông báo nghiệp vụ tức thời cho Admin khi có yêu cầu mới từ User (chạy ngầm qua Thread)."""
+    try:
+        email_cfg = get_email_settings(conn=conn)
+        if not email_cfg.get('enabled') or not email_cfg.get('ready') or not email_cfg.get('admin_notify_enabled', True):
+            return
+
+        admin_email = (email_cfg.get('email') or SUPER_ADMIN_EMAIL or 'mlhang@hcmus.edu.vn').strip()
+        if not admin_email or '@' not in admin_email:
+            return
+
+        try:
+            if req_type in ('booking', 'bulk_booking'):
+                admin_url = url_for('admin_panel', tab='requests', _external=True)
+            elif req_type == 'cancellation':
+                admin_url = url_for('admin_panel', tab='cancellations', _external=True)
+            elif req_type == 'issue':
+                admin_url = url_for('admin_panel', tab='issues', _external=True)
+            else:
+                admin_url = url_for('admin_panel', _external=True)
+        except Exception:
+            admin_url = ""
+
+        subject, html_body, text_body = build_admin_alert_email(req_type, data, admin_panel_url=admin_url)
+
+        def _bg_worker():
+            send_smtp_email_sync(admin_email, subject, html_body, text_body, email_cfg=email_cfg)
+
+        threading.Thread(target=_bg_worker, daemon=True).start()
+    except Exception as e:
+        print(f"[Admin Notify Error] {e}")
+
+
 # ==========================================
 # PHÂN HỆ XÁC THỰC GOOGLE OAUTH 2.0
 # ==========================================
@@ -697,7 +1084,7 @@ def google_callback():
 
         if ALLOWED_EMAIL_DOMAINS:
             domain = email.split('@')[-1]
-            if domain not in ALLOWED_EMAIL_DOMAINS and email not in ADMIN_EMAILS:
+            if domain not in ALLOWED_EMAIL_DOMAINS and email not in get_all_admin_emails():
                 flash(f"Vui lòng sử dụng email thuộc tên miền được phép ({', '.join(ALLOWED_EMAIL_DOMAINS)}).", "danger")
                 return redirect(url_for('login_page'))
 
@@ -755,8 +1142,8 @@ def verify_passcode_page():
             conn = get_db_connection()
             user_name = get_current_user_name()
             conn.execute(
-                "INSERT OR REPLACE INTO verified_users (email, full_name, verified_by) VALUES (?, ?, 'passcode')",
-                (user_email.lower(), user_name)
+                "INSERT OR REPLACE INTO verified_users (email, full_name, verified_by, verified_at) VALUES (?, ?, 'passcode', ?)",
+                (user_email.lower(), user_name, get_vn_now_iso())
             )
             conn.commit()
             conn.close()
@@ -786,15 +1173,84 @@ def normalize_study_period_str(raw_val):
         return dt.strftime('%d/%m/%Y')
     return str(raw_val).strip() if raw_val else ''
 
+
+def normalize_room_code(raw_room):
+    """Chuẩn hóa tên phòng (VD: 'Phòng 5.1', 'P.5.1' -> '5.1')."""
+    return str(raw_room or '').replace('Phòng', '').replace('P.', '').strip()
+
+
+def parse_cancellation_period_range(period_str):
+    """Phân tích chuỗi Ca/Tiết báo vắng (VD: 'Tiết 1 - 5', '1-3.5', 'Ca sáng', 'Ca 2') thành khoảng tiết (start, end)."""
+    s = str(period_str or '').lower().replace(',', '.').strip()
+    if not s:
+        return (1.0, 10.0)
+
+    nums = [float(x) for x in re.findall(r'\d+(?:\.\d+)?', s)]
+    if len(nums) >= 2 and 1.0 <= nums[0] <= 10.0 and 1.0 <= nums[1] <= 10.0:
+        return (min(nums[0], nums[1]), max(nums[0], nums[1]))
+
+    if 'ca 1' in s or 'ca1' in s:
+        return (1.0, 3.5)
+    if 'ca 2' in s or 'ca2' in s:
+        return (3.5, 5.0)
+    if 'ca 3' in s or 'ca3' in s:
+        return (6.0, 8.5)
+    if 'ca 4' in s or 'ca4' in s:
+        return (8.5, 10.0)
+    if 'sáng' in s or 'sang' in s:
+        return (1.0, 5.0)
+    if 'chiều' in s or 'chieu' in s:
+        return (6.0, 10.0)
+
+    if len(nums) == 1 and 1.0 <= nums[0] <= 10.0:
+        return (nums[0], min(10.0, nums[0] + 1.0))
+
+    return (1.0, 10.0)
+
+
+def find_approved_cancellation_for_schedule(schedule_row, target_dates, approved_cancellations):
+    """Kiểm tra một môn học có đơn báo vắng ĐÃ DUYỆT (status == 'Approved') vào đúng ngày và khung tiết hay không."""
+    if not approved_cancellations:
+        return None
+
+    if isinstance(target_dates, datetime.date):
+        date_set = {target_dates}
+    else:
+        date_set = {d for d in (target_dates or []) if isinstance(d, datetime.date)}
+    if not date_set:
+        return None
+
+    sched_room = normalize_room_code(schedule_row['room'])
+    try:
+        s_start = float(schedule_row['start_period'])
+        s_end = float(schedule_row['end_period'])
+    except (ValueError, TypeError, KeyError):
+        return None
+
+    for c in approved_cancellations:
+        if (c['status'] or '') != 'Approved':
+            continue
+        if normalize_room_code(c['room']) != sched_room:
+            continue
+        c_dt = parse_study_period_date(c['cancel_date'])
+        if not c_dt or c_dt not in date_set:
+            continue
+        c_start, c_end = parse_cancellation_period_range(c['period'])
+        if c_start < s_end and c_end > s_start:
+            return c
+    return None
+
+
 def enrich_schedule_row(row, ref_date=None):
     """Bổ sung thông tin chu kỳ lặp (Tuần X/N, Ngày kết thúc, Trạng thái Đóng/Mở cửa) cho 1 dòng lịch học."""
     if ref_date is None:
-        ref_date = datetime.date.today()
+        ref_date = get_vn_today()
     d = dict(row)
     num_weeks = int(d.get('num_weeks') or 15)
     is_ended_early = int(d.get('is_ended_early') or 0)
     ended_early_date = d.get('ended_early_date') or ''
     raw_period = d.get('study_period') or ''
+    d['notes'] = (d.get('notes') or '').strip()
 
     start_dt = parse_study_period_date(raw_period)
     ref_monday = ref_date - datetime.timedelta(days=ref_date.weekday())
@@ -853,10 +1309,18 @@ def enrich_schedule_row(row, ref_date=None):
 
 def get_detailed_free_slots_data(day_of_week, ref_date=None):
     """Tính toán chi tiết các khoảng phòng trống dạng structured data cho ngày chỉ định."""
+    if ref_date is None:
+        ref_date = get_vn_today()
+    ref_monday = ref_date - datetime.timedelta(days=ref_date.weekday())
+    slot_date = ref_monday + datetime.timedelta(days=int(day_of_week) - 2)
+
     conn = get_db_connection()
     schedules = conn.execute(
         'SELECT * FROM schedules WHERE day_of_week = ? AND COALESCE(is_ended_early, 0) = 0 ORDER BY start_period ASC',
         (day_of_week,)
+    ).fetchall()
+    approved_cancellations = conn.execute(
+        "SELECT * FROM cancellations WHERE status = 'Approved'"
     ).fetchall()
     conn.close()
     
@@ -866,6 +1330,9 @@ def get_detailed_free_slots_data(day_of_week, ref_date=None):
         # Nếu môn chưa đến tuần bắt đầu (upcoming), đã hết chu kỳ tuần lặp (completed), hoặc đã kết thúc sớm (ended_early)
         # thì giải phóng phòng trống cho ngày/tuần đang tra cứu
         if not enriched['door_open']:
+            continue
+        # Nếu môn học có đơn báo vắng ĐÃ DUYỆT vào đúng ngày tra cứu thì giải phóng ca đó thành phòng đóng cửa / trống
+        if find_approved_cancellation_for_schedule(row, {slot_date, ref_date}, approved_cancellations):
             continue
         room = row['room']
         if room in room_schedules:
@@ -932,17 +1399,6 @@ def get_detailed_free_slots_data(day_of_week, ref_date=None):
             
     return morning, afternoon
 
-def get_free_slots_for_day(day_of_week, ref_date=None):
-    """Giữ nguyên tương thích ngược cho các nơi sử dụng định dạng dict, có hỗ trợ ref_date."""
-    morning, afternoon = get_detailed_free_slots_data(day_of_week, ref_date=ref_date)
-    morning_free = {}
-    for item in morning:
-        morning_free.setdefault(item['room'], []).append(item['label'])
-    afternoon_free = {}
-    for item in afternoon:
-        afternoon_free.setdefault(item['room'], []).append(item['label'])
-    return morning_free, afternoon_free
-
 @app.route('/')
 def index():
     """Chuyển hướng đến trang chủ"""
@@ -977,12 +1433,30 @@ def submit_issue():
     conn = get_db_connection()
     try:
         conn.execute('''
-        INSERT INTO issue_reports (reporter_name, department, room, machine_number, issue_category, description, email)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (reporter_name, department, room, machine_number, issue_category, description, user_email))
+        INSERT INTO issue_reports (reporter_name, department, room, machine_number, issue_category, description, status, email, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'Processing', ?, ?)
+    ''', (reporter_name, department, room, machine_number, issue_category, description, user_email, get_vn_now_iso()))
         record_submission_rate_log(user_email, action_type='issue', conn=conn)
         conn.commit()
-        flash("Gửi báo cáo sự cố thành công! Bộ phận QTTB sẽ nhanh chóng xử lý.", "success")
+        email_suffix = notify_user_on_status_change('issue', {
+            'reporter_name': reporter_name,
+            'department': department,
+            'room': room,
+            'machine_number': machine_number,
+            'issue_category': issue_category,
+            'description': description,
+            'email': user_email
+        }, 'Processing', conn=conn)
+        notify_admin_on_new_request('issue', {
+            'reporter_name': reporter_name,
+            'department': department,
+            'room': room,
+            'machine_number': machine_number,
+            'issue_category': issue_category,
+            'description': description,
+            'email': user_email
+        }, conn=conn)
+        flash(f"Gửi báo cáo sự cố thành công! Bộ phận QTTB đã tiếp nhận và sẽ nhanh chóng xử lý.{email_suffix}", "success")
     except Exception as e:
         conn.rollback()
         flash(f"Có lỗi xảy ra: {e}", "error")
@@ -1006,7 +1480,7 @@ def api_free_slots():
     raw_date = request.args.get('date', '').strip()
     ref_date = parse_study_period_date(raw_date) if raw_date else None
     if ref_date is None:
-        ref_date = datetime.date.today()
+        ref_date = get_vn_today()
 
     # Tính đúng ngày của Thứ (day) trong tuần chứa ref_date
     monday_of_ref = ref_date - datetime.timedelta(days=ref_date.weekday())
@@ -1033,6 +1507,12 @@ def home_page():
 def submit_booking():
     """Xử lý data khi User gửi form mượn phòng."""
     user_email = get_current_user_email()
+    cfg = get_booking_status_config()
+    is_admin = (get_user_admin_role(user_email) in ('super_admin', 'contributor'))
+    if not cfg['enabled'] and not is_admin:
+        flash(f"⚠️ Cổng đăng ký mượn phòng hiện đang tạm khóa: {cfg['notice']}", "danger")
+        return redirect(url_for('booking_page'))
+
     allowed, retry_after = check_submission_rate_limit(user_email)
     if not allowed:
         flash(f"⚠️ Giới hạn tốc độ gửi: Mỗi tài khoản chỉ được gửi tối đa 2 đơn trong vòng 1 phút để chống spam. Vui lòng đợi {retry_after} giây nữa trước khi gửi tiếp.", "danger")
@@ -1063,13 +1543,43 @@ def submit_booking():
     conn = get_db_connection()
     conn.execute('''
         INSERT INTO booking_requests (requester_name, room, day_of_week, start_period, end_period, purpose, subject_code, class_code, subject_name, department, study_period, software_required, status, email, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, datetime('now', 'localtime'))
-    ''', (requester_name, room, day_of_week, start_period, end_period, purpose, subject_code, class_code, subject_name, department, study_period, software_required, user_email))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Processing', ?, ?)
+    ''', (requester_name, room, day_of_week, start_period, end_period, purpose, subject_code, class_code, subject_name, department, study_period, software_required, user_email, get_vn_now_iso()))
     record_submission_rate_log(user_email, action_type='booking', conn=conn)
     conn.commit()
+    email_suffix = notify_user_on_status_change('booking', {
+        'requester_name': requester_name,
+        'room': room,
+        'day_of_week': day_of_week,
+        'start_period': start_period,
+        'end_period': end_period,
+        'purpose': purpose,
+        'subject_code': subject_code,
+        'class_code': class_code,
+        'subject_name': subject_name,
+        'department': department,
+        'study_period': study_period,
+        'software_required': software_required,
+        'email': user_email
+    }, 'Processing', conn=conn)
+    notify_admin_on_new_request('booking', {
+        'requester_name': requester_name,
+        'room': room,
+        'day_of_week': day_of_week,
+        'start_period': start_period,
+        'end_period': end_period,
+        'purpose': purpose,
+        'subject_code': subject_code,
+        'class_code': class_code,
+        'subject_name': subject_name,
+        'department': department,
+        'study_period': study_period,
+        'software_required': software_required,
+        'email': user_email
+    }, conn=conn)
     conn.close()
     
-    flash("Gửi yêu cầu mượn phòng thành công! Vui lòng chờ Bộ phận Quản trị thiết bị duyệt.", "success")
+    flash(f"Gửi yêu cầu mượn phòng thành công! Hệ thống đã tiếp nhận yêu cầu.{email_suffix}", "success")
     return redirect(url_for('booking_page'))
 
 def is_pending_request_active_on_date(pending_row, ref_date):
@@ -1089,6 +1599,15 @@ def is_pending_request_active_on_date(pending_row, ref_date):
 def submit_bulk_booking():
     """Xử lý data khi User gửi giỏ hàng đăng ký (nhiều môn)."""
     user_email = get_current_user_email()
+    cfg = get_booking_status_config()
+    is_admin = (get_user_admin_role(user_email) in ('super_admin', 'contributor'))
+    if not cfg['enabled'] and not is_admin:
+        return jsonify({
+            'success': False,
+            'booking_closed': True,
+            'message': f"⚠️ Cổng đăng ký mượn phòng hiện đang tạm khóa: {cfg['notice']}"
+        }), 403
+
     allowed, retry_after = check_submission_rate_limit(user_email)
     if not allowed:
         return jsonify({
@@ -1108,7 +1627,7 @@ def submit_bulk_booking():
         'SELECT room, day_of_week, start_period, end_period, study_period, num_weeks, is_ended_early, ended_early_date FROM schedules WHERE COALESCE(is_ended_early, 0) = 0'
     ).fetchall()
     pending_db = conn.execute(
-        "SELECT room, day_of_week, start_period, end_period, study_period FROM booking_requests WHERE status = 'Pending'"
+        "SELECT room, day_of_week, start_period, end_period, study_period FROM booking_requests WHERE status IN ('Pending', 'Processing')"
     ).fetchall()
     cart_assigned = []
     
@@ -1123,7 +1642,7 @@ def submit_bulk_booking():
             return jsonify({'success': False, 'message': 'Dữ liệu thời gian không hợp lệ'}), 400
 
         raw_item_date = item.get('study_period') or item.get('study_date') or ''
-        item_ref_date = parse_study_period_date(raw_item_date) or datetime.date.today()
+        item_ref_date = parse_study_period_date(raw_item_date) or get_vn_today()
 
         active_for_item = [
             dict(s) for s in schedules_db
@@ -1178,16 +1697,18 @@ def submit_bulk_booking():
 
     # 2. TIẾN HÀNH LƯU VÀO DATABASE
     default_name = get_current_user_name()
+    email_suffix = ""
     try:
         for item in data:
+            req_name = item.get('requester_name') or default_name
             conn.execute('''
                 INSERT INTO booking_requests (
                     requester_name, room, day_of_week, start_period, end_period, purpose, 
                     subject_code, class_code, subject_name, department, study_period, software_required, 
                     status, email, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, datetime('now', 'localtime'))
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Processing', ?, ?)
             ''', (
-                item.get('requester_name') or default_name, 
+                req_name, 
                 item.get('room'), 
                 int(item.get('day_of_week')),
                 float(item.get('start_period')), 
@@ -1199,17 +1720,40 @@ def submit_bulk_booking():
                 item.get('department'), 
                 item.get('study_period'), 
                 item.get('software_required'),
-                user_email
+                user_email,
+                get_vn_now_iso()
             ))
         record_submission_rate_log(user_email, action_type='bulk_booking', conn=conn)
         conn.commit()
+        for item in data:
+            email_suffix = notify_user_on_status_change('booking', {
+                'requester_name': item.get('requester_name') or default_name,
+                'room': item.get('room'),
+                'day_of_week': int(item.get('day_of_week')),
+                'start_period': float(item.get('start_period')),
+                'end_period': float(item.get('end_period')),
+                'purpose': item.get('purpose'),
+                'subject_code': item.get('subject_code'),
+                'class_code': item.get('class_code'),
+                'subject_name': item.get('subject_name'),
+                'department': item.get('department'),
+                'study_period': item.get('study_period'),
+                'software_required': item.get('software_required'),
+                'email': user_email
+            }, 'Processing', conn=conn)
+        notify_admin_on_new_request('bulk_booking', {
+            'requester_name': (data[0].get('requester_name') if data else default_name) or default_name,
+            'department': (data[0].get('department') if data else 'Đơn vị') or 'Đơn vị',
+            'email': user_email,
+            'items': data
+        }, conn=conn)
     except Exception as e:
         conn.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
     finally:
         conn.close()
     
-    flash("Gửi danh sách yêu cầu mượn phòng thành công! Các phòng Tùy ý (nếu có) đã được hệ thống tự động xếp vào phòng trống.", "success")
+    flash(f"Gửi danh sách yêu cầu mượn phòng thành công! Hệ thống đã tiếp nhận yêu cầu.{email_suffix}", "success")
     return jsonify({'success': True, 'redirect_url': url_for('booking_page')})
 
 @app.route('/check_conflict', methods=['POST'])
@@ -1224,7 +1768,7 @@ def check_conflict():
         return jsonify({'is_free': False})
 
     raw_req_date = data.get('study_period') or data.get('study_date') or ''
-    req_ref_date = parse_study_period_date(raw_req_date) or datetime.date.today()
+    req_ref_date = parse_study_period_date(raw_req_date) or get_vn_today()
         
     conn = get_db_connection()
     # Kiểm tra cả lịch đã duyệt (đang còn hiệu lực trong tuần của req_ref_date) và yêu cầu đang chờ duyệt
@@ -1236,8 +1780,8 @@ def check_conflict():
         if enrich_schedule_row(s, ref_date=req_ref_date)['door_open']
     ]
     schedules_pending = conn.execute(
-        'SELECT room, day_of_week, start_period, end_period, study_period FROM booking_requests WHERE day_of_week = ? AND status = ?',
-        (dow, 'Pending')
+        "SELECT room, day_of_week, start_period, end_period, study_period FROM booking_requests WHERE day_of_week = ? AND status IN ('Pending', 'Processing')",
+        (dow,)
     ).fetchall()
     active_pending = [
         p for p in schedules_pending
@@ -1290,14 +1834,30 @@ def submit_cancellation():
     
     conn = get_db_connection()
     conn.execute('''
-        INSERT INTO cancellations (teacher_name, room, cancel_date, period, reason, email)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (teacher_name, room, cancel_date, period, reason, user_email))
+        INSERT INTO cancellations (teacher_name, room, cancel_date, period, reason, status, email, created_at)
+        VALUES (?, ?, ?, ?, ?, 'Processing', ?, ?)
+    ''', (teacher_name, room, cancel_date, period, reason, user_email, get_vn_now_iso()))
     record_submission_rate_log(user_email, action_type='cancellation', conn=conn)
     conn.commit()
+    email_suffix = notify_user_on_status_change('cancellation', {
+        'teacher_name': teacher_name,
+        'room': room,
+        'cancel_date': cancel_date,
+        'period': period,
+        'reason': reason,
+        'email': user_email
+    }, 'Processing', conn=conn)
+    notify_admin_on_new_request('cancellation', {
+        'teacher_name': teacher_name,
+        'room': room,
+        'cancel_date': cancel_date,
+        'period': period,
+        'reason': reason,
+        'email': user_email
+    }, conn=conn)
     conn.close()
     
-    flash("Gửi thông báo nghỉ thành công! Phòng QTTB sẽ tiến hành đóng cửa phòng để bảo vệ tài sản.", "success")
+    flash(f"Gửi thông báo nghỉ thành công! Hệ thống đã tiếp nhận và chuyển thông tin tới Phòng QTTB.{email_suffix}", "success")
     return redirect(url_for('cancellation_page'))
 
 # ==========================================
@@ -1316,14 +1876,14 @@ def redirect_to_admin():
 def admin_panel():
     """Trang quản trị (Dashboard): Chỉ Admin mới vào được."""
     conn = get_db_connection()
-    today = datetime.date.today()
+    today = get_vn_today()
 
-    # 1. Lấy toàn bộ danh sách yêu cầu mượn phòng (ưu tiên Chờ xử lý lên đầu, lưu vết các yêu cầu đã xử lý)
+    # 1. Lấy toàn bộ danh sách yêu cầu mượn phòng (ưu tiên Đã tiếp nhận lên đầu, lưu vết các yêu cầu đã xử lý)
     booking_requests = conn.execute("""
         SELECT * FROM booking_requests
-        ORDER BY CASE status WHEN 'Pending' THEN 0 WHEN 'Processing' THEN 1 WHEN 'Approved' THEN 2 ELSE 3 END, id DESC
+        ORDER BY CASE status WHEN 'Processing' THEN 0 WHEN 'Pending' THEN 0 WHEN 'Approved' THEN 1 ELSE 2 END, id DESC
     """).fetchall()
-    pending_requests = [r for r in booking_requests if r['status'] == 'Pending']
+    pending_requests = [r for r in booking_requests if r['status'] in ('Pending', 'Processing')]
 
     # 2. Lấy danh sách lịch học hiện tại (để hiển thị trong bảng quản lý) và bổ sung thông tin chu kỳ tuần
     raw_schedules = conn.execute("SELECT * FROM schedules ORDER BY room ASC, day_of_week ASC, start_period ASC").fetchall()
@@ -1343,18 +1903,6 @@ def admin_panel():
         current_schedules = locked_list
     else:
         current_schedules = all_enriched_schedules
-
-    # Logic tìm phòng trống theo Thứ & Ngày/Tuần (hỗ trợ tra cứu Học kỳ 2)
-    filter_day = request.args.get('filter_day', 2, type=int)
-    raw_free_date = request.args.get('filter_date', '').strip()
-    free_ref_date = parse_study_period_date(raw_free_date) if raw_free_date else today
-    if not free_ref_date:
-        free_ref_date = today
-    free_monday = free_ref_date - datetime.timedelta(days=free_ref_date.weekday())
-    free_target_date = free_monday + datetime.timedelta(days=filter_day - 2)
-    filter_date_str = free_target_date.strftime('%Y-%m-%d')
-    free_target_date_display = free_target_date.strftime('%d/%m/%Y')
-    admin_morning_free, admin_afternoon_free = get_free_slots_for_day(filter_day, ref_date=free_target_date)
 
     # 3. Lấy dữ liệu hiển thị dạng Lưới theo tuần (Chế độ Google Calendar)
     rooms = ROOMS_LIST
@@ -1380,8 +1928,13 @@ def admin_panel():
         day_headers[d] = {
             'date_str': d_date.strftime('%d/%m/%Y'),
             'short_date': d_date.strftime('%d/%m'),
-            'is_today': (d_date == today)
+            'is_today': (d_date == today),
+            'date_obj': d_date
         }
+
+    cancellations = conn.execute("SELECT * FROM cancellations ORDER BY created_at DESC").fetchall()
+    approved_cancellations = [c for c in cancellations if (c['status'] or '') == 'Approved']
+    issues = conn.execute("SELECT * FROM issue_reports ORDER BY created_at DESC").fetchall()
 
     schedules_grid = conn.execute('SELECT * FROM schedules WHERE room = ? ORDER BY start_period ASC', (selected_room,)).fetchall()
     week_data = {day: [] for day in range(2, 8)}
@@ -1393,6 +1946,13 @@ def admin_panel():
             # Chỉ hiển thị trên Thời khóa biểu tuần này nếu học phần nằm trong chu kỳ lặp 1..num_weeks của tuần đang chọn
             if not enriched['is_in_selected_week']:
                 continue
+
+            col_date = day_headers[day]['date_obj']
+            cancel_match = find_approved_cancellation_for_schedule(enriched, col_date, approved_cancellations)
+            enriched['is_cancelled_on_date'] = bool(cancel_match)
+            enriched['cancel_date_str'] = col_date.strftime('%d/%m/%Y')
+            enriched['cancel_teacher'] = (cancel_match['teacher_name'] or '') if cancel_match else ''
+            enriched['cancel_reason'] = (cancel_match['reason'] or '') if cancel_match else ''
 
             start = float(enriched['start_period'])
             end = float(enriched['end_period'])
@@ -1411,9 +1971,6 @@ def admin_panel():
                 'top': top_pct,
                 'height': height_pct
             })
-
-    cancellations = conn.execute("SELECT * FROM cancellations ORDER BY created_at DESC").fetchall()
-    issues = conn.execute("SELECT * FROM issue_reports ORDER BY created_at DESC").fetchall()
 
     # 4. Tính toán số liệu thống kê cho Tab 📊 Dashboard & B42Lab NetAgent
     ak_row = conn.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
@@ -1504,15 +2061,9 @@ def admin_panel():
     # Trạng thái trực tiếp 8 phòng hôm nay & Lịch Mở/Khóa cửa hôm nay
     today_dow = today.weekday() + 2  # Thứ 2 = 2 .. Chủ nhật = 8
     display_dow = today_dow if 2 <= today_dow <= 7 else 2
-    today_str_dmy = today.strftime('%d/%m/%Y')
-    today_str_iso = today.strftime('%Y-%m-%d')
-
-    # Kiểm tra các phòng có báo nghỉ hôm nay
-    cancelled_rooms_today = set()
-    for c in cancellations:
-        c_date = (c['cancel_date'] or '').strip()
-        if c_date in (today_str_dmy, today_str_iso):
-            cancelled_rooms_today.add(str(c['room']).replace('Phòng ', '').replace('P.', '').strip())
+    today_monday = today - datetime.timedelta(days=today.weekday())
+    display_target_date = today_monday + datetime.timedelta(days=display_dow - 2)
+    active_check_dates = {today, display_target_date}
 
     pending_issues_by_room = {r: 0 for r in rooms}
     for iss in issues:
@@ -1529,24 +2080,35 @@ def admin_panel():
     for r in rooms:
         r_today_classes = [s for s in all_enriched_schedules if s['room'] == r and int(s['day_of_week']) == display_dow and s['is_in_selected_week']]
 
-        # Nhãn hoạt động trên thẻ Live Status 8 phòng (luôn ưu tiên hiển thị lịch học/trạng thái cửa)
-        open_today = [s for s in r_today_classes if s['door_open']]
-        ended_today = [s for s in r_today_classes if not s['door_open']]
-        if r in cancelled_rooms_today:
-            activity_label = "🔒 Khóa cửa (Lớp báo nghỉ)"
+        # Nhãn hoạt động trên thẻ Live Status 8 phòng (xét cả báo vắng đã duyệt trong ngày)
+        open_today = []
+        cancelled_today = []
+        ended_today = []
+        for s in r_today_classes:
+            if not s['door_open']:
+                ended_today.append(s)
+            elif find_approved_cancellation_for_schedule(s, active_check_dates, approved_cancellations):
+                cancelled_today.append(s)
+            else:
+                open_today.append(s)
+
+        if cancelled_today and not open_today:
+            c0 = cancelled_today[0]
+            activity_label = f"Khóa cửa (Báo vắng T.{c0['start_period']:g}-{c0['end_period']:g})"
             activity_class = "text-danger fw-semibold"
         elif open_today:
             first_c = open_today[0]
             subj = first_c['subject_name']
             if len(subj) > 20:
                 subj = subj[:19] + "…"
-            activity_label = f"🔓 T.{first_c['start_period']:g}-{first_c['end_period']:g}: {subj}"
+            suffix = " (Có ca vắng)" if cancelled_today else ""
+            activity_label = f"T.{first_c['start_period']:g}-{first_c['end_period']:g}: {subj}{suffix}"
             activity_class = "text-primary fw-semibold"
         elif ended_today:
-            activity_label = "🔒 Khóa cửa (Đã KT sớm)"
+            activity_label = "Khóa cửa (Đã KT sớm)"
             activity_class = "text-secondary"
         else:
-            activity_label = f"⚪ Trống lịch Thứ {display_dow}"
+            activity_label = f"Trống lịch Thứ {display_dow}"
             activity_class = "text-muted"
 
         net_info = net_map.get(r, {'target_ip': '8.8.8.8', 'status': 'online', 'ping_ms': 12, 'updated_at': ''})
@@ -1587,13 +2149,6 @@ def admin_panel():
             room_label = f"P.{item['room']}"
             if room_label not in grouped.setdefault(key, []):
                 grouped[key].append(room_label)
-
-        full_key = (1.0, 5.0) if is_morning else (6.0, 10.0)
-        for r_cancel in sorted(cancelled_rooms_today):
-            r_lbl = f"P.{r_cancel}"
-            already_listed = any(r_lbl in r_list for r_list in grouped.values())
-            if not already_listed:
-                grouped.setdefault(full_key, []).append(r_lbl)
 
         sorted_keys = sorted(grouped.keys(), key=lambda k: (1 if (k[1] - k[0]) >= 4.0 else 0, k[0], k[1]))
         result = []
@@ -1715,7 +2270,7 @@ def admin_panel():
     ).fetchall()
     campaigns = [r['campaign_name'] for r in camp_rows if r['campaign_name']]
     if not campaigns:
-        now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+        now_short = get_vn_now_str('%H:%M %d/%m/%Y')
         for r_code in rooms:
             conn.execute('''
                 INSERT OR IGNORE INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
@@ -1729,7 +2284,7 @@ def admin_panel():
         selected_campaign = campaigns[0]
 
     # Đảm bảo đủ 8 phòng cho đợt đang chọn
-    now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+    now_short = get_vn_now_str('%H:%M %d/%m/%Y')
     for r_code in rooms:
         conn.execute('''
             INSERT OR IGNORE INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
@@ -1777,11 +2332,12 @@ def admin_panel():
 
     email_config = get_email_settings(conn=conn)
 
-    # Passcode, Danh sách Giảng viên Gmail đã xác minh & Danh sách Tài khoản bị khóa
+    # Passcode, Danh sách Giảng viên Gmail đã xác minh, Danh sách Tài khoản bị khóa & Phân quyền Quản trị
     teacher_passcode = get_teacher_passcode(conn=conn)
     verified_users = conn.execute("SELECT * FROM verified_users ORDER BY id DESC").fetchall()
     blocked_users = conn.execute("SELECT * FROM blocked_users ORDER BY id DESC").fetchall()
     blocked_emails = [row['email'].strip().lower() for row in blocked_users if row['email']]
+    admin_permissions = get_admin_permissions_list(conn=conn)
 
     conn.close()
     return render_template(
@@ -1802,11 +2358,6 @@ def admin_panel():
         next_week_date_str=next_week_date_str,
         week_range_label=week_range_label,
         cancellations=cancellations,
-        filter_day=filter_day,
-        filter_date_str=filter_date_str,
-        free_target_date_display=free_target_date_display,
-        morning_free=admin_morning_free,
-        afternoon_free=admin_afternoon_free,
         issues=issues,
         dashboard_stats=dashboard_stats,
         semester_summary=semester_summary,
@@ -1817,7 +2368,8 @@ def admin_panel():
         teacher_passcode=teacher_passcode,
         verified_users=verified_users,
         blocked_users=blocked_users,
-        blocked_emails=blocked_emails
+        blocked_emails=blocked_emails,
+        admin_permissions=admin_permissions
     )
 
 def measure_host_ping_ms(target_ip):
@@ -1854,7 +2406,7 @@ def api_network_heartbeat():
         conn.close()
         return jsonify({'success': False, 'message': 'Invalid agent_key'}), 403
 
-    now_str = datetime.datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+    now_str = get_vn_now_str('%H:%M:%S %d/%m/%Y')
     results = data.get('rooms', {})
     # Hỗ trợ cả trường hợp gửi lẻ 1 phòng: {"room": "5.1", "status": "online", "ping_ms": 11}
     if not results and data.get('room'):
@@ -1924,6 +2476,7 @@ def api_network_status():
 @admin_required
 def save_network_config():
     """Lưu cấu hình IP của 8 phòng máy từ giao diện Admin."""
+    return_tab = (request.form.get('return_tab') or 'settings').strip()
     conn = get_db_connection()
     for r in ROOMS_LIST:
         ip_val = (request.form.get(f"ip_{r}") or '8.8.8.8').strip()
@@ -1931,7 +2484,7 @@ def save_network_config():
     conn.commit()
     conn.close()
     flash("✅ Đã lưu danh sách địa chỉ IP Router cho 8 phòng máy!", "success")
-    return redirect(url_for('admin_panel', tab='dashboard'))
+    return redirect(url_for('admin_panel', tab=return_tab))
 
 @app.route('/admin/network-ping-now', methods=['POST'])
 @admin_required
@@ -1939,7 +2492,7 @@ def admin_network_ping_now():
     """Thực hiện Ping kiểm tra ngay lập tức tới 8 phòng máy."""
     conn = get_db_connection()
     rows = conn.execute("SELECT room, target_ip FROM room_network_status").fetchall()
-    now_str = datetime.datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+    now_str = get_vn_now_str('%H:%M:%S %d/%m/%Y')
 
     for row in rows:
         r = row['room']
@@ -2036,6 +2589,48 @@ def export_semester_report():
         as_attachment=True,
         download_name=filename,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+
+def _parse_monthly_report_params():
+    """Trích xuất và kiểm tra tham số tháng/năm hợp lệ cho báo cáo tháng."""
+    today = get_vn_today()
+    month = request.args.get('month', today.month, type=int) or today.month
+    year = request.args.get('year', today.year, type=int) or today.year
+    if month < 1 or month > 12:
+        month = today.month
+    if year < 2000 or year > 2100:
+        year = today.year
+    return month, year
+
+
+@app.route('/admin/export-monthly-report-excel')
+@admin_required
+def export_monthly_report_excel():
+    """Xuất file Excel (.xlsx) Báo cáo Tích hợp Vận hành & Khai thác 8 Phòng máy theo Tháng (4 Sheet chi tiết)."""
+    month, year = _parse_monthly_report_params()
+    excel_buffer = build_monthly_excel_report(month, year)
+    filename = f"BaoCao_KhaiThac_PhongMay_Thang_{month:02d}_{year}.xlsx"
+    return send_file(
+        excel_buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+
+@app.route('/admin/export-monthly-report-word')
+@admin_required
+def export_monthly_report_word():
+    """Xuất file Word (.docx) Báo cáo Tóm tắt chuẩn thể thức văn bản hành chính theo Tháng (Header chuẩn CSLT)."""
+    month, year = _parse_monthly_report_params()
+    word_buffer = build_monthly_word_report(month, year)
+    filename = f"BaoCao_TomTat_PhongMay_Thang_{month:02d}_{year}.docx"
+    return send_file(
+        word_buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     )
 
 
@@ -2226,7 +2821,7 @@ def delete_overtime(ot_id):
 @admin_required
 def export_overtime_excel():
     """Xuất file Excel bảng chấm công OT theo tháng."""
-    month = request.args.get('month', datetime.date.today().strftime('%Y-%m')).strip()
+    month = request.args.get('month', get_vn_today().strftime('%Y-%m')).strip()
     conn = get_db_connection()
     if month == 'all':
         rows = conn.execute("SELECT * FROM overtime_records ORDER BY ot_date ASC, id ASC").fetchall()
@@ -2302,7 +2897,7 @@ def calculate_worklog_duration(work_date_str, completed_date_str, status):
             return {'days': diff, 'label': f"{diff} ngày", 'badge_class': 'bg-info bg-opacity-15 text-dark border border-info'}
     else:
         # Đang làm (in_progress hoặc pending)
-        today = datetime.date.today()
+        today = get_vn_today()
         elapsed = (today - start_d).days
         if elapsed <= 0:
             return {'days': 0, 'label': 'Hôm nay', 'badge_class': 'bg-light text-secondary border'}
@@ -2316,7 +2911,7 @@ def calculate_worklog_duration(work_date_str, completed_date_str, status):
 @admin_required
 def add_worklog():
     """Thêm công việc mới vào Nhật ký công việc thường nhật."""
-    work_date = (request.form.get('work_date') or datetime.date.today().strftime('%Y-%m-%d')).strip()
+    work_date = (request.form.get('work_date') or get_vn_today_iso()).strip()
     shift_name = (request.form.get('shift_name') or 'Ca sáng').strip()
     category = (request.form.get('category') or 'server_net').strip()
     target_rooms = (request.form.get('target_rooms') or 'Tất cả 8 phòng').strip()
@@ -2325,7 +2920,7 @@ def add_worklog():
     priority = (request.form.get('priority') or 'normal').strip()
     status = (request.form.get('status') or 'in_progress').strip()
     created_by = get_current_user_email() or 'Admin'
-    today_iso = datetime.date.today().strftime('%Y-%m-%d')
+    today_iso = get_vn_today_iso()
     completed_date = today_iso if status == 'completed' else None
 
     if not content:
@@ -2334,9 +2929,9 @@ def add_worklog():
 
     conn = get_db_connection()
     conn.execute('''
-        INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by, completed_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by, completed_date))
+        INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by, completed_date, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by, completed_date, get_vn_now_iso()))
     conn.commit()
     conn.close()
 
@@ -2348,7 +2943,7 @@ def add_worklog():
 @admin_required
 def edit_worklog(log_id):
     """Chỉnh sửa nội dung và ghi chú của một công việc trong Nhật ký."""
-    work_date = (request.form.get('work_date') or datetime.date.today().strftime('%Y-%m-%d')).strip()
+    work_date = (request.form.get('work_date') or get_vn_today_iso()).strip()
     shift_name = (request.form.get('shift_name') or 'Ca sáng').strip()
     category = (request.form.get('category') or 'server_net').strip()
     target_rooms = (request.form.get('target_rooms') or 'Tất cả 8 phòng').strip()
@@ -2361,7 +2956,7 @@ def edit_worklog(log_id):
         flash("⚠️ Nội dung công việc không được để trống!", "warning")
         return redirect(url_for('admin_panel', tab='worklog'))
 
-    today_iso = datetime.date.today().strftime('%Y-%m-%d')
+    today_iso = get_vn_today_iso()
     conn = get_db_connection()
     row = conn.execute("SELECT status, completed_date FROM work_logs WHERE id = ?", (log_id,)).fetchone()
     if status == 'completed':
@@ -2391,7 +2986,7 @@ def toggle_worklog_status(log_id):
     if row:
         cur = row['status'] or 'in_progress'
         requested_status = (request.form.get('status') or '').strip()
-        today_iso = datetime.date.today().strftime('%Y-%m-%d')
+        today_iso = get_vn_today_iso()
 
         if requested_status in ('in_progress', 'completed'):
             nxt = requested_status
@@ -2481,7 +3076,7 @@ def export_worklog_excel():
     ws["A1"].alignment = align_center
 
     ws.merge_cells("A2:I2")
-    ws["A2"] = f"Hệ thống Phòng máy (5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.5, 6.6) • Ngày xuất: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    ws["A2"] = f"Hệ thống Phòng máy (5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.5, 6.6) • Ngày xuất: {get_vn_now_str('%d/%m/%Y %H:%M')}"
     ws["A2"].font = font_subtitle
     ws["A2"].alignment = align_center
 
@@ -2533,7 +3128,7 @@ def export_worklog_excel():
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    filename = f"Nhat_Ky_Cong_Viec_Phong_May_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
+    filename = f"Nhat_Ky_Cong_Viec_Phong_May_{get_vn_today().strftime('%Y%m%d')}.xlsx"
     return send_file(
         output,
         as_attachment=True,
@@ -2554,7 +3149,7 @@ def api_update_deploy_checklist():
         checked_steps = []
     notes = (data.get('notes') or '').strip()
     updated_by = get_current_user_email() or 'Admin'
-    now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+    now_short = get_vn_now_str('%H:%M %d/%m/%Y')
 
     conn = get_db_connection()
     conn.execute('''
@@ -2586,7 +3181,7 @@ def api_copy_phase_a_all():
     campaign_name = (data.get('campaign_name') or 'HK1 (2026-2027) - Deploy Hệ thống chuẩn').strip()
     phase_a_ids = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10']
     updated_by = get_current_user_email() or 'Admin'
-    now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+    now_short = get_vn_now_str('%H:%M %d/%m/%Y')
 
     conn = get_db_connection()
     updated_map = {}
@@ -2635,7 +3230,7 @@ def add_deploy_campaign():
         flash("⚠️ Vui lòng nhập tên đợt triển khai mới!", "warning")
         return redirect(url_for('admin_panel', tab='worklog', wl_view='deploy'))
 
-    now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+    now_short = get_vn_now_str('%H:%M %d/%m/%Y')
     updated_by = get_current_user_email() or 'Admin'
     conn = get_db_connection()
     for r_code in ROOMS_LIST:
@@ -2677,7 +3272,7 @@ def api_log_deploy_to_worklog():
 
     pct = int(round((done_count / max(1, total_count)) * 100))
     status = 'completed' if done_count >= total_count else 'in_progress'
-    today_iso = datetime.date.today().strftime('%Y-%m-%d')
+    today_iso = get_vn_today_iso()
     created_by = get_current_user_email() or 'Admin'
 
     content = (
@@ -2689,9 +3284,9 @@ def api_log_deploy_to_worklog():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by)
-        VALUES (?, 'Cả ngày', 'vmware', ?, ?, ?, 'high', ?, ?)
-    ''', (today_iso, room, content, final_note, status, created_by))
+        INSERT INTO work_logs (work_date, shift_name, category, target_rooms, content, notes, priority, status, created_by, created_at)
+        VALUES (?, 'Cả ngày', 'vmware', ?, ?, ?, 'high', ?, ?, ?)
+    ''', (today_iso, room, content, final_note, status, created_by, get_vn_now_iso()))
     new_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -2708,13 +3303,15 @@ def api_log_deploy_to_worklog():
 def save_email_config():
     """Lưu cấu hình gửi Email tự động (Gmail SMTP App Password)."""
     smtp_enabled = '1' if request.form.get('smtp_enabled') == '1' else '0'
+    admin_notify_enabled = '1' if request.form.get('admin_notify_enabled') == '1' else '0'
     smtp_email = (request.form.get('smtp_email') or 'mlhang@hcmus.edu.vn').strip()
     smtp_password = (request.form.get('smtp_password') or '').strip()
     smtp_sender_name = (request.form.get('smtp_sender_name') or 'Hệ thống Phòng máy B4.2 - Phòng QTTB').strip()
-    return_tab = (request.form.get('return_tab') or 'requests').strip()
+    return_tab = (request.form.get('return_tab') or 'settings').strip()
 
     conn = get_db_connection()
     conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_enabled', ?)", (smtp_enabled,))
+    conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('admin_notify_enabled', ?)", (admin_notify_enabled,))
     conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_email', ?)", (smtp_email,))
     conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('smtp_sender_name', ?)", (smtp_sender_name,))
     if smtp_password:
@@ -2722,7 +3319,7 @@ def save_email_config():
     conn.commit()
     conn.close()
 
-    flash("✅ Đã lưu cấu hình Gửi Email tự động trả kết quả cho User!", "success")
+    flash("Đã lưu cấu hình Gửi Email tự động thành công!", "success")
     return redirect(url_for('admin_panel', tab=return_tab))
 
 
@@ -2757,7 +3354,7 @@ def test_email_config():
         'subject_name': 'Kiểm tra hệ thống gửi Email tự động',
         'class_code': 'TEST-B42',
         'purpose': 'Kiểm tra kết nối SMTP trả kết quả tự động cho giảng viên',
-        'study_period': datetime.date.today().strftime('%d/%m/%Y'),
+        'study_period': get_vn_today().strftime('%d/%m/%Y'),
         'email': test_to
     }
     subject, html_body, text_body = build_request_notification_email(
@@ -2771,12 +3368,34 @@ def test_email_config():
     return jsonify({'success': ok, 'message': msg})
 
 
+@app.route('/admin/toggle-booking-status', methods=['POST'])
+@admin_required
+def toggle_booking_status():
+    """Bật/Tắt khóa cổng đăng ký mượn phòng và cập nhật nội dung thông báo cho giảng viên."""
+    booking_enabled = '1' if request.form.get('booking_enabled') == '1' else '0'
+    notice = (request.form.get('booking_disabled_notice') or '').strip()
+    return_tab = (request.form.get('return_tab') or 'settings').strip()
+
+    if not notice:
+        notice = 'Hệ thống đang tạm khóa đăng ký mượn phòng để Quản trị viên sắp xếp Thời khóa biểu. Quý Thầy/Cô vui lòng quay lại sau!'
+
+    conn = get_db_connection()
+    conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('booking_enabled', ?)", (booking_enabled,))
+    conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('booking_disabled_notice', ?)", (notice,))
+    conn.commit()
+    conn.close()
+
+    status_str = "MỞ nhận đơn" if booking_enabled == '1' else "TẠM KHÓA đăng ký"
+    flash(f"Đã cập nhật trạng thái Cổng đăng ký mượn phòng: {status_str} thành công!", "success")
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
 @app.route('/admin/update-teacher-passcode', methods=['POST'])
 @admin_required
 def update_teacher_passcode():
     """Cập nhật Mã Passcode nội bộ dành cho Thầy/Cô dùng Gmail cá nhân."""
     new_passcode = (request.form.get('teacher_passcode') or '').strip()
-    return_tab = (request.form.get('return_tab') or 'dashboard').strip()
+    return_tab = (request.form.get('return_tab') or 'settings').strip()
     if not new_passcode:
         flash("Mã Passcode không được để trống.", "warning")
         return redirect(url_for('admin_panel', tab=return_tab))
@@ -2793,7 +3412,7 @@ def update_teacher_passcode():
 @admin_required
 def delete_verified_user(user_id):
     """Thu hồi quyền Giảng viên của một tài khoản Gmail."""
-    return_tab = (request.form.get('return_tab') or 'dashboard').strip()
+    return_tab = (request.form.get('return_tab') or 'settings').strip()
     conn = get_db_connection()
     row = conn.execute("SELECT email FROM verified_users WHERE id = ?", (user_id,)).fetchone()
     if row:
@@ -2810,7 +3429,7 @@ def add_verified_user():
     """Admin chủ động thêm xác thực cho tài khoản Giảng viên dùng Gmail."""
     email = (request.form.get('email') or '').strip().lower()
     full_name = (request.form.get('full_name') or '').strip()
-    return_tab = (request.form.get('return_tab') or 'dashboard').strip()
+    return_tab = (request.form.get('return_tab') or 'settings').strip()
     if not email or '@' not in email:
         flash("Địa chỉ email không hợp lệ.", "warning")
         return redirect(url_for('admin_panel', tab=return_tab))
@@ -2818,8 +3437,8 @@ def add_verified_user():
     conn = get_db_connection()
     try:
         conn.execute(
-            "INSERT OR REPLACE INTO verified_users (email, full_name, verified_by) VALUES (?, ?, 'admin')",
-            (email, full_name or email.split('@')[0])
+            "INSERT OR REPLACE INTO verified_users (email, full_name, verified_by, verified_at) VALUES (?, ?, 'admin', ?)",
+            (email, full_name or email.split('@')[0], get_vn_now_iso())
         )
         conn.commit()
         flash(f"Đã cấp quyền Giảng viên thành công cho tài khoản {email}.", "success")
@@ -2842,16 +3461,16 @@ def block_user_account():
         flash("Địa chỉ email cần khóa không hợp lệ.", "warning")
         return redirect(url_for('admin_panel', tab=return_tab))
 
-    if email in [e.lower() for e in ADMIN_EMAILS]:
-        flash("Không thể khóa tài khoản Quản trị viên (Admin)!", "danger")
+    if email in get_all_admin_emails():
+        flash("Không thể khóa tài khoản thuộc danh sách Phân quyền Quản trị (Admin / Contributor)!", "danger")
         return redirect(url_for('admin_panel', tab=return_tab))
 
     admin_email = get_current_user_email() or 'Admin'
     conn = get_db_connection()
     try:
         conn.execute(
-            "INSERT OR REPLACE INTO blocked_users (email, reason, blocked_by) VALUES (?, ?, ?)",
-            (email, reason, admin_email)
+            "INSERT OR REPLACE INTO blocked_users (email, reason, blocked_by, blocked_at) VALUES (?, ?, ?, ?)",
+            (email, reason, admin_email, get_vn_now_iso())
         )
         # Đồng thời thu hồi quyền xác minh Passcode nếu có
         conn.execute("DELETE FROM verified_users WHERE LOWER(email) = LOWER(?)", (email,))
@@ -2869,7 +3488,7 @@ def block_user_account():
 @admin_required
 def unblock_user_account(block_id):
     """Mở khóa tài khoản đã bị chặn."""
-    return_tab = (request.form.get('return_tab') or 'requests').strip()
+    return_tab = (request.form.get('return_tab') or 'settings').strip()
     conn = get_db_connection()
     row = conn.execute("SELECT email FROM blocked_users WHERE id = ?", (block_id,)).fetchone()
     if row:
@@ -2880,13 +3499,85 @@ def unblock_user_account(block_id):
     return redirect(url_for('admin_panel', tab=return_tab))
 
 
+@app.route('/admin/permissions/add', methods=['POST'])
+@admin_required
+def add_admin_permission():
+    """Super Admin thêm tài khoản Contributor (Chỉ xem, không có quyền chỉnh sửa/duyệt/xóa)."""
+    return_tab = (request.form.get('return_tab') or 'settings').strip()
+    current_email = (get_current_user_email() or '').strip().lower()
+    if current_email != SUPER_ADMIN_EMAIL.lower():
+        flash("🔒 Chỉ Super Admin (mlhang@hcmus.edu.vn) mới có quyền thêm hoặc thay đổi phân quyền!", "danger")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    email = (request.form.get('email') or '').strip().lower()
+    note = (request.form.get('note') or '').strip()
+
+    if not email or '@' not in email:
+        flash("Vui lòng nhập địa chỉ email hợp lệ.", "warning")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    if email == SUPER_ADMIN_EMAIL.lower():
+        flash(f"Tài khoản {SUPER_ADMIN_EMAIL} mặc định là Super Admin (Toàn quyền).", "info")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT INTO admin_permissions (email, role, note, added_by, created_at)
+            VALUES (?, 'contributor', ?, ?, ?)
+            ON CONFLICT(email) DO UPDATE SET
+                role = 'contributor',
+                note = excluded.note,
+                added_by = excluded.added_by
+        ''', (email, note or 'Contributor - Chỉ xem (Không có quyền duyệt/sửa/xóa)', current_email, get_vn_now_iso()))
+        # Nếu tài khoản đang nằm trong danh sách khóa thì gỡ khóa để vào xem được
+        conn.execute("DELETE FROM blocked_users WHERE LOWER(email) = LOWER(?)", (email,))
+        conn.commit()
+        flash(f"✅ Đã cấp quyền Contributor (Chỉ xem) cho tài khoản {email} thành công!", "success")
+    except Exception as e:
+        flash(f"Lỗi khi thêm phân quyền: {e}", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
+@app.route('/admin/permissions/delete/<int:perm_id>', methods=['POST'])
+@admin_required
+def delete_admin_permission(perm_id):
+    """Super Admin thu hồi quyền Contributor của một email."""
+    return_tab = (request.form.get('return_tab') or 'settings').strip()
+    current_email = (get_current_user_email() or '').strip().lower()
+    if current_email != SUPER_ADMIN_EMAIL.lower():
+        flash("🔒 Chỉ Super Admin (mlhang@hcmus.edu.vn) mới có quyền thu hồi phân quyền!", "danger")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    conn = get_db_connection()
+    row = conn.execute("SELECT email, role FROM admin_permissions WHERE id = ?", (perm_id,)).fetchone()
+    if not row:
+        conn.close()
+        flash("Không tìm thấy mục phân quyền cần xóa.", "warning")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    if (row['email'] or '').strip().lower() == SUPER_ADMIN_EMAIL.lower() or row['role'] == 'super_admin':
+        conn.close()
+        flash(f"Không thể xóa quyền Super Admin mặc định ({SUPER_ADMIN_EMAIL})!", "danger")
+        return redirect(url_for('admin_panel', tab=return_tab))
+
+    conn.execute("DELETE FROM admin_permissions WHERE id = ?", (perm_id,))
+    conn.commit()
+    conn.close()
+    flash(f"🗑️ Đã thu hồi quyền Contributor của tài khoản {row['email']}.", "info")
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
 @app.route('/admin/approve-cancellation/<int:cancellation_id>', methods=['POST'])
 @admin_required
 def approve_cancellation(cancellation_id):
-    """Cập nhật trạng thái thông báo nghỉ gấp (Chờ xử lý / Đã tiếp nhận / Đã duyệt) từ Dropdown và gửi email thông báo cho giảng viên."""
-    new_status = request.form.get('status', 'Approved')
-    if new_status not in ('Pending', 'Processing', 'Approved'):
-        new_status = 'Approved'
+    """Cập nhật trạng thái thông báo nghỉ gấp (Đã tiếp nhận / Đã duyệt) từ Dropdown và gửi email thông báo cho giảng viên."""
+    new_status = (request.form.get('status') or 'Approved').strip()
+    if new_status not in ('Processing', 'Approved'):
+        new_status = 'Processing'
     admin_note = request.form.get('admin_note', '').strip()
 
     conn = get_db_connection()
@@ -2899,11 +3590,10 @@ def approve_cancellation(cancellation_id):
             (new_status, final_note, cancellation_id)
         )
         conn.commit()
-        if new_status in ('Processing', 'Approved'):
-            email_suffix = notify_user_on_status_change('cancellation', rec, new_status, admin_note=final_note, conn=conn)
+        email_suffix = notify_user_on_status_change('cancellation', rec, new_status, admin_note=final_note, conn=conn)
     conn.close()
 
-    status_label = "Đã tiếp nhận" if new_status == 'Processing' else ("Đã duyệt" if new_status == 'Approved' else "Chờ xử lý")
+    status_label = "Đã duyệt" if new_status == 'Approved' else "Đã tiếp nhận"
     flash(f"Đã cập nhật trạng thái báo nghỉ: {status_label}.{email_suffix}", "success")
     return redirect(url_for('admin_panel', tab='cancellations'))
 
@@ -2937,9 +3627,9 @@ def bulk_delete_cancellations():
 @app.route('/admin/update-request-status/<int:request_id>', methods=['POST'])
 @admin_required
 def update_request_status(request_id):
-    """Cập nhật trạng thái yêu cầu mượn phòng (Chờ xử lý / Đã tiếp nhận / Đã duyệt / Từ chối) từ Dropdown và gửi email."""
+    """Cập nhật trạng thái yêu cầu mượn phòng (Đã tiếp nhận / Đã duyệt / Từ chối) từ Dropdown và gửi email."""
     new_status = (request.form.get('status') or 'Processing').strip()
-    if new_status not in ('Pending', 'Processing', 'Approved', 'Rejected'):
+    if new_status not in ('Processing', 'Approved', 'Rejected'):
         new_status = 'Processing'
     admin_note = request.form.get('admin_note', '').strip()
 
@@ -2951,7 +3641,7 @@ def update_request_status(request_id):
             class_code = req['class_code'] if req['class_code'] else 'MƯỢN PHÒNG'
             subject_name = req['subject_name'] if req['subject_name'] else req['purpose']
             department = req['department'] if req['department'] else req['requester_name']
-            study_period = normalize_study_period_str(req['study_period']) if req['study_period'] else datetime.date.today().strftime('%d/%m/%Y')
+            study_period = normalize_study_period_str(req['study_period']) if req['study_period'] else get_vn_today().strftime('%d/%m/%Y')
 
             conn.execute('''
                 INSERT INTO schedules (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks, is_ended_early)
@@ -2964,17 +3654,15 @@ def update_request_status(request_id):
             (new_status, final_note, request_id)
         )
         conn.commit()
-        if new_status in ('Processing', 'Approved', 'Rejected'):
-            email_suffix = notify_user_on_status_change('booking', req, new_status, admin_note=final_note, conn=conn)
+        email_suffix = notify_user_on_status_change('booking', req, new_status, admin_note=final_note, conn=conn)
 
     conn.close()
     status_map = {
-        'Pending': ('Chờ xử lý', 'secondary'),
         'Processing': ('Đã tiếp nhận', 'info'),
         'Approved': ('Đã duyệt', 'success'),
-        'Rejected': ('Từ chối', 'warning')
+        'Rejected': ('Từ chối', 'danger')
     }
-    st_label, flash_cat = status_map.get(new_status, ('Đã cập nhật', 'info'))
+    st_label, flash_cat = status_map.get(new_status, ('Đã tiếp nhận', 'info'))
     flash(f"Đã cập nhật trạng thái yêu cầu mượn phòng sang '{st_label}'.{email_suffix}", flash_cat)
     return redirect(url_for('admin_panel', tab='requests'))
 
@@ -3020,7 +3708,7 @@ def toggle_early_end(schedule_id):
     if row:
         current_ended = int(row['is_ended_early'] or 0)
         if current_ended == 0:
-            today_str = datetime.date.today().strftime('%d/%m/%Y')
+            today_str = get_vn_today().strftime('%d/%m/%Y')
             conn.execute(
                 "UPDATE schedules SET is_ended_early = 1, ended_early_date = ? WHERE id = ?",
                 (today_str, schedule_id)
@@ -3115,37 +3803,133 @@ def delete_all_schedules():
 @app.route('/admin/add_schedule', methods=['POST'])
 @admin_required
 def add_schedule():
-    """Xử lý form Thêm lịch mới thủ công của Admin."""
-    room = request.form.get('room')
-    day_of_week = int(request.form.get('day_of_week'))
-    start_period = float(request.form.get('start_period'))
-    end_period = float(request.form.get('end_period'))
-    subject_name = request.form.get('subject_name')
-    class_code = request.form.get('class_code')
-    department = request.form.get('department')
-    raw_study_period = request.form.get('study_period', '')
-    study_period = normalize_study_period_str(raw_study_period)
-    num_weeks = request.form.get('num_weeks', 15, type=int)
-    num_weeks = max(1, min(52, num_weeks))
-    
+    """Xử lý form Thêm lịch mới thủ công của Admin (hỗ trợ cả thêm 1 môn hoặc thêm danh sách nhiều môn)."""
+    return_tab = (request.form.get('return_tab') or 'schedules').strip()
+    if return_tab not in ('schedules', 'timetable'):
+        return_tab = 'schedules'
+
+    bulk_json_raw = (request.form.get('bulk_items_json') or '').strip()
+    items_to_insert = []
+
+    if bulk_json_raw:
+        try:
+            parsed_list = json.loads(bulk_json_raw)
+            if isinstance(parsed_list, list):
+                items_to_insert = parsed_list
+        except Exception:
+            items_to_insert = []
+
+    if not items_to_insert:
+        items_to_insert = [{
+            'room': request.form.get('room'),
+            'day_of_week': request.form.get('day_of_week'),
+            'start_period': request.form.get('start_period'),
+            'end_period': request.form.get('end_period'),
+            'subject_name': request.form.get('subject_name'),
+            'class_code': request.form.get('class_code'),
+            'department': request.form.get('department'),
+            'study_period': request.form.get('study_period', ''),
+            'num_weeks': request.form.get('num_weeks', 15),
+            'notes': request.form.get('notes', '')
+        }]
+
+    validated_rows = []
+    for idx, item in enumerate(items_to_insert, 1):
+        room = normalize_room_code(item.get('room'))
+        try:
+            day_of_week = int(item.get('day_of_week'))
+            start_period = float(item.get('start_period'))
+            end_period = float(item.get('end_period'))
+            num_weeks = max(1, min(52, int(item.get('num_weeks') or 15)))
+        except (ValueError, TypeError):
+            flash(f"Dòng #{idx}: Thông tin Thứ hoặc Tiết học không hợp lệ!", "danger")
+            return redirect(url_for('admin_panel', tab=return_tab))
+
+        if start_period >= end_period:
+            flash(f"Dòng #{idx}: Tiết bắt đầu phải nhỏ hơn tiết kết thúc!", "danger")
+            return redirect(url_for('admin_panel', tab=return_tab))
+        if start_period < 1 or end_period > 10:
+            flash(f"Dòng #{idx}: Tiết học phải nằm trong khoảng từ 1 đến 10!", "danger")
+            return redirect(url_for('admin_panel', tab=return_tab))
+
+        subject_name = (item.get('subject_name') or '').strip()
+        if not room or not subject_name:
+            flash(f"Dòng #{idx}: Vui lòng nhập đầy đủ Phòng và Tên môn học!", "danger")
+            return redirect(url_for('admin_panel', tab=return_tab))
+
+        class_code = (item.get('class_code') or '').strip()
+        department = (item.get('department') or '').strip()
+        study_period = normalize_study_period_str(item.get('study_period', ''))
+        notes = (item.get('notes') or '').strip()
+
+        validated_rows.append((
+            room, day_of_week, start_period, end_period,
+            class_code, subject_name, department, study_period, num_weeks, notes
+        ))
+
+    conn = get_db_connection()
+    for row_vals in validated_rows:
+        conn.execute('''
+            INSERT INTO schedules (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks, is_ended_early, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+        ''', row_vals)
+    conn.commit()
+    conn.close()
+
+    last_room = validated_rows[-1][0] if validated_rows else '5.1'
+    if len(validated_rows) == 1:
+        r0 = validated_rows[0]
+        flash(f"Đã thêm lịch môn '{r0[5]}' vào Phòng {r0[0]} (lặp {r0[8]} tuần) thành công.", "success")
+    else:
+        flash(f"Đã thêm thành công {len(validated_rows)} môn học vào Thời khóa biểu!", "success")
+
+    if return_tab == 'timetable':
+        return redirect(url_for('admin_panel', tab='timetable', room=last_room))
+    return redirect(url_for('admin_panel', tab='schedules'))
+
+
+@app.route('/admin/edit_schedule/<int:schedule_id>', methods=['POST'])
+@admin_required
+def edit_schedule(schedule_id):
+    """Cập nhật thông tin chi tiết một môn học trong bảng Lịch học."""
+    schedule_filter = (request.form.get('schedule_filter') or 'all').strip()
+    room = normalize_room_code(request.form.get('room'))
+    try:
+        day_of_week = int(request.form.get('day_of_week'))
+        start_period = float(request.form.get('start_period'))
+        end_period = float(request.form.get('end_period'))
+        num_weeks = max(1, min(52, int(request.form.get('num_weeks') or 15)))
+    except (ValueError, TypeError):
+        flash("Thông tin Thứ, Tiết học hoặc Số tuần không hợp lệ!", "danger")
+        return redirect(url_for('admin_panel', tab='schedules', schedule_filter=schedule_filter))
+
     if start_period >= end_period:
         flash("Tiết bắt đầu phải nhỏ hơn tiết kết thúc!", "danger")
-        return redirect(url_for('admin_panel', tab='schedules'))
+        return redirect(url_for('admin_panel', tab='schedules', schedule_filter=schedule_filter))
     if start_period < 1 or end_period > 10:
         flash("Tiết phải nằm trong khoảng từ 1 đến 10!", "danger")
-        return redirect(url_for('admin_panel', tab='schedules'))
+        return redirect(url_for('admin_panel', tab='schedules', schedule_filter=schedule_filter))
+
+    subject_name = (request.form.get('subject_name') or '').strip()
+    class_code = (request.form.get('class_code') or '').strip()
+    department = (request.form.get('department') or '').strip()
+    study_period = normalize_study_period_str(request.form.get('study_period', ''))
+    notes = (request.form.get('notes') or '').strip()
 
     conn = get_db_connection()
     conn.execute('''
-        INSERT INTO schedules (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks, is_ended_early)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-    ''', (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks))
-    
+        UPDATE schedules
+        SET room = ?, day_of_week = ?, start_period = ?, end_period = ?,
+            class_code = ?, subject_name = ?, department = ?, study_period = ?,
+            num_weeks = ?, notes = ?
+        WHERE id = ?
+    ''', (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks, notes, schedule_id))
     conn.commit()
     conn.close()
-    
-    flash(f"Đã thêm lịch môn {subject_name} vào phòng {room} (lặp {num_weeks} tuần) thành công.", "success")
-    return redirect(url_for('admin_panel', tab='schedules'))
+
+    flash(f"Đã cập nhật lịch môn '{subject_name}' (Phòng {room}, Thứ {day_of_week}) thành công.", "success")
+    return redirect(url_for('admin_panel', tab='schedules', schedule_filter=schedule_filter))
+
 
 @app.route('/admin/import_schedule', methods=['POST'])
 @admin_required
@@ -3179,7 +3963,7 @@ def import_schedule():
             conn = get_db_connection()
             count = 0
             
-            for index, row in df.iterrows():
+            for _, row in df.iterrows():
                 room = str(row.get('Phong', '')).strip()
                 day_of_week = row.get('Thu', '')
                 start_period = row.get('Tiet_BD', '')
@@ -3189,6 +3973,7 @@ def import_schedule():
                 department = str(row.get('Khoa', '')).strip()
                 raw_period = row.get('Giai_Doan', '')
                 study_period = normalize_study_period_str(raw_period)
+                notes = str(row.get('Ghi_Chu', '') or row.get('Ghi_chu', '') or '').strip()
                 
                 if not room or not day_of_week or start_period == '' or end_period == '':
                     continue
@@ -3209,9 +3994,9 @@ def import_schedule():
                     continue
 
                 conn.execute('''
-                    INSERT INTO schedules (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks, is_ended_early)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                ''', (room, day_val, start_val, end_val, class_code, subject_name, department, study_period, default_num_weeks))
+                    INSERT INTO schedules (room, day_of_week, start_period, end_period, class_code, subject_name, department, study_period, num_weeks, is_ended_early, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                ''', (room, day_val, start_val, end_val, class_code, subject_name, department, study_period, default_num_weeks, notes))
                 count += 1
                 
             conn.commit()
@@ -3227,24 +4012,23 @@ def import_schedule():
 @app.route('/update_issue_status/<int:issue_id>', methods=['POST'])
 @admin_required
 def update_issue_status(issue_id):
-    new_status = (request.form.get('status') or 'Pending').strip()
+    new_status = (request.form.get('status') or 'Processing').strip()
     if new_status == 'Approved':
         new_status = 'Resolved'
+    if new_status not in ('Processing', 'Resolved'):
+        new_status = 'Processing'
     admin_note = request.form.get('admin_note', '').strip()
-    if new_status in ('Pending', 'Processing', 'Resolved'):
-        conn = get_db_connection()
-        iss = conn.execute("SELECT * FROM issue_reports WHERE id = ?", (issue_id,)).fetchone()
-        email_suffix = ""
-        if iss:
-            final_note = admin_note if admin_note else (iss['admin_note'] or '')
-            conn.execute('UPDATE issue_reports SET status = ?, admin_note = ? WHERE id = ?', (new_status, final_note, issue_id))
-            conn.commit()
-            if new_status in ('Processing', 'Resolved'):
-                email_suffix = notify_user_on_status_change('issue', iss, new_status, admin_note=final_note, conn=conn)
-        conn.close()
-        status_label = "Đã tiếp nhận" if new_status == 'Processing' else ("Đã duyệt" if new_status == 'Resolved' else "Chờ xử lý")
-        flash(f"Đã cập nhật trạng thái sự cố: {status_label}.{email_suffix}", "success")
-    
+    conn = get_db_connection()
+    iss = conn.execute("SELECT * FROM issue_reports WHERE id = ?", (issue_id,)).fetchone()
+    email_suffix = ""
+    if iss:
+        final_note = admin_note if admin_note else (iss['admin_note'] or '')
+        conn.execute('UPDATE issue_reports SET status = ?, admin_note = ? WHERE id = ?', (new_status, final_note, issue_id))
+        conn.commit()
+        email_suffix = notify_user_on_status_change('issue', iss, new_status, admin_note=final_note, conn=conn)
+    conn.close()
+    status_label = "Đã xong" if new_status == 'Resolved' else "Đã tiếp nhận"
+    flash(f"Đã cập nhật trạng thái sự cố: {status_label}.{email_suffix}", "success")
     return redirect(url_for('admin_panel', tab='issues'))
 
 @app.route('/admin/delete-issue/<int:issue_id>', methods=['POST'])

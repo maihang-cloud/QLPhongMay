@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Lịch sử hoạt động của tôi{% endblock %}
 {% block content %}
-<div class="container py-2 py-md-4 px-1 px-md-3">
+<div class="my-dashboard-page">
     <div class="d-flex justify-content-between align-items-center mb-3 mb-md-4">
         <div>
             <h2 class="fw-bold text-primary mb-1"><i class="bi bi-clock-history me-2"></i>Lịch sử của tôi</h2>
@@ -34,28 +34,24 @@
                 {% for b in bookings %}
                     <div class="col-md-6 col-lg-4">
                         <div class="card h-100 border-0 shadow-sm rounded-4 position-relative overflow-hidden">
-                            {% if b.status == 'Processing' %}
-                                <div class="bg-info position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
-                            {% elif b.status == 'Approved' %}
+                            {% if b.status == 'Approved' %}
                                 <div class="bg-success position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
                             {% elif b.status == 'Rejected' %}
                                 <div class="bg-danger position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
                             {% else %}
-                                <div class="bg-warning position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
+                                <div class="bg-info position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
                             {% endif %}
                             
                             <div class="card-body p-4">
                                 <div class="d-flex justify-content-between align-items-start mb-3">
                                     <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 rounded-pill">P.{{ b.room }}</span>
                                     
-                                    {% if b.status == 'Processing' %}
-                                        <span class="badge bg-info text-dark"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
-                                    {% elif b.status == 'Approved' %}
+                                    {% if b.status == 'Approved' %}
                                         <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đã duyệt</span>
                                     {% elif b.status == 'Rejected' %}
                                         <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Từ chối</span>
                                     {% else %}
-                                        <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Chờ xử lý</span>
+                                        <span class="badge bg-info text-dark"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
                                     {% endif %}
                                 </div>
                                 <h5 class="fw-bold mb-1">{{ b.subject_name }}</h5>
@@ -73,7 +69,7 @@
                                 {% endif %}
                             </div>
                             <div class="card-footer bg-white border-0 pt-0 pb-3 px-4 text-muted" style="font-size: 0.75rem;">
-                                Gửi lúc: {{ b.created_at }}
+                                Gửi lúc: {{ b.created_at | vn_datetime }}
                             </div>
                         </div>
                     </div>
@@ -94,25 +90,21 @@
                 {% for i in issues %}
                     <div class="col-md-6 col-lg-4">
                         <div class="card h-100 border-0 shadow-sm rounded-4 position-relative overflow-hidden">
-                            {% if i.status == 'Processing' %}
-                                <div class="bg-info position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
-                            {% elif i.status in ['Resolved', 'Approved'] %}
+                            {% if i.status in ['Resolved', 'Approved'] %}
                                 <div class="bg-success position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
                             {% else %}
-                                <div class="bg-warning position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
+                                <div class="bg-info position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
                             {% endif %}
                             <div class="card-body p-4">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
                                     <span class="badge bg-secondary"><i class="bi bi-pc-display me-1"></i>Máy {{ i.machine_number }} (P.{{ i.room }})</span>
-                                    {% if i.status == 'Processing' %}
-                                        <span class="badge bg-info text-dark"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
-                                    {% elif i.status in ['Resolved', 'Approved'] %}
-                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đã duyệt</span>
+                                    {% if i.status in ['Resolved', 'Approved'] %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đã xong</span>
                                     {% else %}
-                                        <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Chờ xử lý</span>
+                                        <span class="badge bg-info text-dark"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
                                     {% endif %}
                                 </div>
-                                <h6 class="fw-bold">{{ i.issue_category }}</h6>
+                                <h5 class="fw-bold mb-1">{{ i.issue_category }}</h5>
                                 <p class="small text-muted mb-3">{{ i.description }}</p>
                                 
                                 {% if i.admin_note %}
@@ -122,7 +114,7 @@
                                 {% endif %}
                             </div>
                             <div class="card-footer bg-white border-0 pt-0 pb-3 px-4 text-muted" style="font-size: 0.75rem;">
-                                Gửi lúc: {{ i.created_at }}
+                                Gửi lúc: {{ i.created_at | vn_datetime }}
                             </div>
                         </div>
                     </div>
@@ -143,25 +135,21 @@
                 {% for c in cancellations %}
                     <div class="col-md-6 col-lg-4">
                         <div class="card h-100 border-0 shadow-sm rounded-4 position-relative overflow-hidden">
-                            {% if c.status == 'Processing' %}
-                                <div class="bg-info position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
-                            {% elif c.status == 'Approved' %}
+                            {% if c.status == 'Approved' %}
                                 <div class="bg-success position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
                             {% else %}
-                                <div class="bg-warning position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
+                                <div class="bg-info position-absolute top-0 start-0 w-100" style="height: 4px;"></div>
                             {% endif %}
                             <div class="card-body p-4">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
                                     <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 rounded-pill">P.{{ c.room }}</span>
-                                    {% if c.status == 'Processing' %}
-                                        <span class="badge bg-info text-dark"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
-                                    {% elif c.status == 'Approved' %}
+                                    {% if c.status == 'Approved' %}
                                         <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đã duyệt</span>
                                     {% else %}
-                                        <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Chờ xử lý</span>
+                                        <span class="badge bg-info text-dark"><i class="bi bi-clock-history me-1"></i>Đã tiếp nhận</span>
                                     {% endif %}
                                 </div>
-                                <h6 class="fw-bold mb-1">Ngày vắng: {{ c.cancel_date }}</h6>
+                                <h5 class="fw-bold mb-1">Ngày vắng: {{ c.cancel_date }}</h5>
                                 <p class="text-muted small mb-2">Ca/Tiết: {{ c.period }}</p>
                                 <p class="small bg-light p-2 rounded-3 text-secondary mb-2">Lý do: {{ c.reason }}</p>
                                 {% if c.admin_note %}
@@ -171,7 +159,7 @@
                                 {% endif %}
                             </div>
                             <div class="card-footer bg-white border-0 pt-0 pb-3 px-4 text-muted" style="font-size: 0.75rem;">
-                                Gửi lúc: {{ c.created_at }}
+                                Gửi lúc: {{ c.created_at | vn_datetime }}
                             </div>
                         </div>
                     </div>

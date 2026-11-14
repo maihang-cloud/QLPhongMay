@@ -1,6 +1,6 @@
 import sqlite3
-import datetime
 import os
+from timezone_utils import get_vn_now_str, get_vn_today_iso
 
 # Khai báo đường dẫn tuyệt đối tới file database (tương thích cả Windows và PythonAnywhere Linux)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,7 +52,7 @@ def init_db():
             department TEXT,
             study_period TEXT,
             software_required TEXT,
-            status TEXT DEFAULT 'Pending',
+            status TEXT DEFAULT 'Processing',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -66,7 +66,7 @@ def init_db():
             cancel_date TEXT NOT NULL,
             period TEXT NOT NULL,
             reason TEXT,
-            status TEXT DEFAULT 'Pending',
+            status TEXT DEFAULT 'Processing',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -81,7 +81,7 @@ def init_db():
             machine_number TEXT NOT NULL,
             issue_category TEXT NOT NULL,
             description TEXT NOT NULL,
-            status TEXT DEFAULT 'Pending',
+            status TEXT DEFAULT 'Processing',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -120,7 +120,35 @@ def init_db():
     # Migration an toàn: Thêm cột created_at cho DB cũ nếu chưa có
     try:
         cursor.execute("ALTER TABLE booking_requests ADD COLUMN created_at TIMESTAMP")
-        cursor.execute("UPDATE booking_requests SET created_at = datetime('now', 'localtime') WHERE created_at IS NULL")
+        cursor.execute("UPDATE booking_requests SET created_at = datetime('now', '+7 hours') WHERE created_at IS NULL")
+    except Exception:
+        pass
+
+    # Migration đồng bộ Múi giờ Việt Nam (UTC+7): Khắc phục các bản ghi cũ bị SQLite lưu ngầm theo UTC
+    try:
+        cursor.execute('''
+            UPDATE cancellations
+            SET created_at = datetime(created_at, '+7 hours')
+            WHERE created_at LIKE '2026-11-12 04:%' OR created_at LIKE '2026-11-12 05:%'
+        ''')
+    except Exception:
+        pass
+
+    try:
+        cursor.execute('''
+            UPDATE issue_reports
+            SET created_at = datetime(created_at, '+7 hours')
+            WHERE created_at LIKE '2026-11-12 04:%' OR created_at LIKE '2026-11-12 05:%'
+        ''')
+    except Exception:
+        pass
+
+    try:
+        cursor.execute('''
+            UPDATE admin_permissions
+            SET created_at = datetime(created_at, '+7 hours')
+            WHERE created_at LIKE '2026-11-12 05:%'
+        ''')
     except Exception:
         pass
 
@@ -140,10 +168,19 @@ def init_db():
     except Exception:
         pass
 
+    try:
+        cursor.execute("ALTER TABLE schedules ADD COLUMN notes TEXT DEFAULT ''")
+    except Exception:
+        pass
+
     cursor.execute("UPDATE schedules SET num_weeks = 15 WHERE num_weeks IS NULL")
     cursor.execute("UPDATE schedules SET is_ended_early = 0 WHERE is_ended_early IS NULL")
+    cursor.execute("UPDATE schedules SET notes = '' WHERE notes IS NULL")
     cursor.execute("UPDATE schedules SET study_period = '28/09/2026' WHERE study_period LIKE '2026-09-28%'")
     cursor.execute("UPDATE work_logs SET status = 'in_progress' WHERE status = 'pending'")
+    cursor.execute("UPDATE booking_requests SET status = 'Processing' WHERE status = 'Pending' OR status IS NULL")
+    cursor.execute("UPDATE issue_reports SET status = 'Processing' WHERE status = 'Pending' OR status IS NULL")
+    cursor.execute("UPDATE cancellations SET status = 'Processing' WHERE status = 'Pending' OR status IS NULL")
 
     # 6. Bảng lưu cấu hình hệ thống & Trạng thái mạng 8 phòng máy (B42Lab NetAgent)
     cursor.execute('''
@@ -249,6 +286,25 @@ def init_db():
         )
     ''')
 
+    # 13. Bảng Danh sách Phân quyền Quản trị (Super Admin & Contributor)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS admin_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            role TEXT NOT NULL DEFAULT 'contributor',
+            note TEXT DEFAULT '',
+            added_by TEXT DEFAULT 'mlhang@hcmus.edu.vn',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        INSERT OR IGNORE INTO admin_permissions (email, role, note, added_by)
+        VALUES ('mlhang@hcmus.edu.vn', 'super_admin', 'Super Admin / Administrator - Toàn quyền quản trị', 'System')
+    ''')
+    cursor.execute('''
+        UPDATE admin_permissions SET role = 'super_admin' WHERE LOWER(email) = 'mlhang@hcmus.edu.vn'
+    ''')
+
     # Khởi tạo cấu hình mặc định cho B42Lab NetAgent & IP Router 8 phòng máy
     ak_row = cursor.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
     if not ak_row or not ak_row['value']:
@@ -266,12 +322,24 @@ def init_db():
         'smtp_enabled': '1',
         'smtp_email': 'mlhang@hcmus.edu.vn',
         'smtp_password': '',
-        'smtp_sender_name': 'Hệ thống Phòng máy B4.2 - Phòng QTTB'
+        'smtp_sender_name': 'Hệ thống Phòng máy B4.2 - Phòng QTTB',
+        'admin_notify_enabled': '1'
     }
     for s_key, s_val in default_smtp_settings.items():
         cursor.execute(
             "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
             (s_key, s_val)
+        )
+
+    # Khởi tạo trạng thái Đăng ký mượn phòng (Khóa / Mở cổng đăng ký)
+    default_booking_settings = {
+        'booking_enabled': '1',
+        'booking_disabled_notice': 'Hệ thống đang tạm khóa đăng ký mượn phòng để Quản trị viên sắp xếp Thời khóa biểu. Quý Thầy/Cô vui lòng quay lại sau!'
+    }
+    for b_key, b_val in default_booking_settings.items():
+        cursor.execute(
+            "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
+            (b_key, b_val)
         )
 
     default_router_ips = {
@@ -284,7 +352,7 @@ def init_db():
         '6.5': '10.29.37.63',
         '6.6': '10.29.37.61',
     }
-    now_str = datetime.datetime.now().strftime('%H:%M:%S %d/%m/%Y')
+    now_str = get_vn_now_str('%H:%M:%S %d/%m/%Y')
     for r_code, real_ip in default_router_ips.items():
         existing_net = cursor.execute(
             "SELECT room, target_ip FROM room_network_status WHERE room = ?", (r_code,)
@@ -305,7 +373,7 @@ def init_db():
     if not seeded_row:
         existing_wl_count = cursor.execute("SELECT COUNT(*) as c FROM work_logs").fetchone()['c']
         if existing_wl_count == 0:
-            today_iso = datetime.date.today().strftime('%Y-%m-%d')
+            today_iso = get_vn_today_iso()
             sample_logs = [
                 (
                     today_iso, 'Ca sáng', 'server_net', '6.1, 6.2, Server/Rack',
@@ -343,7 +411,7 @@ def init_db():
     has_campaign = cursor.execute("SELECT 1 FROM deployment_checklists LIMIT 1").fetchone()
     if not has_campaign:
         default_campaign = "HK1 (2026-2027) - Deploy Hệ thống chuẩn"
-        now_short = datetime.datetime.now().strftime('%H:%M %d/%m/%Y')
+        now_short = get_vn_now_str('%H:%M %d/%m/%Y')
         for r_code in default_router_ips.keys():
             cursor.execute('''
                 INSERT OR IGNORE INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
