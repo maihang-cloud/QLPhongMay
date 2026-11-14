@@ -5,6 +5,8 @@ Hỗ trợ 2 định dạng:
 """
 
 import io
+import html
+import zipfile
 import calendar
 import datetime
 from timezone_utils import get_vn_today
@@ -20,13 +22,17 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-# Python-docx cho Word
-from docx import Document
-from docx.shared import Inches, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.oxml import OxmlElement, parse_xml
-from docx.oxml.ns import nsdecls, qn
+# Python-docx cho Word (Hỗ trợ fallback tự động bằng OpenXML/zipfile nếu server chưa cài python-docx)
+try:
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.oxml import OxmlElement, parse_xml
+    from docx.oxml.ns import nsdecls, qn
+    HAS_PYTHON_DOCX = True
+except ImportError:
+    HAS_PYTHON_DOCX = False
 
 ROOM_MACHINES = {r: 41 for r in ROOMS_LIST}  # 40 máy SV + 01 máy GV = 41 máy/phòng
 TOTAL_MACHINES = sum(ROOM_MACHINES.values())
@@ -632,6 +638,209 @@ def build_monthly_excel_report(month: int, year: int) -> io.BytesIO:
     return output
 
 
+def _build_monthly_word_report_openxml(month: int, year: int, data: dict) -> io.BytesIO:
+    """Tạo file Word (.docx) thuần Python (zipfile + OpenXML) khi server chưa cài thư viện python-docx."""
+    esc = html.escape
+    today = get_vn_today()
+
+    def _w_rpr(sz_pt=12, bold=False, italic=False, color="000000"):
+        sz_val = int(round(sz_pt * 2))
+        b_tag = "<w:b/><w:bCs/>" if bold else ""
+        i_tag = "<w:i/><w:iCs/>" if italic else ""
+        return (
+            f'<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>'
+            f'{b_tag}{i_tag}<w:color w:val="{color}"/><w:sz w:val="{sz_val}"/><w:szCs w:val="{sz_val}"/></w:rPr>'
+        )
+
+    def _w_p(text="", align="left", sz_pt=12.5, bold=False, italic=False, bold_prefix=None, before=40, after=60, line=300, color="000000"):
+        runs = []
+        if bold_prefix:
+            runs.append(f'<w:r>{_w_rpr(sz_pt=sz_pt, bold=True, color=color)}<w:t xml:space="preserve">{esc(str(bold_prefix))}</w:t></w:r>')
+        lines = str(text).split('\n')
+        for idx_l, ln in enumerate(lines):
+            br = "<w:br/>" if idx_l > 0 else ""
+            runs.append(f'<w:r>{_w_rpr(sz_pt=sz_pt, bold=bold, italic=italic, color=color)}{br}<w:t xml:space="preserve">{esc(ln)}</w:t></w:r>')
+        return (
+            f'<w:p><w:pPr><w:spacing w:before="{before}" w:after="{after}" w:line="{line}" w:lineRule="auto"/>'
+            f'<w:jc w:val="{align}"/></w:pPr>{"".join(runs)}</w:p>'
+        )
+
+    # 1. Bảng Header Quốc hiệu - Tiêu ngữ (Không viền)
+    no_borders = '<w:tcBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/></w:tcBorders>'
+    hdr_tbl = (
+        '<w:tbl><w:tblPr><w:tblW w:w="9500" w:type="dxa"/><w:jc w:val="center"/></w:tblPr>'
+        '<w:tblGrid><w:gridCol w:w="4200"/><w:gridCol w:w="5300"/></w:tblGrid>'
+        '<w:tr>'
+        f'<w:tc><w:tcPr><w:tcW w:w="4200" w:type="dxa"/>{no_borders}</w:tcPr>{_w_p("TRƯỜNG ĐẠI HỌC KHOA HỌC TỰ NHIÊN", align="center", sz_pt=11, before=0, after=40, line=260)}</w:tc>'
+        f'<w:tc><w:tcPr><w:tcW w:w="5300" w:type="dxa"/>{no_borders}</w:tcPr>{_w_p("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", align="center", sz_pt=11, bold=True, before=0, after=40, line=260)}</w:tc>'
+        '</w:tr>'
+        '<w:tr>'
+        f'<w:tc><w:tcPr><w:tcW w:w="4200" w:type="dxa"/>{no_borders}</w:tcPr>'
+        f'{_w_p("PHÒNG QUẢN TRỊ THIẾT BỊ (CSLT)", align="center", sz_pt=11, bold=True, before=0, after=20, line=260)}'
+        f'{_w_p("─────────────", align="center", sz_pt=8, before=0, after=0, line=240, color="323232")}</w:tc>'
+        f'<w:tc><w:tcPr><w:tcW w:w="5300" w:type="dxa"/>{no_borders}</w:tcPr>'
+        f'{_w_p("Độc lập - Tự do - Hạnh phúc", align="center", sz_pt=12, bold=True, before=0, after=20, line=260)}'
+        f'{_w_p("──────────────────", align="center", sz_pt=8, before=0, after=0, line=240, color="323232")}</w:tc>'
+        '</w:tr></w:tbl>'
+    )
+
+    # 2. Bảng thống kê 8 phòng máy
+    t_headers = ["STT", "Phòng", "Quy mô", "Ca chính khóa", "Ca mượn bù", "Tần suất (%)"]
+    stats_rows_xml = []
+    hdr_cells = "".join(
+        f'<w:tc><w:tcPr><w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tcMar></w:tcPr>'
+        f'{_w_p(h, align="center", sz_pt=11, bold=True, before=40, after=40, line=240)}</w:tc>'
+        for h in t_headers
+    )
+    stats_rows_xml.append(f'<w:tr>{hdr_cells}</w:tr>')
+
+    for idx_r, r_code in enumerate(ROOMS_LIST, 1):
+        st = data['room_stats'][r_code]
+        vals = [str(idx_r), f"P.{r_code}", f"{st['machines']} máy", f"{st['regular_ca']} ca", f"{st['booking_ca']} ca", f"{st['util_rate']}%"]
+        row_cells = "".join(
+            f'<w:tc><w:tcPr><w:tcMar><w:top w:w="60" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tcMar></w:tcPr>'
+            f'{_w_p(v, align=("left" if c_i == 1 else "center"), sz_pt=11, before=20, after=20, line=240)}</w:tc>'
+            for c_i, v in enumerate(vals)
+        )
+        stats_rows_xml.append(f'<w:tr>{row_cells}</w:tr>')
+
+    tot_vals = ["—", "TỔNG", f"{TOTAL_MACHINES} máy", f"{data['total_regular_ca']} ca", f"{data['total_booking_ca']} ca", f"{data['utilization_rate']}%"]
+    tot_cells = "".join(
+        f'<w:tc><w:tcPr><w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tcMar></w:tcPr>'
+        f'{_w_p(v, align=("left" if c_i == 1 else "center"), sz_pt=11, bold=True, before=40, after=40, line=240)}</w:tc>'
+        for c_i, v in enumerate(tot_vals)
+    )
+    stats_rows_xml.append(f'<w:tr>{tot_cells}</w:tr>')
+
+    stats_tbl = (
+        '<w:tbl><w:tblPr><w:tblW w:w="9300" w:type="dxa"/><w:jc w:val="center"/>'
+        '<w:tblBorders><w:top w:val="single" w:sz="6" w:space="0" w:color="000000"/>'
+        '<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>'
+        '<w:insideH w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>'
+        '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>'
+        '<w:left w:val="none"/><w:right w:val="none"/></w:tblBorders></w:tblPr>'
+        f'{"".join(stats_rows_xml)}</w:tbl>'
+    )
+
+    # 3. Bảng chữ ký & nơi nhận
+    noi_nhan_p = _w_p("- Như kính gửi;\n- Lãnh đạo Phòng QTTB (để b/c);\n- Lưu: VT, Tổ Phòng máy B4.2.", align="left", sz_pt=10.5, before=0, after=20, line=260)
+    ky_ten_p = _w_p("(Ký và ghi rõ họ tên)\n\n\n\n", align="center", sz_pt=11, italic=True, before=0, after=40, line=260)
+    sig_tbl = (
+        '<w:tbl><w:tblPr><w:tblW w:w="9500" w:type="dxa"/><w:jc w:val="center"/></w:tblPr>'
+        '<w:tblGrid><w:gridCol w:w="4600"/><w:gridCol w:w="4900"/></w:tblGrid><w:tr>'
+        f'<w:tc><w:tcPr><w:tcW w:w="4600" w:type="dxa"/>{no_borders}</w:tcPr>'
+        f'{_w_p("Nơi nhận:", align="left", sz_pt=11, bold=True, italic=True, before=0, after=40, line=260)}'
+        f'{noi_nhan_p}</w:tc>'
+        f'<w:tc><w:tcPr><w:tcW w:w="4900" w:type="dxa"/>{no_borders}</w:tcPr>'
+        f'{_w_p("NGƯỜI LẬP BÁO CÁO", align="center", sz_pt=12, bold=True, before=0, after=40, line=260)}'
+        f'{ky_ten_p}</w:tc>'
+        '</w:tr></w:tbl>'
+    )
+
+    booking_pct = round(data['approved_bookings'] / data['total_bookings'] * 100, 1) if data['total_bookings'] else 100
+    body_parts = [
+        hdr_tbl,
+        _w_p(f"TP. Hồ Chí Minh, ngày {today.day:02d} tháng {today.month:02d} năm {today.year}", align="right", sz_pt=12, italic=True, before=240, after=360),
+        _w_p("BÁO CÁO", align="center", sz_pt=16, bold=True, before=0, after=80),
+        _w_p(f"Tần suất khai thác và vận hành 8 phòng máy tính tháng {month:02d} năm {year}", align="center", sz_pt=13.5, bold=True, before=0, after=80),
+        _w_p("(tại cơ sở 02)", align="center", sz_pt=12, bold=True, before=0, after=280),
+        _w_p("Kính gửi:  Lãnh đạo Phòng Quản trị Thiết bị\n                 Ban Giám hiệu Trường ĐH Khoa học Tự nhiên", align="center", sz_pt=12, italic=True, before=0, after=280),
+        _w_p("I. TÌNH HÌNH PHÂN BỔ THỜI KHÓA BIỂU & KHAI THÁC 8 PHÒNG MÁY", align="left", sz_pt=13, bold=True, before=200, after=80),
+        _w_p(
+            f"Trong tháng {month:02d}/{year} (từ ngày 01/{month:02d}/{year} đến ngày {data['month_end'].day:02d}/{month:02d}/{year}), "
+            f"Tổ Phòng máy tính Cơ sở 2 đã vận hành liên tục 8 phòng máy (P.5.1 đến P.6.6) với tổng quy mô {TOTAL_MACHINES} máy trạm. Kết quả khai thác ghi nhận:",
+            align="both", bold_prefix="1. Tổng quan số liệu: "
+        ),
+        _w_p(f"• Tổng số ca máy phục vụ thực tế: {data['total_served_ca']} ca (trong đó: {data['total_regular_ca']} ca chính khóa và {data['total_booking_ca']} ca mượn phòng ngoài giờ/thi/dạy bù).", align="both"),
+        _w_p(f"• Tần suất lấp đầy bình quân toàn hệ thống: {data['utilization_rate']}% trên tổng công suất thiết kế ({data['max_capacity_ca']} ca/tháng).", align="both"),
+        _w_p(f"• Số môn học có lịch diễn ra trong tháng: {len(data['active_schedules'])} môn thuộc các Khoa: CNTT, Toán - Tin, Hóa học, Sinh học, Vật lý, Điện tử...", align="both"),
+        _w_p("2. Bảng tổng hợp công suất khai thác theo từng phòng máy:", align="both"),
+        stats_tbl,
+        _w_p("II. CÔNG TÁC KỸ THUẬT & PHỤC VỤ NGƯỜI DÙNG (USER REQUESTS)", align="left", sz_pt=13, bold=True, before=200, after=80),
+        _w_p(
+            f"Hệ thống trực tuyến đã tiếp nhận tổng cộng {data['total_bookings']} yêu cầu mượn phòng học, thi và thực hành ngoài giờ. "
+            f"Trong đó: Đã duyệt {data['approved_bookings']} yêu cầu (đáp ứng {booking_pct}% nhu cầu giảng viên); "
+            f"Từ chối {data['rejected_bookings']} yêu cầu do trùng phòng đã có lịch chính khóa hoặc phòng không phù hợp cấu hình phần mềm.",
+            align="both", bold_prefix="1. Tiếp nhận & điều phối mượn phòng: "
+        ),
+        _w_p(
+            f"Ghi nhận tổng cộng {data['total_issues']} sự cố kỹ thuật từ Giảng viên và Sinh viên. "
+            f"Tổ kỹ thuật đã xử lý dứt điểm {data['resolved_issues']}/{data['total_issues']} sự cố (đạt tỷ lệ khắc phục {data['issue_resolve_rate']}%). "
+            f"Các dạng sự cố chủ yếu gồm: Lỗi chuột/phím ({data['issue_categories'].get('Chuột / Bàn phím', 0)} trường hợp), "
+            f"Lỗi kết nối mạng/máy trạm ({data['issue_categories'].get('Mạng LAN / Internet', 0)} trường hợp) và hỗ trợ phần mềm chuyên ngành.",
+            align="both", bold_prefix="2. Khắc phục sự cố kỹ thuật máy trạm: "
+        ),
+        _w_p(
+            f"Đã tiếp nhận {data['total_cancels']} thông báo nghỉ lớp đột xuất từ Giảng viên. Bộ phận QTTB đã kịp thời cập nhật phòng trống trên bản đồ Thời khóa biểu trực tuyến "
+            f"để nhân viên quản lý nắm bắt và tạo điều kiện bố trí phòng cho các lớp khác mượn dạy bù nhanh chóng.",
+            align="both", bold_prefix="3. Xử lý thông báo nghỉ & Báo vắng: "
+        ),
+        _w_p("III. NHẬT KÝ CA TRỰC & CÔNG VIỆC QUẢN TRỊ HỆ THỐNG", align="left", sz_pt=13, bold=True, before=200, after=80),
+        _w_p(
+            f"Trong tháng ghi nhận {data['total_worklogs']} lượt nhật ký ca trực và biên bản kỹ thuật từ nhân sự phòng máy. Các công tác trọng tâm đã thực hiện:",
+            align="both", bold_prefix="1. Theo dõi ca trực: "
+        ),
+        _w_p("• Kiểm tra và duy trì kết nối mạng LAN thông suốt cho 8 IP Router phòng máy (cụm 5.1-5.3 và 6.1-6.6) qua công cụ giám sát B42Lab NetAgent.", align="both"),
+        _w_p("• Triển khai cài đặt và cấu hình phần mềm thi, kiểm tra định kỳ theo đúng danh mục phần mềm đã được các Khoa/Bộ môn đăng ký.", align="both"),
+        _w_p("• Thực hiện vệ sinh công nghiệp máy trạm, bàn ghế phòng học và kiểm tra hệ thống điện lạnh đảm bảo điều kiện học tập tốt nhất cho sinh viên.", align="both"),
+        _w_p("IV. ĐÁNH GIÁ CHUNG, TỒN ĐỌNG & ĐỀ XUẤT KIẾN NGHỊ", align="left", sz_pt=13, bold=True, before=200, after=80),
+        _w_p(
+            "Toàn bộ 8 phòng máy được vận hành an toàn, đúng tiến độ đào tạo của Nhà trường. "
+            "Việc số hóa công tác đăng ký mượn phòng, báo vắng và tiếp nhận sự cố kỹ thuật trực tuyến đã giúp giảm thiểu thời gian xử lý và phục vụ người dùng minh bạch, chính xác.",
+            align="both", bold_prefix="1. Đánh giá chung: "
+        ),
+        _w_p(
+            "Một số thiết bị ngoại vi (chuột, bàn phím) tại các phòng máy cụm P.5.x đã hao mòn qua nhiều học kỳ cần được thay thế định kỳ để đảm bảo hiệu suất thực hành môn học.",
+            align="both", bold_prefix="2. Khó khăn, tồn đọng: "
+        ),
+        _w_p(
+            "Kính đề xuất Lãnh đạo Phòng Quản trị Thiết bị xem xét phê duyệt mua sắm bổ sung thiết bị dự phòng (chuột quang, bàn phím, dây mạng đúc sẵn) "
+            "và bảo dưỡng hệ thống điều hòa nhiệt độ tại 8 phòng máy trước đợt thi học kỳ sắp tới.",
+            align="both", bold_prefix="3. Đề xuất kiến nghị: "
+        ),
+        _w_p("", before=0, after=240),
+        sig_tbl,
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="850" w:bottom="1134" w:left="1701" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
+    ]
+
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<w:body>{"".join(body_parts)}</w:body></w:document>'
+    )
+
+    content_types_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        '</Types>'
+    )
+
+    rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+        '</Relationships>'
+    )
+
+    doc_rels_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>'
+    )
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('[Content_Types].xml', content_types_xml)
+        zf.writestr('_rels/.rels', rels_xml)
+        zf.writestr('word/_rels/document.xml.rels', doc_rels_xml)
+        zf.writestr('word/document.xml', document_xml)
+    output.seek(0)
+    return output
+
+
 def set_cell_margins_and_border(cell, top=80, bottom=80, left=100, right=100):
     """Thiết lập padding và xóa viền ô trong Word table."""
     tcPr = cell._tc.get_or_add_tcPr()
@@ -647,6 +856,8 @@ def set_cell_margins_and_border(cell, top=80, bottom=80, left=100, right=100):
 def build_monthly_word_report(month: int, year: int) -> io.BytesIO:
     """Tạo Document Word (.docx) Báo cáo Tóm tắt chuẩn thể thức văn bản hành chính (Theo đúng ảnh mẫu)."""
     data = get_monthly_report_data(month, year)
+    if not HAS_PYTHON_DOCX:
+        return _build_monthly_word_report_openxml(month, year, data)
     doc = Document()
 
     # Thiết lập lề trang chuẩn Nghị định 30/2020/NĐ-CP (A4: Top 2cm, Bottom 2cm, Left 3cm, Right 1.5cm)

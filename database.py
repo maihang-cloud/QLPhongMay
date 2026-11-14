@@ -177,7 +177,6 @@ def init_db():
     cursor.execute("UPDATE schedules SET is_ended_early = 0 WHERE is_ended_early IS NULL")
     cursor.execute("UPDATE schedules SET notes = '' WHERE notes IS NULL")
     cursor.execute("UPDATE schedules SET study_period = '28/09/2026' WHERE study_period LIKE '2026-09-28%'")
-    cursor.execute("UPDATE work_logs SET status = 'in_progress' WHERE status = 'pending'")
     cursor.execute("UPDATE booking_requests SET status = 'Processing' WHERE status = 'Pending' OR status IS NULL")
     cursor.execute("UPDATE issue_reports SET status = 'Processing' WHERE status = 'Pending' OR status IS NULL")
     cursor.execute("UPDATE cancellations SET status = 'Processing' WHERE status = 'Pending' OR status IS NULL")
@@ -239,6 +238,7 @@ def init_db():
         cursor.execute("ALTER TABLE work_logs ADD COLUMN completed_date TEXT DEFAULT NULL")
     except Exception:
         pass
+    cursor.execute("UPDATE work_logs SET status = 'in_progress' WHERE status = 'pending'")
 
     # 9. Bảng Checklist Deploy hệ thống 8 phòng máy theo từng đợt (SOP Acronis & Clonezilla)
     cursor.execute('''
