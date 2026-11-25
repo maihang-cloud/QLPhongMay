@@ -2732,14 +2732,42 @@ _LAST_FULL_SCAN_TS = 0.0
 _SCAN_COOLDOWN_LOCK = threading.Lock()
 
 
+def is_cloud_hosted_env():
+    """Nhận diện server đang chạy trên PythonAnywhere / Cloud (ngoài mạng LAN trường 10.29.37.x)."""
+    return bool(
+        os.environ.get('PYTHONANYWHERE_DOMAIN')
+        or os.environ.get('PYTHONANYWHERE_SITE')
+        or os.environ.get('CLOUD_HYBRID_MODE', '').strip().lower() in ('1', 'true', 'yes')
+    )
+
+
 @app.route('/admin/network-ping-now', methods=['POST'])
 @app.route('/api/router-monitor/scan-now', methods=['POST'])
 @admin_required
 def admin_network_ping_now():
-    """[#QTTB-03] Quét Realtime đồng thời cả 8 Router (GCC6010, AirPro & GWN7062G), có cooldown 5s chống spam."""
+    """[#QTTB-03] Quét Realtime đồng thời cả 8 Router (GCC6010 & AirPro), có cooldown 5s chống spam.
+    Trên PythonAnywhere / Cloud: không tự quét IP LAN nội bộ (tránh ghi đè Offline), chỉ trả về dữ liệu mới nhất từ NetAgent."""
     global _LAST_FULL_SCAN_TS
     req_data = request.get_json(silent=True) or {}
     single_room = (req_data.get('room') or '').strip()
+
+    if is_cloud_hosted_env():
+        conn = get_db_connection()
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'last_netagent_push_at'").fetchone()
+        conn.close()
+        last_push = (row['value'] if row and row['value'] else '').strip()
+        msg = (
+            f"Đang chạy chế độ Cloud (PythonAnywhere) — Đã nạp dữ liệu mới nhất từ NetAgent tại trường (đồng bộ lúc {last_push})."
+            if last_push else
+            "Đang chạy chế độ Cloud (PythonAnywhere) — Chưa nhận dữ liệu từ NetAgent. Hãy chạy b42_network_agent.py trên máy nội bộ tại trường để đẩy trạng thái 8 Router."
+        )
+        return jsonify({
+            'success': True,
+            'cloud_mode': True,
+            'updated_at': last_push or get_vn_now_str('%H:%M:%S %d/%m/%Y'),
+            'scanned_rooms': [single_room] if (single_room and single_room in ROOMS_LIST) else list(ROOMS_LIST),
+            'message': msg
+        })
 
     if not single_room:
         with _SCAN_COOLDOWN_LOCK:
@@ -4976,8 +5004,10 @@ def _run_scheduled_router_poll_once():
 
 
 def _start_router_auto_poller(interval_sec=600):
-    """Khởi chạy luồng nền tự động quét 8 Router mỗi 10 phút trong khung giờ 4 Ca học."""
+    """Khởi chạy luồng nền tự động quét 8 Router mỗi 10 phút trong khung giờ 4 Ca học (chỉ chạy ở môi trường nội bộ)."""
     global _AUTO_POLLER_STARTED
+    if is_cloud_hosted_env():
+        return
     with _AUTO_POLLER_LOCK:
         if _AUTO_POLLER_STARTED:
             return

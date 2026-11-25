@@ -606,6 +606,10 @@ def init_db():
             )
         cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('airpro_migrated_v1', '1')")
 
+    # Đảm bảo không còn bản ghi cũ mang nhãn GWN7062G và đồng bộ đúng GCC6010 cho P5.2, P6.3
+    cursor.execute("UPDATE room_network_status SET router_model = 'GCC6010', https_port = 443 WHERE room IN ('5.2', '6.3') AND COALESCE(router_model, '') != 'GCC6010'")
+    cursor.execute("UPDATE room_network_status SET router_model = 'AIRPRO', https_port = 80 WHERE room IN ('5.1', '5.3', '6.1', '6.2', '6.5', '6.6') AND router_model = 'GWN7062G'")
+
     for r_code, real_ip in default_router_ips.items():
         r_model = default_router_models.get(r_code, 'AIRPRO')
         r_port = 80 if r_model == 'AIRPRO' else 443
