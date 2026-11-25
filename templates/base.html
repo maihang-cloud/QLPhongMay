@@ -379,6 +379,532 @@
         </div>
     </footer>
 
+    <!-- ===================================================================== -->
+    <!-- [#QTTB-02] BONG BÓNG KÊNH THÔNG BÁO & ĐỀ XUẤT PHẦN MỀM 8 PHÒNG MÁY    -->
+    <!-- ===================================================================== -->
+    <style>
+        .b42-hub-launcher-wrap {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 1080;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .b42-hub-launcher-btn {
+            pointer-events: auto;
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%);
+            color: #ffffff;
+            border: 2.5px solid #2DD4BF;
+            box-shadow: 0 8px 24px rgba(15, 41, 66, 0.38);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.45rem;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .b42-hub-launcher-btn:hover {
+            transform: scale(1.06);
+            box-shadow: 0 10px 28px rgba(13, 148, 136, 0.48);
+        }
+        .b42-hub-unread-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background-color: #EF4444;
+            color: #ffffff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            border: 2px solid #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+        }
+        .b42-hub-float-toast {
+            pointer-events: auto;
+            max-width: 310px;
+            background: #FEF2F2;
+            border: 1.5px solid #FCA5A5;
+            border-radius: 12px;
+            padding: 10px 12px;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+            font-size: 0.78rem;
+            color: #7F1D1D;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+        .b42-hub-float-toast:hover {
+            transform: translateY(-2px);
+        }
+        .b42-hub-float-toast.survey-mode {
+            background: #FFFBEB;
+            border-color: #FCD34D;
+            color: #78350F;
+        }
+        .b42-hub-panel {
+            position: fixed;
+            right: 20px;
+            bottom: 88px;
+            width: 470px;
+            max-width: calc(100vw - 24px);
+            height: 670px;
+            max-height: calc(100vh - 110px);
+            background: #ffffff;
+            border-radius: 18px;
+            border: 1.5px solid #CBD5E1;
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.26);
+            z-index: 1085;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .b42-hub-panel.open {
+            display: flex;
+        }
+        .b42-hub-header {
+            background: linear-gradient(135deg, #0F172A 0%, #0F2942 100%);
+            color: #ffffff;
+            padding: 12px 15px;
+            flex-shrink: 0;
+        }
+        .b42-hub-room-bar {
+            background: #F8FAFC;
+            border-bottom: 1px solid #E2E8F0;
+            padding: 8px 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .b42-room-pill {
+            border: 1px solid #CBD5E1;
+            background: #ffffff;
+            color: #334155;
+            border-radius: 8px;
+            padding: 4px 9px;
+            font-size: 0.74rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.15s ease;
+        }
+        .b42-room-pill:hover {
+            border-color: #0D9488;
+            color: #0F2942;
+        }
+        .b42-room-pill.active {
+            background: #2563EB;
+            border-color: #1D4ED8;
+            color: #ffffff;
+        }
+        .b42-net-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .b42-net-dot.online {
+            background-color: #22C55E;
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22);
+        }
+        .b42-net-dot.offline {
+            background-color: #EF4444;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.28);
+        }
+        .b42-room-pill-count {
+            background: #EF4444;
+            color: #ffffff;
+            font-size: 0.64rem;
+            font-weight: 700;
+            border-radius: 999px;
+            padding: 0 5px;
+            line-height: 1.35;
+        }
+        .b42-room-pill.active .b42-room-pill-count {
+            background: #FBBF24;
+            color: #0F172A;
+        }
+        .b42-hub-subtabs {
+            display: flex;
+            background: #F1F5F9;
+            padding: 5px 12px 0;
+            gap: 6px;
+            border-bottom: 1px solid #E2E8F0;
+            flex-shrink: 0;
+        }
+        .b42-hub-subtab {
+            flex: 1;
+            text-align: center;
+            padding: 7px 8px;
+            font-size: 0.77rem;
+            font-weight: 700;
+            color: #475569;
+            background: transparent;
+            border: none;
+            border-bottom: 2.5px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .b42-hub-subtab.active {
+            color: #0D9488;
+            border-bottom-color: #0D9488;
+            background: #ffffff;
+            border-radius: 8px 8px 0 0;
+        }
+        .b42-hub-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            background: #F8FAFC;
+        }
+        .b42-pin-card {
+            background: #FFFBEB;
+            border: 1.5px solid #F59E0B;
+            border-radius: 10px;
+            padding: 9px 12px;
+            margin-bottom: 10px;
+        }
+        .b42-ann-card {
+            background: #ffffff;
+            border: 1px solid #CBD5E1;
+            border-radius: 11px;
+            padding: 10px 12px;
+            margin-bottom: 9px;
+            font-size: 0.81rem;
+        }
+        .b42-ann-card.urgent {
+            background: #FEF2F2;
+            border: 1.5px solid #FCA5A5;
+        }
+        .b42-ann-card.resolved {
+            background: #F0FDF4;
+            border: 1.5px solid #86EFAC;
+        }
+        .b42-ann-card.maintenance {
+            background: #FFFBEB;
+            border: 1.5px solid #FCD34D;
+        }
+        .b42-prop-card {
+            background: #ffffff;
+            border: 1px solid #CBD5E1;
+            border-radius: 11px;
+            padding: 10px 12px;
+            margin-bottom: 9px;
+            font-size: 0.8rem;
+        }
+        .b42-prop-card.planned_image {
+            border-left: 4px solid #2563EB;
+        }
+        .b42-prop-card.completed {
+            border-left: 4px solid #16A34A;
+            background: #F8FAFC;
+        }
+        .b42-hub-footer {
+            background: #F1F5F9;
+            border-top: 1px solid #CBD5E1;
+            padding: 9px 12px;
+            flex-shrink: 0;
+        }
+        .b42-tpl-chip {
+            border-radius: 7px;
+            font-size: 0.71rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        @media (max-width: 575.98px) {
+            .b42-hub-panel {
+                right: 10px;
+                left: 10px;
+                bottom: 80px;
+                width: auto;
+                max-width: none;
+                height: calc(100vh - 96px);
+            }
+            .b42-hub-launcher-wrap {
+                right: 14px;
+                bottom: 14px;
+            }
+        }
+    </style>
+
+    <!-- Nút Bong Bóng Nổi & Toast Cảnh Báo Nhanh -->
+    <div class="b42-hub-launcher-wrap">
+        <div id="b42RoomHubFloatToast" class="b42-hub-float-toast d-none" onclick="window.B42RoomHub.openFromToast()">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+                <strong id="b42FloatToastTitle" class="d-block mb-1">🔔 Thông báo phòng máy</strong>
+                <button type="button" class="btn-close" style="font-size: 0.6rem;" onclick="event.stopPropagation(); window.B42RoomHub.dismissToast();"></button>
+            </div>
+            <div id="b42FloatToastBody" class="mb-1"></div>
+            <div class="fw-bold text-primary" style="font-size: 0.72rem;">&raquo; Bấm để mở kênh phòng máy</div>
+        </div>
+
+        <button type="button" id="b42RoomHubLauncher" class="b42-hub-launcher-btn" onclick="window.B42RoomHub.togglePanel()" title="Kênh Thông Báo & Đề Xuất Phần Mềm 8 Phòng Máy">
+            <i id="b42RoomHubLauncherIcon" class="bi bi-chat-dots-fill"></i>
+            <span id="b42RoomHubBadge" class="b42-hub-unread-badge d-none">0</span>
+        </button>
+    </div>
+
+    <!-- Khung Popup Chính Của Bong Bóng Phòng Máy -->
+    <div id="b42RoomHubPanel" class="b42-hub-panel" aria-live="polite">
+        <!-- 1. Header -->
+        <div class="b42-hub-header">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge rounded-pill" style="background: #2DD4BF; color: #091B2C; font-size: 0.68rem;">LIVE HUB</span>
+                        <h6 class="mb-0 fw-bold text-white" style="font-size: 0.92rem;">KÊNH THÔNG BÁO PHÒNG MÁY B4.2</h6>
+                    </div>
+                    <div class="text-white-50 mt-1" style="font-size: 0.72rem;">
+                        Chọn phòng máy bạn đang dạy để xem thông báo hoặc nhắc phần mềm kỳ sau
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <span id="b42HubRoleBadge" class="badge bg-dark border border-secondary text-info" style="font-size: 0.68rem;">Chỉ đọc</span>
+                    <button type="button" class="btn btn-sm text-white-50 p-0 ms-1" onclick="window.B42RoomHub.togglePanel()" title="Thu gọn">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Thanh công cụ nhanh trên Header dành riêng cho Super Admin -->
+            <div id="b42AdminHeaderTools" class="d-none mt-2 pt-2 border-top border-secondary border-opacity-50 d-flex flex-wrap justify-content-between align-items-center gap-1">
+                <button type="button" id="b42BtnSurveyToggle" class="btn btn-xs btn-outline-warning py-0 px-2" style="font-size: 0.69rem;" onclick="window.B42RoomHub.toggleSurveyBanner()">
+                    <i class="bi bi-megaphone me-1"></i>Mở nhắc phần mềm HK mới
+                </button>
+                <button type="button" class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size: 0.69rem;" onclick="window.B42RoomHub.resetSemester()">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Làm mới học kỳ
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. Thanh chọn Kênh Chung + 8 Phòng (5.1 -> 6.6) -->
+        <div class="b42-hub-room-bar" id="b42RoomPillsBar"></div>
+
+        <!-- 3. Hai Tab con: [Thông báo Vận hành] & [Phần mềm & Góp ý Kỳ tới] -->
+        <div class="b42-hub-subtabs">
+            <button type="button" id="b42SubTabAnn" class="b42-hub-subtab active" onclick="window.B42RoomHub.switchSubTab('announcements')">
+                <i class="bi bi-broadcast-pin me-1"></i>Thông báo Vận hành
+                <span id="b42SubTabAnnCount" class="badge rounded-pill bg-secondary ms-1" style="font-size: 0.65rem;">0</span>
+            </button>
+            <button type="button" id="b42SubTabProp" class="b42-hub-subtab" onclick="window.B42RoomHub.switchSubTab('proposals')">
+                <i class="bi bi-pc-display-horizontal me-1"></i>Phần mềm & Kỳ tới
+                <span id="b42SubTabPropCount" class="badge rounded-pill bg-primary ms-1" style="font-size: 0.65rem;">0</span>
+            </button>
+        </div>
+
+        <!-- 4. Nội dung chính (Body) -->
+        <div class="b42-hub-body" id="b42HubBody">
+            <!-- TAB 1: THÔNG BÁO VẬN HÀNH -->
+            <div id="b42ViewAnnouncements">
+                <!-- Banner nhắc rà soát phần mềm cuối kỳ (nếu bật) -->
+                <div id="b42SurveyBannerBox" class="alert alert-warning py-2 px-3 mb-2 rounded-3 border-warning d-none" style="font-size: 0.76rem;">
+                    <div class="fw-bold text-dark mb-1">
+                        <i class="bi bi-stars text-warning me-1"></i>Đợt chuẩn bị Image máy tính cho Học kỳ tới!
+                    </div>
+                    <div class="text-muted mb-1">
+                        Quý Thầy/Cô cần nâng cấp phần mềm hoặc bổ sung thư viện nào cho kỳ sau vui lòng ghi chú vào phòng máy tương ứng.
+                    </div>
+                    <button type="button" class="btn btn-warning btn-sm py-0 px-2 fw-bold" style="font-size: 0.71rem;" onclick="window.B42RoomHub.switchSubTab('proposals', true)">
+                        &raquo; Bấm ghi chú phần mềm kỳ tới
+                    </button>
+                </div>
+
+                <!-- Khung Tin Ghim Đầu Phòng -->
+                <div id="b42PinnedContainer"></div>
+
+                <!-- Danh sách Thông báo theo thời gian -->
+                <div id="b42AnnouncementsList"></div>
+            </div>
+
+            <!-- TAB 2: PHẦN MỀM & GÓP Ý KỲ TỚI -->
+            <div id="b42ViewProposals" class="d-none">
+                <!-- Thẻ Cấu hình & Phần mềm hiện có tại Phòng -->
+                <div class="card border-0 shadow-sm rounded-3 mb-2" style="background: #EFF6FF; border: 1px solid #BFDBFE !important;">
+                    <div class="card-body p-2.5">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-bold text-primary" style="font-size: 0.76rem;">
+                                <i class="bi bi-cpu-fill me-1"></i>Cấu hình & Phần mềm hiện có (<span id="b42SpecRoomLabel">Toàn hệ thống</span>):
+                            </span>
+                            <button type="button" id="b42BtnEditSpec" class="btn btn-link btn-sm p-0 text-decoration-none d-none" style="font-size: 0.72rem;" onclick="window.B42RoomHub.toggleSpecEditor()">
+                                <i class="bi bi-pencil-square"></i> Sửa
+                            </button>
+                        </div>
+                        <div id="b42SpecSummaryText" class="text-dark" style="font-size: 0.76rem; line-height: 1.4;"></div>
+                        <div id="b42SpecEditorBox" class="d-none mt-2">
+                            <textarea id="b42SpecInput" class="form-control form-control-sm mb-1" rows="2" style="font-size: 0.76rem;"></textarea>
+                            <div class="d-flex justify-content-end gap-1">
+                                <button type="button" class="btn btn-light btn-sm py-0 px-2" style="font-size: 0.72rem;" onclick="window.B42RoomHub.toggleSpecEditor(false)">Hủy</button>
+                                <button type="button" class="btn btn-primary btn-sm py-0 px-2" style="font-size: 0.72rem;" onclick="window.B42RoomHub.saveSpecSummary()">Lưu cấu hình</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thanh bộ lọc & Nút mở Form Đề xuất -->
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-2">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-secondary py-0 px-2 active" id="b42PropFilterAll" style="font-size: 0.71rem;" onclick="window.B42RoomHub.setProposalFilter('all')">Tất cả</button>
+                        <button type="button" class="btn btn-outline-secondary py-0 px-2" id="b42PropFilterNext" style="font-size: 0.71rem;" onclick="window.B42RoomHub.setProposalFilter('next_semester')">Chuẩn bị HK sau</button>
+                        <button type="button" class="btn btn-outline-secondary py-0 px-2" id="b42PropFilterImage" style="font-size: 0.71rem;" onclick="window.B42RoomHub.setProposalFilter('planned_image')">Checklist Image</button>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm py-1 px-2.5 fw-bold" style="font-size: 0.73rem;" onclick="window.B42RoomHub.toggleProposalForm()">
+                        <i class="bi bi-plus-circle me-1"></i>Đề xuất / Nhắc kỳ sau
+                    </button>
+                </div>
+
+                <!-- Biểu mẫu (Mini-Form) Gửi Đề xuất Phần mềm / Thư viện / Cải thiện -->
+                <div id="b42ProposalFormBox" class="card border-primary mb-2 d-none" style="border-radius: 11px !important;">
+                    <div class="card-body p-2.5">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong class="text-primary" style="font-size: 0.78rem;">
+                                <i class="bi bi-send-plus me-1"></i>Gửi Đề xuất Phần mềm / Thư viện / Cải thiện
+                            </strong>
+                            <button type="button" class="btn-close" style="font-size: 0.65rem;" onclick="window.B42RoomHub.toggleProposalForm(false)"></button>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label mb-1 fw-semibold text-muted" style="font-size: 0.71rem;">1. Áp dụng cho phòng máy:</label>
+                            <div id="b42PropRoomsCheckboxes" class="d-flex flex-wrap gap-1"></div>
+                        </div>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label mb-1 fw-semibold text-muted" style="font-size: 0.71rem;">2. Phân loại:</label>
+                                <select id="b42PropType" class="form-select form-select-sm" style="font-size: 0.74rem;">
+                                    <option value="software_next_sem">💿 Cài mới / Nâng cấp phần mềm</option>
+                                    <option value="library_update">📦 Bổ sung thư viện / Package</option>
+                                    <option value="hardware_improve">💡 Cải thiện thiết bị / Phòng máy</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label mb-1 fw-semibold text-muted" style="font-size: 0.71rem;">3. Thời điểm cần:</label>
+                                <select id="b42PropScope" class="form-select form-select-sm" style="font-size: 0.74rem;">
+                                    <option value="next_semester">📌 Chuẩn bị cho Học kỳ sau (Image mới)</option>
+                                    <option value="current_semester">⚡ Cần bổ sung ngay trong kỳ này</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label mb-1 fw-semibold text-muted" style="font-size: 0.71rem;">4. Tên phần mềm / thư viện / nội dung chính *:</label>
+                            <input type="text" id="b42PropTitle" class="form-control form-control-sm" style="font-size: 0.76rem;" placeholder="VD: Python 3.12 + thư viện PyTorch, OpenCV (hoặc MATLAB R2024b)">
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label mb-1 fw-semibold text-muted" style="font-size: 0.71rem;">5. Ghi chú môn học / yêu cầu chi tiết:</label>
+                            <textarea id="b42PropDesc" class="form-control form-control-sm" rows="2" style="font-size: 0.75rem;" placeholder="VD: Phục vụ môn Xử lý ảnh & Thị giác máy tính vào Học kỳ tới..."></textarea>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-1">
+                            <button type="button" class="btn btn-light btn-sm py-1 px-2" style="font-size: 0.73rem;" onclick="window.B42RoomHub.toggleProposalForm(false)">Đóng</button>
+                            <button type="button" class="btn btn-primary btn-sm py-1 px-3 fw-bold" style="font-size: 0.73rem;" onclick="window.B42RoomHub.submitProposal()">
+                                <i class="bi bi-check2-circle me-1"></i>Lưu đề xuất vào kênh phòng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Danh sách Thẻ Đề xuất của Giảng viên -->
+                <div id="b42ProposalsList"></div>
+            </div>
+        </div>
+
+        <!-- 5. Chân khung chat (Footer: Chế độ Chỉ đọc cho User HOẶC Bộ Phát sóng cho Admin) -->
+        <div class="b42-hub-footer">
+            <!-- Footer mặc định cho Giảng viên / User (Chỉ đọc + Lối tắt Báo sự cố) -->
+            <div id="b42UserReadOnlyFooter">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-1">
+                    <span class="text-muted" style="font-size: 0.72rem;">
+                        <i class="bi bi-lock-fill me-1"></i>Kênh thông báo một chiều từ QTTB
+                    </span>
+                    <div class="d-flex align-items-center gap-1">
+                        <a id="b42QuickIssueLink" href="{{ url_for('report_page') }}" class="btn btn-outline-primary btn-sm py-0 px-2 fw-semibold" style="font-size: 0.71rem;">
+                            <i class="bi bi-tools me-1"></i>Báo sự cố máy lỗi &rarr;
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bộ công cụ Phát thông báo (Broadcast Composer) dành cho Super Admin -->
+            <div id="b42AdminBroadcastFooter" class="d-none">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none fw-bold text-dark" style="font-size: 0.75rem;" onclick="window.B42RoomHub.toggleAdminComposer()">
+                        <i class="bi bi-megaphone-fill text-primary me-1"></i>Bộ công cụ Phát thông báo (Broadcast)
+                        <i id="b42ComposerChevron" class="bi bi-chevron-up ms-1"></i>
+                    </button>
+                    <a id="b42AdminQuickIssueLink" href="{{ url_for('report_page') }}" class="text-decoration-none" style="font-size: 0.7rem;">Phiếu báo sự cố &rarr;</a>
+                </div>
+
+                <div id="b42AdminComposerBody">
+                    <!-- Chọn phòng nhận -->
+                    <div class="mb-1">
+                        <div class="d-flex flex-wrap gap-1 mb-1" id="b42BroadcastRoomChecks"></div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button type="button" class="btn btn-outline-secondary py-0 px-1.5" style="font-size: 0.67rem;" onclick="window.B42RoomHub.selectBroadcastGroup('all8')">Tất cả 8 phòng</button>
+                            <button type="button" class="btn btn-outline-secondary py-0 px-1.5" style="font-size: 0.67rem;" onclick="window.B42RoomHub.selectBroadcastGroup('floor5')">Chỉ Tầng 5 (5.1-5.3)</button>
+                            <button type="button" class="btn btn-outline-secondary py-0 px-1.5" style="font-size: 0.67rem;" onclick="window.B42RoomHub.selectBroadcastGroup('floor6')">Chỉ Tầng 6 (6.1-6.6)</button>
+                            <button type="button" class="btn btn-outline-secondary py-0 px-1.5" style="font-size: 0.67rem;" onclick="window.B42RoomHub.selectBroadcastGroup('general')">Kênh Chung</button>
+                        </div>
+                    </div>
+
+                    <!-- Mẫu điền nhanh 1-chạm -->
+                    <div class="d-flex flex-wrap gap-1 mb-1">
+                        <span class="b42-tpl-chip" style="background:#FEE2E2;color:#DC2626;border-color:#FCA5A5;" onclick="window.B42RoomHub.applyTemplate('net_down')">🔴 Sự cố rớt mạng</span>
+                        <span class="b42-tpl-chip" style="background:#DCFCE7;color:#15803D;border-color:#86EFAC;" onclick="window.B42RoomHub.applyTemplate('net_up')">🟢 Đã có mạng lại</span>
+                        <span class="b42-tpl-chip" style="background:#FEF3C7;color:#B45309;border-color:#FCD34D;" onclick="window.B42RoomHub.applyTemplate('pc_maint')">🟠 Máy đang bảo trì</span>
+                        <span class="b42-tpl-chip" style="background:#E0F2FE;color:#0369A1;border-color:#7DD3FC;" onclick="window.B42RoomHub.applyTemplate('ac_maint')">🔵 Bảo trì máy lạnh</span>
+                    </div>
+
+                    <!-- Loại thông báo & Ghim -->
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-1 mb-1">
+                        <select id="b42BroadcastCategory" class="form-select form-select-sm py-0 px-2" style="width: auto; font-size: 0.72rem; height: 26px;">
+                            <option value="urgent">🚨 Khẩn cấp / Sự cố mạng</option>
+                            <option value="resolved">✅ Đã khắc phục</option>
+                            <option value="maintenance">🛠️ Đang bảo trì thiết bị</option>
+                            <option value="info" selected>💿 Thông báo chung</option>
+                        </select>
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" id="b42BroadcastPin">
+                            <label class="form-check-label fw-semibold text-warning-emphasis" for="b42BroadcastPin" style="font-size: 0.72rem;">
+                                📌 Ghim lên đầu phòng
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Ô nhập & Nút Phát -->
+                    <div class="d-flex gap-1">
+                        <textarea id="b42BroadcastContent" class="form-control form-control-sm" rows="2" style="font-size: 0.76rem;" placeholder="Nhập thông báo vận hành gửi tới các phòng đã chọn..."></textarea>
+                        <button type="button" class="btn btn-primary btn-sm px-2.5 fw-bold flex-shrink-0 d-flex flex-column justify-content-center align-items-center" style="font-size: 0.74rem; min-width: 96px;" onclick="window.B42RoomHub.sendBroadcast()">
+                            <span>PHÁT NGAY &raquo;</span>
+                            <small id="b42BroadcastTargetCount" class="fw-normal opacity-75" style="font-size: 0.64rem;">(1 kênh)</small>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Secret shortcut: Press Ctrl + Shift + Q to access Admin Panel
@@ -398,6 +924,844 @@
                 }, 5000);
             });
         });
+
+        // =====================================================================
+        // [#QTTB-02] CONTROLLER CHO BONG BÓNG KÊNH PHÒNG MÁY (B42RoomHub)
+        // =====================================================================
+        window.B42RoomHub = (function() {
+            const ROOMS = ['ALL', '5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6'];
+            const STORAGE_SEEN_KEY = 'b42_hub_last_seen_ann_id_v1';
+            const STORAGE_TOAST_DISMISSED_KEY = 'b42_hub_dismissed_toast_id_v1';
+
+            let state = {
+                isOpen: false,
+                currentRoom: '5.1',
+                currentSubTab: 'announcements',
+                proposalFilter: 'all',
+                composerExpanded: true,
+                selectedBroadcastRooms: new Set(['5.1']),
+                selectedProposalRooms: new Set(['5.1']),
+                data: {
+                    max_ann_id: 0,
+                    latest_urgent: null,
+                    survey_banner_enabled: false,
+                    net_map: {},
+                    specs_map: {},
+                    announcements: [],
+                    proposals: [],
+                    permissions: {
+                        is_logged_in: false,
+                        can_propose: false,
+                        can_broadcast: false,
+                        is_admin_viewer: false
+                    }
+                },
+                toastTargetRoom: '5.1',
+                toastTargetTab: 'announcements'
+            };
+
+            function escapeHtml(str) {
+                const div = document.createElement('div');
+                div.textContent = str == null ? '' : String(str);
+                return div.innerHTML;
+            }
+
+            async function fetchState() {
+                try {
+                    const resp = await fetch('/api/room-hub/state', { credentials: 'same-origin' });
+                    if (!resp.ok) return;
+                    const json = await resp.json();
+                    if (!json || !json.success) return;
+                    state.data = json;
+                    renderAll();
+                } catch (e) {
+                    // Bỏ qua lỗi mạng tạm thời khi polling
+                }
+            }
+
+            function getSeenMaxId() {
+                return parseInt(localStorage.getItem(STORAGE_SEEN_KEY) || '0', 10) || 0;
+            }
+
+            function markAllSeen() {
+                if (state.data.max_ann_id > 0) {
+                    localStorage.setItem(STORAGE_SEEN_KEY, String(state.data.max_ann_id));
+                }
+                updateUnreadBadge();
+            }
+
+            function updateUnreadBadge() {
+                const seenId = getSeenMaxId();
+                const unreadAnns = (state.data.announcements || []).filter(a => a.id > seenId);
+                const badgeEl = document.getElementById('b42RoomHubBadge');
+                if (!badgeEl) return;
+                if (state.isOpen) {
+                    badgeEl.classList.add('d-none');
+                    return;
+                }
+                if (unreadAnns.length > 0) {
+                    badgeEl.textContent = unreadAnns.length > 9 ? '9+' : String(unreadAnns.length);
+                    badgeEl.classList.remove('d-none');
+                } else {
+                    badgeEl.classList.add('d-none');
+                }
+
+                // Kiểm tra hiển thị Toast nổi khi có tin Khẩn cấp mới hoặc đợt nhắc phần mềm HK mới
+                const toastEl = document.getElementById('b42RoomHubFloatToast');
+                const toastTitle = document.getElementById('b42FloatToastTitle');
+                const toastBody = document.getElementById('b42FloatToastBody');
+                if (!toastEl || state.isOpen) {
+                    if (toastEl) toastEl.classList.add('d-none');
+                    return;
+                }
+
+                const dismissedKey = localStorage.getItem(STORAGE_TOAST_DISMISSED_KEY) || '';
+                const urgent = state.data.latest_urgent;
+                if (urgent && dismissedKey !== ('urgent_' + urgent.id)) {
+                    toastEl.classList.remove('d-none', 'survey-mode');
+                    const rLabel = urgent.room === 'ALL' ? 'Toàn hệ thống' : ('Phòng ' + urgent.room);
+                    toastTitle.textContent = '🚨 [' + rLabel + '] Thông báo khẩn:';
+                    toastBody.textContent = urgent.content.length > 88 ? (urgent.content.slice(0, 88) + '...') : urgent.content;
+                    state.toastTargetRoom = urgent.room;
+                    state.toastTargetTab = 'announcements';
+                } else if (state.data.survey_banner_enabled && dismissedKey !== 'survey_active') {
+                    toastEl.classList.remove('d-none');
+                    toastEl.classList.add('survey-mode');
+                    toastTitle.textContent = '💿 Chuẩn bị phần mềm Học kỳ mới:';
+                    toastBody.textContent = 'Thầy/Cô cần nâng cấp phần mềm hoặc thư viện cho kỳ tới? Ghi chú ngay tại đây!';
+                    state.toastTargetRoom = state.currentRoom;
+                    state.toastTargetTab = 'proposals';
+                } else {
+                    toastEl.classList.add('d-none');
+                }
+            }
+
+            function dismissToast() {
+                const urgent = state.data.latest_urgent;
+                if (urgent) {
+                    localStorage.setItem(STORAGE_TOAST_DISMISSED_KEY, 'urgent_' + urgent.id);
+                } else if (state.data.survey_banner_enabled) {
+                    localStorage.setItem(STORAGE_TOAST_DISMISSED_KEY, 'survey_active');
+                }
+                const toastEl = document.getElementById('b42RoomHubFloatToast');
+                if (toastEl) toastEl.classList.add('d-none');
+            }
+
+            function openFromToast() {
+                state.currentRoom = state.toastTargetRoom || '5.1';
+                state.currentSubTab = state.toastTargetTab || 'announcements';
+                dismissToast();
+                if (!state.isOpen) {
+                    togglePanel(true);
+                } else {
+                    renderAll();
+                }
+            }
+
+            function togglePanel(forceOpen) {
+                state.isOpen = typeof forceOpen === 'boolean' ? forceOpen : !state.isOpen;
+                const panel = document.getElementById('b42RoomHubPanel');
+                const icon = document.getElementById('b42RoomHubLauncherIcon');
+                if (panel) {
+                    panel.classList.toggle('open', state.isOpen);
+                }
+                if (icon) {
+                    icon.className = state.isOpen ? 'bi bi-x-lg' : 'bi bi-chat-dots-fill';
+                }
+                if (state.isOpen) {
+                    markAllSeen();
+                    renderAll();
+                } else {
+                    updateUnreadBadge();
+                }
+            }
+
+            function selectRoom(roomCode) {
+                state.currentRoom = roomCode;
+                state.selectedBroadcastRooms = new Set([roomCode]);
+                state.selectedProposalRooms = new Set([roomCode]);
+                renderAll();
+            }
+
+            function switchSubTab(tabName, openProposalForm) {
+                state.currentSubTab = tabName;
+                renderAll();
+                if (openProposalForm) {
+                    toggleProposalForm(true);
+                }
+            }
+
+            function renderHeaderAndRole() {
+                const perms = state.data.permissions || {};
+                const roleBadge = document.getElementById('b42HubRoleBadge');
+                const adminHeaderTools = document.getElementById('b42AdminHeaderTools');
+                const userFooter = document.getElementById('b42UserReadOnlyFooter');
+                const adminFooter = document.getElementById('b42AdminBroadcastFooter');
+                const btnEditSpec = document.getElementById('b42BtnEditSpec');
+                const surveyBtn = document.getElementById('b42BtnSurveyToggle');
+
+                if (roleBadge) {
+                    if (perms.can_broadcast) {
+                        roleBadge.textContent = 'Admin Mode';
+                        roleBadge.className = 'badge bg-warning text-dark fw-bold';
+                    } else if (perms.can_propose) {
+                        roleBadge.textContent = 'Giảng viên';
+                        roleBadge.className = 'badge bg-success text-white';
+                    } else {
+                        roleBadge.textContent = 'Chỉ đọc';
+                        roleBadge.className = 'badge bg-dark border border-secondary text-info';
+                    }
+                }
+
+                if (adminHeaderTools) {
+                    adminHeaderTools.classList.toggle('d-none', !perms.can_broadcast);
+                }
+                if (btnEditSpec) {
+                    btnEditSpec.classList.toggle('d-none', !perms.can_broadcast);
+                }
+                if (surveyBtn) {
+                    if (state.data.survey_banner_enabled) {
+                        surveyBtn.className = 'btn btn-xs btn-warning text-dark fw-bold py-0 px-2';
+                        surveyBtn.innerHTML = '<i class="bi bi-megaphone-fill me-1"></i>Đang bật nhắc HK mới (Tắt)';
+                    } else {
+                        surveyBtn.className = 'btn btn-xs btn-outline-warning py-0 px-2';
+                        surveyBtn.innerHTML = '<i class="bi bi-megaphone me-1"></i>Mở nhắc phần mềm HK mới';
+                    }
+                }
+
+                // Footer hiển thị theo tab và quyền
+                const isAnnTab = state.currentSubTab === 'announcements';
+                if (perms.can_broadcast && isAnnTab) {
+                    if (userFooter) userFooter.classList.add('d-none');
+                    if (adminFooter) adminFooter.classList.remove('d-none');
+                } else {
+                    if (userFooter) userFooter.classList.remove('d-none');
+                    if (adminFooter) adminFooter.classList.add('d-none');
+                }
+
+                // Cập nhật link Báo cáo sự cố kèm sẵn mã phòng đang chọn
+                const roomParam = state.currentRoom !== 'ALL' ? ('?room=' + encodeURIComponent(state.currentRoom)) : '';
+                const issueHref = "{{ url_for('report_page') }}" + roomParam;
+                const rLabel = state.currentRoom === 'ALL' ? 'phòng máy' : ('P.' + state.currentRoom);
+                const qLink = document.getElementById('b42QuickIssueLink');
+                const aqLink = document.getElementById('b42AdminQuickIssueLink');
+                if (qLink) {
+                    qLink.href = issueHref;
+                    qLink.innerHTML = '<i class="bi bi-tools me-1"></i>Gửi Phiếu báo sự cố tại ' + rLabel + ' &rarr;';
+                }
+                if (aqLink) {
+                    aqLink.href = issueHref;
+                }
+            }
+
+            function renderRoomPills() {
+                const bar = document.getElementById('b42RoomPillsBar');
+                if (!bar) return;
+                const anns = state.data.announcements || [];
+                const props = state.data.proposals || [];
+                const netMap = state.data.net_map || {};
+
+                let html = '';
+                ROOMS.forEach(r => {
+                    const isActive = state.currentRoom === r;
+                    const label = r === 'ALL' ? '📢 Kênh Chung' : ('P.' + r);
+                    const roomAnns = r === 'ALL' ? anns : anns.filter(a => a.room === r);
+                    const roomProps = r === 'ALL' ? props : props.filter(p => p.room === r && p.status !== 'completed');
+                    const urgentCount = roomAnns.filter(a => a.category === 'urgent').length;
+                    const badgeNum = state.currentSubTab === 'proposals' ? roomProps.length : (urgentCount || roomAnns.length);
+
+                    let netDotHtml = '';
+                    if (r !== 'ALL') {
+                        const netSt = (netMap[r] && netMap[r].status === 'offline') ? 'offline' : 'online';
+                        const netTitle = netSt === 'offline' ? 'Đang mất kết nối mạng' : 'Mạng hoạt động tốt';
+                        netDotHtml = `<span class="b42-net-dot ${netSt}" title="${netTitle}"></span>`;
+                    }
+
+                    const countBadge = badgeNum > 0
+                        ? `<span class="b42-room-pill-count">${badgeNum}</span>`
+                        : '';
+
+                    html += `
+                        <button type="button" class="b42-room-pill ${isActive ? 'active' : ''}" onclick="window.B42RoomHub.selectRoom('${r}')">
+                            ${netDotHtml}
+                            <span>${label}</span>
+                            ${countBadge}
+                        </button>
+                    `;
+                });
+                bar.innerHTML = html;
+            }
+
+            function renderSubTabs() {
+                const btnAnn = document.getElementById('b42SubTabAnn');
+                const btnProp = document.getElementById('b42SubTabProp');
+                const viewAnn = document.getElementById('b42ViewAnnouncements');
+                const viewProp = document.getElementById('b42ViewProposals');
+                const cntAnn = document.getElementById('b42SubTabAnnCount');
+                const cntProp = document.getElementById('b42SubTabPropCount');
+
+                const isAnn = state.currentSubTab === 'announcements';
+                if (btnAnn) btnAnn.classList.toggle('active', isAnn);
+                if (btnProp) btnProp.classList.toggle('active', !isAnn);
+                if (viewAnn) viewAnn.classList.toggle('d-none', !isAnn);
+                if (viewProp) viewProp.classList.toggle('d-none', isAnn);
+
+                const roomAnns = getFilteredAnnouncements();
+                const roomProps = getFilteredProposals('all');
+                if (cntAnn) cntAnn.textContent = String(roomAnns.length);
+                if (cntProp) cntProp.textContent = String(roomProps.length);
+            }
+
+            function getFilteredAnnouncements() {
+                const anns = state.data.announcements || [];
+                if (state.currentRoom === 'ALL') {
+                    return anns;
+                }
+                return anns.filter(a => a.room === state.currentRoom || (a.room === 'ALL' && a.category === 'urgent'));
+            }
+
+            function renderAnnouncementsTab() {
+                const surveyBox = document.getElementById('b42SurveyBannerBox');
+                if (surveyBox) {
+                    surveyBox.classList.toggle('d-none', !state.data.survey_banner_enabled);
+                }
+
+                const canAdmin = !!(state.data.permissions && state.data.permissions.can_broadcast);
+                const roomAnns = getFilteredAnnouncements();
+                const pinnedList = roomAnns.filter(a => a.is_pinned && (state.currentRoom === 'ALL' ? a.room === 'ALL' : a.room === state.currentRoom));
+                const pinnedContainer = document.getElementById('b42PinnedContainer');
+                const listContainer = document.getElementById('b42AnnouncementsList');
+
+                if (pinnedContainer) {
+                    if (pinnedList.length > 0) {
+                        const p = pinnedList[0];
+                        const rTitle = p.room === 'ALL' ? 'TOÀN HỆ THỐNG' : ('PHÒNG ' + p.room);
+                        pinnedContainer.innerHTML = `
+                            <div class="b42-pin-card">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="badge bg-warning text-dark fw-bold" style="font-size: 0.65rem;">📌 GHIM ĐẦU ${rTitle}</span>
+                                        <small class="text-muted" style="font-size: 0.68rem;">${escapeHtml(p.created_at_display)}</small>
+                                    </div>
+                                    ${canAdmin ? `
+                                        <button type="button" class="btn btn-xs btn-outline-warning text-dark py-0 px-1.5" style="font-size: 0.66rem;" onclick="window.B42RoomHub.togglePin(${p.id})">
+                                            Bỏ ghim ✕
+                                        </button>
+                                    ` : ''}
+                                </div>
+                                <div class="text-dark fw-medium" style="font-size: 0.79rem; white-space: pre-line;">${escapeHtml(p.content)}</div>
+                            </div>
+                        `;
+                    } else {
+                        pinnedContainer.innerHTML = '';
+                    }
+                }
+
+                if (!listContainer) return;
+                if (roomAnns.length === 0) {
+                    const rName = state.currentRoom === 'ALL' ? 'Kênh Chung' : ('Phòng ' + state.currentRoom);
+                    listContainer.innerHTML = `
+                        <div class="text-center py-4 text-muted" style="font-size: 0.8rem;">
+                            <i class="bi bi-check2-circle fs-3 text-success d-block mb-1"></i>
+                            Hiện tại <strong>${rName}</strong> hoạt động bình thường, chưa có thông báo sự cố nào.
+                        </div>
+                    `;
+                    return;
+                }
+
+                const catMeta = {
+                    urgent: { cls: 'urgent', badgeBg: '#DC2626', label: '[!] KHẨN CẤP - SỰ CỐ MẠNG' },
+                    resolved: { cls: 'resolved', badgeBg: '#16A34A', label: '[V] ĐÃ KHẮC PHỤC' },
+                    maintenance: { cls: 'maintenance', badgeBg: '#D97706', label: '[!] ĐANG BẢO TRÌ THIẾT BỊ' },
+                    info: { cls: '', badgeBg: '#0284C7', label: '[i] THÔNG BÁO VẬN HÀNH' }
+                };
+
+                let html = '';
+                roomAnns.forEach(a => {
+                    const meta = catMeta[a.category] || catMeta.info;
+                    const roomTag = a.room === 'ALL' ? 'Toàn hệ thống' : ('P.' + a.room);
+                    html += `
+                        <div class="b42-ann-card ${meta.cls}">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mb-1">
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="badge" style="background:${meta.badgeBg}; font-size:0.65rem;">${meta.label}</span>
+                                    <span class="badge bg-secondary bg-opacity-10 text-dark border" style="font-size:0.65rem;">${roomTag}</span>
+                                </div>
+                                <small class="text-muted" style="font-size: 0.69rem;">${escapeHtml(a.created_at_display)}</small>
+                            </div>
+                            <div class="fw-bold text-dark mb-1" style="font-size: 0.75rem;">${escapeHtml(a.created_by)}:</div>
+                            <div class="text-dark" style="font-size: 0.8rem; white-space: pre-line;">${escapeHtml(a.content)}</div>
+                            ${canAdmin ? `
+                                <div class="d-flex justify-content-end gap-1 mt-2 pt-1 border-top border-secondary border-opacity-10">
+                                    <button type="button" class="btn btn-light btn-sm py-0 px-2 border" style="font-size: 0.67rem;" onclick="window.B42RoomHub.togglePin(${a.id})">
+                                        📌 ${a.is_pinned ? 'Bỏ ghim' : 'Ghim đầu phòng'}
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size: 0.67rem;" onclick="window.B42RoomHub.deleteAnnouncement(${a.id})">
+                                        🗑️ Xóa
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                listContainer.innerHTML = html;
+            }
+
+            function getFilteredProposals(filterOverride) {
+                const filterMode = filterOverride || state.proposalFilter;
+                const props = state.data.proposals || [];
+                let list = state.currentRoom === 'ALL'
+                    ? props
+                    : props.filter(p => p.room === state.currentRoom || p.room === 'ALL');
+                if (filterMode === 'next_semester') {
+                    list = list.filter(p => p.target_scope === 'next_semester');
+                } else if (filterMode === 'planned_image') {
+                    list = list.filter(p => p.status === 'planned_image');
+                }
+                return list;
+            }
+
+            function renderProposalsTab() {
+                const rLabel = state.currentRoom === 'ALL' ? 'Toàn hệ thống' : ('Phòng ' + state.currentRoom);
+                const specRoomEl = document.getElementById('b42SpecRoomLabel');
+                const specTextEl = document.getElementById('b42SpecSummaryText');
+                if (specRoomEl) specRoomEl.textContent = rLabel;
+                const specObj = (state.data.specs_map || {})[state.currentRoom] || (state.data.specs_map || {})['ALL'] || {};
+                if (specTextEl) {
+                    specTextEl.textContent = specObj.spec_summary || 'Chưa cập nhật danh sách phần mềm.';
+                }
+
+                // Filter buttons state
+                ['All', 'Next', 'Image'].forEach(k => {
+                    const el = document.getElementById('b42PropFilter' + k);
+                    if (!el) return;
+                    const modeMap = { All: 'all', Next: 'next_semester', Image: 'planned_image' };
+                    el.classList.toggle('active', state.proposalFilter === modeMap[k]);
+                });
+
+                const listEl = document.getElementById('b42ProposalsList');
+                if (!listEl) return;
+                const list = getFilteredProposals();
+                const canAdmin = !!(state.data.permissions && state.data.permissions.can_broadcast);
+
+                if (list.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="text-center py-4 text-muted" style="font-size: 0.79rem;">
+                            <i class="bi bi-journal-code fs-3 text-primary d-block mb-1"></i>
+                            Chưa có đề xuất phần mềm / thư viện nào tại <strong>${rLabel}</strong>.<br>
+                            Quý Thầy/Cô có thể bấm <strong>"+ Đề xuất / Nhắc kỳ sau"</strong> để QTTB chuẩn bị trước nhé!
+                        </div>
+                    `;
+                    return;
+                }
+
+                const typeMeta = {
+                    software_next_sem: { icon: '💿', label: 'Phần mềm / Phiên bản', bg: '#EFF6FF', fg: '#1D4ED8' },
+                    library_update: { icon: '📦', label: 'Thư viện / Package', bg: '#F0FDF4', fg: '#15803D' },
+                    hardware_improve: { icon: '💡', label: 'Cải thiện Phòng máy', bg: '#FFFBEB', fg: '#B45309' }
+                };
+                const statusMeta = {
+                    recorded: { badge: '⏳ Đã ghi nhận', cls: 'bg-secondary bg-opacity-10 text-secondary border' },
+                    planned_image: { badge: '📌 Đưa vào Image HK sau', cls: 'bg-primary text-white' },
+                    completed: { badge: '✅ Đã cài đặt xong', cls: 'bg-success text-white' }
+                };
+
+                let html = '';
+                list.forEach(p => {
+                    const tMeta = typeMeta[p.proposal_type] || typeMeta.software_next_sem;
+                    const sMeta = statusMeta[p.status] || statusMeta.recorded;
+                    const scopeLabel = p.target_scope === 'current_semester' ? '⚡ Cần trong HK này' : '🗓️ Chuẩn bị cho HK sau';
+                    const rTag = p.room === 'ALL' ? 'Toàn hệ thống' : ('P.' + p.room);
+
+                    html += `
+                        <div class="b42-prop-card ${p.status}">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mb-1">
+                                <div class="d-flex align-items-center flex-wrap gap-1">
+                                    <span class="badge" style="background:${tMeta.bg}; color:${tMeta.fg}; font-size:0.65rem;">${tMeta.icon} ${tMeta.label}</span>
+                                    <span class="badge bg-light text-dark border" style="font-size:0.65rem;">${rTag}</span>
+                                    <span class="badge bg-light text-muted border" style="font-size:0.64rem;">${scopeLabel}</span>
+                                </div>
+                                <span class="badge ${sMeta.cls}" style="font-size:0.65rem;">${sMeta.badge}</span>
+                            </div>
+
+                            <div class="fw-bold text-dark mt-1" style="font-size: 0.83rem;">${escapeHtml(p.title_software)}</div>
+                            ${p.description ? `<div class="text-secondary mt-1" style="font-size: 0.77rem; white-space: pre-line;">${escapeHtml(p.description)}</div>` : ''}
+
+                            ${p.admin_reply ? `
+                                <div class="mt-2 p-2 rounded-2" style="background:#F0FDFA; border:1px solid #99F6E4; font-size:0.74rem; color:#0F766E;">
+                                    <strong><i class="bi bi-reply-fill me-1"></i>Phản hồi QTTB:</strong> ${escapeHtml(p.admin_reply)}
+                                </div>
+                            ` : ''}
+
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2 pt-1 border-top">
+                                <small class="text-muted" style="font-size: 0.69rem;">
+                                    Bởi <strong>${escapeHtml(p.proposer_name)}</strong> • ${escapeHtml(p.created_at_display)}
+                                </small>
+                                <button type="button" class="btn btn-sm py-0 px-2 fw-semibold ${p.has_upvoted ? 'btn-primary' : 'btn-outline-primary'}" style="font-size: 0.7rem;" onclick="window.B42RoomHub.upvoteProposal(${p.id})" title="Bấm nếu môn học của Thầy/Cô cũng cần phần mềm/thư viện này">
+                                    👍 Tôi cũng cần (${p.upvotes})
+                                </button>
+                            </div>
+
+                            ${canAdmin ? `
+                                <div class="mt-2 pt-2 border-top border-secondary border-opacity-25 bg-light p-1.5 rounded-2">
+                                    <div class="d-flex flex-wrap gap-1 mb-1">
+                                        <select id="b42AdminPropStatus_${p.id}" class="form-select form-select-sm py-0 px-2" style="font-size: 0.7rem; width: auto; height: 25px;">
+                                            <option value="recorded" ${p.status === 'recorded' ? 'selected' : ''}>⏳ Đã ghi nhận</option>
+                                            <option value="planned_image" ${p.status === 'planned_image' ? 'selected' : ''}>📌 Đưa vào Image HK sau</option>
+                                            <option value="completed" ${p.status === 'completed' ? 'selected' : ''}>✅ Đã cài đặt xong</option>
+                                        </select>
+                                        <input type="text" id="b42AdminPropReply_${p.id}" class="form-control form-control-sm py-0 px-2 flex-grow-1" style="font-size: 0.7rem; height: 25px;" placeholder="Ghi chú phản hồi của Admin..." value="${escapeHtml(p.admin_reply)}">
+                                        <button type="button" class="btn btn-success btn-sm py-0 px-2" style="font-size: 0.68rem;" onclick="window.B42RoomHub.adminUpdateProposal(${p.id}, 'update')">Lưu</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1.5" style="font-size: 0.68rem;" onclick="window.B42RoomHub.adminUpdateProposal(${p.id}, 'delete')" title="Xóa đề xuất">🗑️</button>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                listEl.innerHTML = html;
+            }
+
+            function renderBroadcastCheckboxes() {
+                const container = document.getElementById('b42BroadcastRoomChecks');
+                if (!container) return;
+                let html = '';
+                ROOMS.forEach(r => {
+                    const checked = state.selectedBroadcastRooms.has(r);
+                    const label = r === 'ALL' ? 'Chung' : ('P.' + r);
+                    html += `
+                        <button type="button" class="btn btn-sm py-0 px-1.5 ${checked ? 'btn-primary' : 'btn-outline-secondary'}" style="font-size: 0.68rem;" onclick="window.B42RoomHub.toggleBroadcastRoom('${r}')">
+                            ${checked ? '☑' : '☐'} ${label}
+                        </button>
+                    `;
+                });
+                container.innerHTML = html;
+                const cntEl = document.getElementById('b42BroadcastTargetCount');
+                if (cntEl) {
+                    cntEl.textContent = `(${state.selectedBroadcastRooms.size} kênh)`;
+                }
+            }
+
+            function renderProposalRoomCheckboxes() {
+                const container = document.getElementById('b42PropRoomsCheckboxes');
+                if (!container) return;
+                let html = '';
+                ROOMS.forEach(r => {
+                    const checked = state.selectedProposalRooms.has(r);
+                    const label = r === 'ALL' ? 'Cả 8 phòng (Chung)' : ('P.' + r);
+                    html += `
+                        <button type="button" class="btn btn-sm py-0 px-2 ${checked ? 'btn-primary' : 'btn-outline-secondary'}" style="font-size: 0.7rem;" onclick="window.B42RoomHub.toggleProposalRoom('${r}')">
+                            ${checked ? '☑' : '☐'} ${label}
+                        </button>
+                    `;
+                });
+                container.innerHTML = html;
+            }
+
+            function toggleBroadcastRoom(roomCode) {
+                if (state.selectedBroadcastRooms.has(roomCode)) {
+                    if (state.selectedBroadcastRooms.size > 1) {
+                        state.selectedBroadcastRooms.delete(roomCode);
+                    }
+                } else {
+                    state.selectedBroadcastRooms.add(roomCode);
+                }
+                renderBroadcastCheckboxes();
+            }
+
+            function selectBroadcastGroup(mode) {
+                if (mode === 'all8') {
+                    state.selectedBroadcastRooms = new Set(['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6']);
+                } else if (mode === 'floor5') {
+                    state.selectedBroadcastRooms = new Set(['5.1', '5.2', '5.3']);
+                } else if (mode === 'floor6') {
+                    state.selectedBroadcastRooms = new Set(['6.1', '6.2', '6.3', '6.5', '6.6']);
+                } else if (mode === 'general') {
+                    state.selectedBroadcastRooms = new Set(['ALL']);
+                }
+                renderBroadcastCheckboxes();
+            }
+
+            function applyTemplate(tplKey) {
+                const roomsArr = Array.from(state.selectedBroadcastRooms);
+                const rText = roomsArr.includes('ALL') ? 'toàn bộ phòng máy B4.2' : ('Phòng ' + roomsArr.join(', '));
+                const catEl = document.getElementById('b42BroadcastCategory');
+                const contentEl = document.getElementById('b42BroadcastContent');
+                const pinEl = document.getElementById('b42BroadcastPin');
+                if (!contentEl || !catEl) return;
+
+                if (tplKey === 'net_down') {
+                    catEl.value = 'urgent';
+                    contentEl.value = `Hiện tại đường truyền mạng tại ${rText} đang bị gián đoạn tạm thời. Bộ phận kỹ thuật QTTB đang kiểm tra và khắc phục (~10-15 phút). Mong Quý Thầy/Cô thông cảm!`;
+                } else if (tplKey === 'net_up') {
+                    catEl.value = 'resolved';
+                    contentEl.value = `Đường truyền Internet tại ${rText} đã được khắc phục và hoạt động ổn định trở lại. Cảm ơn Quý Thầy/Cô!`;
+                } else if (tplKey === 'pc_maint') {
+                    catEl.value = 'maintenance';
+                    if (pinEl) pinEl.checked = true;
+                    contentEl.value = `Tại ${rText}: Máy số [...] đang chờ bảo trì phần cứng. Quý Thầy/Cô vui lòng hướng dẫn sinh viên chuyển sang ngồi các máy dự phòng cuối phòng.`;
+                } else if (tplKey === 'ac_maint') {
+                    catEl.value = 'maintenance';
+                    contentEl.value = `Thông báo: Hệ thống máy lạnh tại ${rText} đang được vệ sinh / bảo trì định kỳ. Kỹ thuật viên sẽ hoàn tất trước ca học tiếp theo.`;
+                }
+            }
+
+            async function sendBroadcast() {
+                const contentEl = document.getElementById('b42BroadcastContent');
+                const catEl = document.getElementById('b42BroadcastCategory');
+                const pinEl = document.getElementById('b42BroadcastPin');
+                const content = (contentEl ? contentEl.value : '').trim();
+                if (!content) {
+                    alert('Vui lòng nhập nội dung thông báo cần phát!');
+                    return;
+                }
+                const resp = await fetch('/api/room-hub/announcements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target_rooms: Array.from(state.selectedBroadcastRooms),
+                        category: catEl ? catEl.value : 'info',
+                        content: content,
+                        is_pinned: !!(pinEl && pinEl.checked)
+                    })
+                });
+                const json = await resp.json();
+                if (json && json.success) {
+                    if (contentEl) contentEl.value = '';
+                    if (pinEl) pinEl.checked = false;
+                    await fetchState();
+                } else {
+                    alert((json && json.message) || 'Không thể gửi thông báo.');
+                }
+            }
+
+            async function togglePin(annId) {
+                const resp = await fetch(`/api/room-hub/announcements/${annId}/toggle-pin`, { method: 'POST' });
+                const json = await resp.json();
+                if (json && json.success) {
+                    await fetchState();
+                } else {
+                    alert((json && json.message) || 'Lỗi khi ghim thông báo.');
+                }
+            }
+
+            async function deleteAnnouncement(annId) {
+                if (!confirm('Bạn có chắc muốn xóa thông báo này khỏi kênh phòng?')) return;
+                const resp = await fetch(`/api/room-hub/announcements/${annId}`, { method: 'DELETE' });
+                const json = await resp.json();
+                if (json && json.success) {
+                    await fetchState();
+                }
+            }
+
+            async function resetSemester() {
+                if (!confirm('Làm mới Học kỳ sẽ xóa các thông báo vận hành cũ và các đề xuất đã cài đặt xong (giữ lại cấu hình phòng & các đề xuất chờ làm Image kỳ tới). Bạn có chắc chắn muốn thực hiện?')) return;
+                const resp = await fetch('/api/room-hub/semester-reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clear_completed_proposals: true })
+                });
+                const json = await resp.json();
+                if (json && json.success) {
+                    await fetchState();
+                    alert(json.message);
+                }
+            }
+
+            async function toggleSurveyBanner() {
+                const resp = await fetch('/api/room-hub/toggle-survey-banner', { method: 'POST' });
+                const json = await resp.json();
+                if (json && json.success) {
+                    await fetchState();
+                }
+            }
+
+            function toggleSpecEditor(forceState) {
+                const box = document.getElementById('b42SpecEditorBox');
+                const input = document.getElementById('b42SpecInput');
+                if (!box) return;
+                const show = typeof forceState === 'boolean' ? forceState : box.classList.contains('d-none');
+                if (show && input) {
+                    const specObj = (state.data.specs_map || {})[state.currentRoom] || {};
+                    input.value = specObj.spec_summary || '';
+                }
+                box.classList.toggle('d-none', !show);
+            }
+
+            async function saveSpecSummary() {
+                const input = document.getElementById('b42SpecInput');
+                const val = (input ? input.value : '').trim();
+                if (!val) return;
+                const resp = await fetch('/api/room-hub/specs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: state.currentRoom, spec_summary: val })
+                });
+                const json = await resp.json();
+                if (json && json.success) {
+                    toggleSpecEditor(false);
+                    await fetchState();
+                } else {
+                    alert((json && json.message) || 'Không thể lưu cấu hình.');
+                }
+            }
+
+            function setProposalFilter(mode) {
+                state.proposalFilter = mode;
+                renderProposalsTab();
+            }
+
+            function toggleProposalRoom(roomCode) {
+                if (state.selectedProposalRooms.has(roomCode)) {
+                    if (state.selectedProposalRooms.size > 1) {
+                        state.selectedProposalRooms.delete(roomCode);
+                    }
+                } else {
+                    state.selectedProposalRooms.add(roomCode);
+                }
+                renderProposalRoomCheckboxes();
+            }
+
+            function toggleProposalForm(forceShow) {
+                const perms = state.data.permissions || {};
+                if (!perms.is_logged_in) {
+                    if (confirm('Vui lòng đăng nhập bằng tài khoản Giảng viên để gửi đề xuất phần mềm / thư viện cho phòng máy. Chuyển tới trang Đăng nhập ngay?')) {
+                        window.location.href = "{{ url_for('login_page') }}";
+                    }
+                    return;
+                }
+                if (!perms.can_propose) {
+                    if (confirm('Tài khoản của bạn cần nhập Mã Passcode Giảng viên một lần duy nhất trước khi gửi đề xuất. Chuyển tới trang xác thực ngay?')) {
+                        window.location.href = "{{ url_for('verify_passcode_page') }}";
+                    }
+                    return;
+                }
+                const box = document.getElementById('b42ProposalFormBox');
+                if (!box) return;
+                const show = typeof forceShow === 'boolean' ? forceShow : box.classList.contains('d-none');
+                state.selectedProposalRooms = new Set([state.currentRoom]);
+                renderProposalRoomCheckboxes();
+                box.classList.toggle('d-none', !show);
+            }
+
+            async function submitProposal() {
+                const typeEl = document.getElementById('b42PropType');
+                const scopeEl = document.getElementById('b42PropScope');
+                const titleEl = document.getElementById('b42PropTitle');
+                const descEl = document.getElementById('b42PropDesc');
+
+                const title = (titleEl ? titleEl.value : '').trim();
+                if (!title) {
+                    alert('Vui lòng nhập tên phần mềm, thư viện hoặc nội dung cần cải thiện!');
+                    return;
+                }
+
+                const resp = await fetch('/api/room-hub/proposals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rooms: Array.from(state.selectedProposalRooms),
+                        proposal_type: typeEl ? typeEl.value : 'software_next_sem',
+                        target_scope: scopeEl ? scopeEl.value : 'next_semester',
+                        title_software: title,
+                        description: (descEl ? descEl.value : '').trim()
+                    })
+                });
+                const json = await resp.json();
+                if (json && json.success) {
+                    if (titleEl) titleEl.value = '';
+                    if (descEl) descEl.value = '';
+                    toggleProposalForm(false);
+                    await fetchState();
+                } else {
+                    alert((json && json.message) || 'Không thể gửi đề xuất.');
+                }
+            }
+
+            async function upvoteProposal(propId) {
+                const perms = state.data.permissions || {};
+                if (!perms.is_logged_in) {
+                    alert('Vui lòng đăng nhập tài khoản Giảng viên để bấm đồng tình (+1).');
+                    return;
+                }
+                const resp = await fetch(`/api/room-hub/proposals/${propId}/upvote`, { method: 'POST' });
+                const json = await resp.json();
+                if (json && json.success) {
+                    await fetchState();
+                } else if (json && json.message) {
+                    alert(json.message);
+                }
+            }
+
+            async function adminUpdateProposal(propId, action) {
+                if (action === 'delete' && !confirm('Xóa đề xuất phần mềm này?')) return;
+                const stEl = document.getElementById('b42AdminPropStatus_' + propId);
+                const rpEl = document.getElementById('b42AdminPropReply_' + propId);
+                const resp = await fetch(`/api/room-hub/proposals/${propId}/admin-update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: action,
+                        status: stEl ? stEl.value : 'recorded',
+                        admin_reply: rpEl ? rpEl.value : ''
+                    })
+                });
+                const json = await resp.json();
+                if (json && json.success) {
+                    await fetchState();
+                } else {
+                    alert((json && json.message) || 'Không thể cập nhật đề xuất.');
+                }
+            }
+
+            function toggleAdminComposer() {
+                state.composerExpanded = !state.composerExpanded;
+                const body = document.getElementById('b42AdminComposerBody');
+                const chev = document.getElementById('b42ComposerChevron');
+                if (body) body.classList.toggle('d-none', !state.composerExpanded);
+                if (chev) chev.className = state.composerExpanded ? 'bi bi-chevron-up ms-1' : 'bi bi-chevron-down ms-1';
+            }
+
+            function renderAll() {
+                renderHeaderAndRole();
+                renderRoomPills();
+                renderSubTabs();
+                renderAnnouncementsTab();
+                renderProposalsTab();
+                renderBroadcastCheckboxes();
+                updateUnreadBadge();
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                fetchState();
+                setInterval(fetchState, 12000);
+            });
+
+            return {
+                togglePanel,
+                openFromToast,
+                dismissToast,
+                selectRoom,
+                switchSubTab,
+                toggleBroadcastRoom,
+                selectBroadcastGroup,
+                applyTemplate,
+                sendBroadcast,
+                togglePin,
+                deleteAnnouncement,
+                resetSemester,
+                toggleSurveyBanner,
+                toggleSpecEditor,
+                saveSpecSummary,
+                setProposalFilter,
+                toggleProposalRoom,
+                toggleProposalForm,
+                submitProposal,
+                upvoteProposal,
+                adminUpdateProposal,
+                toggleAdminComposer
+            };
+        })();
     </script>
 </body>
 </html>

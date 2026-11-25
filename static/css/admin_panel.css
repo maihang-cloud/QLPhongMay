@@ -1,0 +1,624 @@
+    .admin-wrapper-font {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        letter-spacing: -0.01em;
+    }
+    #adminTabs.admin-grid-nav {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        background: #ffffff;
+        padding: 10px;
+        border-radius: 16px;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+        border: 1px solid #e2e8f0;
+        list-style: none;
+    }
+    #adminTabs.admin-grid-nav .nav-item {
+        margin: 0;
+        width: 100%;
+        min-width: 0;
+    }
+    #adminTabs.admin-grid-nav .nav-link {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 0.65rem 0.5rem;
+        color: #334155;
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        transition: all 0.18s ease;
+        text-align: center;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+    #adminTabs.admin-grid-nav .nav-link .tab-icon {
+        font-size: 1.15rem;
+        line-height: 1;
+    }
+    #adminTabs.admin-grid-nav .nav-link .badge-dot {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: #dc3545;
+        color: #fff;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+        z-index: 2;
+    }
+    #adminTabs.admin-grid-nav .nav-link:hover:not(.active) {
+        background-color: #f1f5f9;
+        border-color: #cbd5e1;
+        color: #0f172a;
+    }
+    #adminTabs.admin-grid-nav .nav-link.active {
+        background-color: #0D9488 !important;
+        border-color: #0D9488 !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
+    }
+
+    /* Badge tự động làm mới sau 10s cho các tab xử lý gấp */
+    .auto-reload-badge {
+        background-color: #F0FDFA;
+        border: 1px solid #99F6E4;
+        color: #0D9488;
+        font-size: 0.76rem;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.2s ease;
+    }
+    .auto-reload-badge:hover {
+        background-color: #CCFBF1;
+        border-color: #5EEAD4;
+    }
+    .auto-reload-badge.paused {
+        background-color: #FFFBEB !important;
+        border-color: #FDE68A !important;
+        color: #92400E !important;
+    }
+    @keyframes spin-reload {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .spin-reload-active {
+        animation: spin-reload 1s linear infinite;
+        display: inline-block;
+    }
+
+    /* Thẻ duyệt nhanh trên Mobile (Yêu cầu, Sự cố, Báo nghỉ) */
+    .mobile-action-card {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 14px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+        margin-bottom: 12px;
+    }
+    .mobile-action-meta {
+        font-size: 0.82rem;
+        color: #475569;
+        margin-bottom: 5px;
+    }
+
+    /* Dãy nút chọn nhanh Thứ trên Tab Thời khóa biểu */
+    .tt-day-pills {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 5px;
+    }
+    .tt-day-pill {
+        text-align: center;
+        padding: 6px 2px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        border-radius: 8px;
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid #cbd5e1;
+        text-decoration: none;
+        transition: all 0.15s ease;
+    }
+    .tt-day-pill:hover {
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+    .tt-day-pill.active {
+        background: #0D9488;
+        color: #ffffff;
+        border-color: #0D9488;
+        box-shadow: 0 2px 6px rgba(13, 148, 136, 0.28);
+    }
+
+    /* Cố định cột Tiết khi cuộn ngang trên bảng Thời khóa biểu */
+    .tt-sticky-col {
+        position: sticky;
+        left: 0;
+        z-index: 6;
+        background-color: #f8fafc !important;
+        box-shadow: 2px 0 5px rgba(15, 23, 42, 0.04);
+    }
+
+    /* Bộ lọc nhanh trên Tab Lịch học */
+    .schedule-filter-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 0.76rem;
+        padding: 5px 11px;
+        border-radius: 8px;
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid #cbd5e1;
+        background: #f8fafc;
+        color: #475569;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+    .schedule-filter-pill:hover {
+        background: #f1f5f9;
+        color: #0f172a;
+    }
+    .schedule-filter-pill.active-all {
+        background: #0D9488;
+        color: #ffffff;
+        border-color: #0D9488;
+    }
+    .schedule-filter-pill.active-open {
+        background: #059669;
+        color: #ffffff;
+        border-color: #059669;
+    }
+    .schedule-filter-pill.active-locked {
+        background: #dc2626;
+        color: #ffffff;
+        border-color: #dc2626;
+    }
+
+    /* Bảng Lịch học */
+    .schedule-mgmt-table th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        color: #475569;
+        background-color: #f8fafc !important;
+        padding: 11px 8px;
+        white-space: nowrap;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .schedule-mgmt-table td {
+        font-size: 0.82rem;
+        padding: 10px 8px;
+        vertical-align: middle;
+    }
+    .row-ended-early {
+        background-color: #fff5f5 !important;
+    }
+    .row-ended-early td {
+        color: #64748b;
+    }
+
+    /* Thanh công cụ Google Calendar trên Tab Thời khóa biểu */
+    .gcal-toolbar {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 12px 14px;
+        box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
+        border: 1px solid #e2e8f0;
+    }
+    .btn-gcal {
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        color: #1e293b;
+        font-weight: 600;
+        font-size: 0.79rem;
+        padding: 5px 10px;
+        border-radius: 8px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+    .btn-gcal:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+        color: #0f172a;
+    }
+    .week-range-badge {
+        background: #F0FDFA;
+        border: 1px solid #99F6E4;
+        color: #0D9488;
+        font-weight: 700;
+        font-size: 0.78rem;
+        padding: 5px 11px;
+        border-radius: 999px;
+        white-space: nowrap;
+    }
+
+    /* Thẻ môn học trên Lưới Thời khóa biểu */
+    .tt-course-card {
+        border-radius: 8px;
+        padding: 6px 8px;
+        height: 100%;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+        overflow: hidden;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .tt-course-card:hover {
+        z-index: 10;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+    }
+    .tt-theme-green {
+        background-color: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-left: 4px solid #10b981 !important;
+        color: #065f46;
+    }
+    .tt-theme-blue {
+        background-color: #F0FDFA;
+        border: 1px solid #99F6E4;
+        border-left: 4px solid #0D9488 !important;
+        color: #0F2942;
+    }
+    .tt-theme-amber {
+        background-color: #fffbeb;
+        border: 1px solid #fde68a;
+        border-left: 4px solid #f59e0b !important;
+        color: #92400e;
+    }
+    .tt-theme-ended {
+        background: repeating-linear-gradient(135deg, #fff5f5, #fff5f5 10px, #fef2f2 10px, #fef2f2 20px);
+        border: 1.5px dashed #f87171;
+        border-left: 4px solid #ef4444 !important;
+        color: #7f1d1d;
+    }
+    .tt-subject-title {
+        font-size: 0.76rem;
+        font-weight: 700;
+        line-height: 1.25;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 2px;
+    }
+    .tt-mini-btn {
+        font-size: 0.64rem;
+        font-weight: 700;
+        padding: 2px 5px;
+        border-radius: 5px;
+        border: 1px solid rgba(15, 23, 42, 0.16);
+        background: rgba(255, 255, 255, 0.92);
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+        line-height: 1.3;
+    }
+    .tt-mini-btn:hover {
+        background: #ffffff;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    @media (max-width: 767.98px) {
+        #adminTabs.admin-grid-nav {
+            gap: 6px;
+            padding: 8px;
+        }
+        #adminTabs.admin-grid-nav .nav-link {
+            flex-direction: column;
+            gap: 3px;
+            padding: 8px 4px;
+            font-size: 0.72rem;
+            border-radius: 10px;
+        }
+        #adminTabs.admin-grid-nav .nav-link .tab-icon {
+            font-size: 1.15rem;
+            margin-bottom: 1px;
+        }
+        .gcal-toolbar {
+            padding: 10px;
+        }
+        .schedule-mgmt-table th,
+        .schedule-mgmt-table td {
+            font-size: 0.78rem;
+            padding: 8px 6px;
+        }
+    }
+
+    /* CSS cho Tab 📊 Dashboard Mới */
+    .dash-kpi-card {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 14px 16px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+        height: 100%;
+        min-width: 0;
+        overflow: hidden;
+    }
+    .dash-kpi-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #64748b;
+        letter-spacing: 0.02em;
+    }
+    .dash-kpi-val {
+        font-size: 1.65rem;
+        font-weight: 800;
+        line-height: 1.2;
+        margin: 4px 0;
+    }
+    .dash-kpi-sub {
+        font-size: 0.75rem;
+        color: #64748b;
+        overflow-wrap: anywhere;
+    }
+    .dash-section-card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 16px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
+    .room-status-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    @media (max-width: 1199.98px) {
+        .room-status-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+    }
+    @media (max-width: 767.98px) {
+        .dash-kpi-card {
+            padding: 10px 12px;
+        }
+        .dash-kpi-val {
+            font-size: 1.35rem;
+        }
+    }
+    @media (max-width: 575.98px) {
+        .room-status-grid {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 8px;
+        }
+    }
+    .room-node {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border-left: 4px solid #10b981;
+        transition: all 0.2s ease;
+        min-width: 0;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+    }
+    .room-node.status-online {
+        border-left-color: #10b981;
+        background: #f8fafc;
+    }
+    .room-node.status-warn {
+        border-left-color: #f59e0b;
+        background: #fffbeb;
+    }
+    .room-node.status-offline {
+        border-left-color: #ef4444;
+        background: #fef2f2;
+    }
+    .ping-pill {
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        white-space: nowrap;
+    }
+    .ping-ok { background: #d1fae5; color: #065f46; }
+    .ping-warn { background: #fef3c7; color: #92400e; }
+    .ping-err { background: #fee2e2; color: #991b1b; }
+    .ping-wait { background: #e2e8f0; color: #475569; }
+
+    .dash-bar-chart {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        height: 150px;
+        padding: 18px 8px 0 8px;
+        border-bottom: 1px solid #cbd5e1;
+        gap: 8px;
+    }
+    .dash-bar-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100%;
+        justify-content: flex-end;
+    }
+    .dash-bar-fill {
+        width: 100%;
+        max-width: 36px;
+        border-radius: 6px 6px 0 0;
+        background: linear-gradient(180deg, #14B8A6, #0D9488);
+        transition: height 0.3s ease;
+    }
+    .dash-donut-ring {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+    }
+    .dash-donut-hole {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 0.95rem;
+        line-height: 1.1;
+    }
+
+    /* Tab Nhật ký công việc & Checklist Deploy Hệ thống */
+    #adminTabs.admin-grid-nav .nav-item.worklog-nav-span {
+        grid-column: 1 / -1;
+    }
+    #adminTabs.admin-grid-nav .nav-item.worklog-nav-span .nav-link {
+        flex-direction: row !important;
+        padding: 0.6rem 0.85rem;
+        font-size: 0.84rem;
+        background: linear-gradient(135deg, #F0FDFA 0%, #CCFBF1 100%);
+        border: 1px solid #99F6E4;
+        color: #0F2942;
+    }
+    #adminTabs.admin-grid-nav .nav-item.worklog-nav-span .nav-link.active {
+        background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%) !important;
+        border-color: #0D9488 !important;
+        color: #ffffff !important;
+    }
+    .wl-note-box {
+        background-color: #FFFBEB;
+        border: 1px solid #FDE68A;
+        color: #92400E;
+        padding: 7px 10px;
+        border-radius: 8px;
+        font-size: 0.78rem;
+        line-height: 1.35;
+    }
+    .wl-room-chip {
+        cursor: pointer;
+        user-select: none;
+        padding: 5px 11px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        border: 1.5px solid #CBD5E1;
+        background: #F8FAFC;
+        color: #334155;
+        transition: all 0.15s ease;
+    }
+    .wl-room-chip.active {
+        background: #0F2942;
+        color: #2DD4BF;
+        border-color: #0F2942;
+    }
+    .deploy-rooms-grid {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 8px;
+    }
+    @media (max-width: 991.98px) {
+        .deploy-rooms-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 575.98px) {
+        .deploy-rooms-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    .deploy-room-card {
+        border: 2px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 9px 6px;
+        text-align: center;
+        cursor: pointer;
+        background: #F8FAFC;
+        transition: all 0.18s ease;
+        min-width: 0;
+        overflow: hidden;
+    }
+    .deploy-room-card:hover {
+        border-color: #0D9488;
+        transform: translateY(-1px);
+    }
+    .deploy-room-card.active {
+        border-color: #0D9488;
+        background: #F0FDFA;
+        box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+    }
+    .deploy-room-card.done {
+        border-color: #22C55E;
+        background: #F0FDF4;
+    }
+    .deploy-step-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        border: 1px solid #E2E8F0;
+        background: #F8FAFC;
+        cursor: pointer;
+        transition: all 0.12s ease;
+        margin-bottom: 6px;
+    }
+    .deploy-step-item:hover {
+        border-color: #94A3B8;
+        background: #F1F5F9;
+    }
+    .deploy-step-item.checked {
+        background: #F0FDF4;
+        border-color: #BBF7D0;
+    }
+    .deploy-step-item.sub-step {
+        margin-left: 18px;
+        background: #FFFFFF;
+        border-left: 3.5px solid #0D9488;
+    }
+    .deploy-step-item.sub-step.checked {
+        background: #F0FDF4;
+        border-left-color: #22C55E;
+    }
+    .deploy-step-item.checked .deploy-step-title {
+        text-decoration: line-through;
+        color: #15803D;
+    }
+    .deploy-code-pill {
+        display: inline-block;
+        background: #E2E8F0;
+        color: #0F2942;
+        font-family: monospace;
+        font-weight: 700;
+        font-size: 0.75rem;
+        padding: 1px 6px;
+        border-radius: 4px;
+    }
+    .deploy-secret-pill {
+        display: inline-block;
+        background: #FEF3C7;
+        color: #92400E;
+        border: 1px solid #FDE68A;
+        font-family: monospace;
+        font-weight: 700;
+        font-size: 0.75rem;
+        padding: 1px 6px;
+        border-radius: 4px;
+    }

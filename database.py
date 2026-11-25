@@ -1,16 +1,131 @@
 import sqlite3
 import os
+import base64
+import hashlib
+import hmac
+import secrets
 from timezone_utils import get_vn_now_str, get_vn_today_iso
 
 # Khai báo đường dẫn tuyệt đối tới file database (tương thích cả Windows và PythonAnywhere Linux)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, 'lab_schedule.db')
+ENV_FILE_PATH = os.path.join(BASE_DIR, '.env')
+_SECRET_PREFIX = 'enc:v1:'
+
+
+def get_or_create_env_secret(env_var):
+    """Lấy hoặc tự sinh khóa bí mật ngẫu nhiên trong biến môi trường / file .env (đã nằm trong .gitignore)."""
+    key_str = (os.environ.get(env_var) or '').strip()
+    if not key_str and os.path.exists(ENV_FILE_PATH):
+        try:
+            with open(ENV_FILE_PATH, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#') or '=' not in line:
+                        continue
+                    k, v = line.split('=', 1)
+                    if k.strip() == env_var and v.strip():
+                        key_str = v.strip().strip('"').strip("'")
+                        os.environ[env_var] = key_str
+                        break
+        except Exception:
+            pass
+
+    if not key_str:
+        key_str = secrets.token_urlsafe(32)
+        os.environ[env_var] = key_str
+        try:
+            need_nl = os.path.exists(ENV_FILE_PATH) and os.path.getsize(ENV_FILE_PATH) > 0
+            with open(ENV_FILE_PATH, 'a', encoding='utf-8') as f:
+                if need_nl:
+                    f.write('\n')
+                f.write(f'{env_var}={key_str}\n')
+        except Exception:
+            pass
+
+    return key_str
+
+
+def _get_router_master_key():
+    """Lấy hoặc tự sinh khóa đối xứng 32-byte từ biến môi trường / file .env (đã nằm trong .gitignore)."""
+    key_str = get_or_create_env_secret('ROUTER_SECRET_KEY')
+    return hashlib.sha256(key_str.encode('utf-8')).digest()
+
+
+def _keystream_xor(enc_key, nonce, data_bytes):
+    """Sinh keystream SHA-256 CTR và XOR với dữ liệu."""
+    out = bytearray()
+    counter = 0
+    for idx in range(0, len(data_bytes), 32):
+        block_key = hashlib.sha256(enc_key + nonce + counter.to_bytes(4, 'big')).digest()
+        chunk = data_bytes[idx:idx + 32]
+        for j, b in enumerate(chunk):
+            out.append(b ^ block_key[j])
+        counter += 1
+    return bytes(out)
+
+
+def encrypt_router_secret(plaintext):
+    """Mã hóa mật khẩu router (Encrypt-then-MAC với SHA-256 + HMAC-SHA256) trước khi lưu SQLite."""
+    text = str(plaintext or '')
+    if not text:
+        return ''
+    if text.startswith(_SECRET_PREFIX):
+        return text
+
+    master = _get_router_master_key()
+    nonce = secrets.token_bytes(16)
+    k_enc = hmac.new(master, b'enc:' + nonce, hashlib.sha256).digest()
+    k_mac = hmac.new(master, b'mac:' + nonce, hashlib.sha256).digest()
+
+    cipher = _keystream_xor(k_enc, nonce, text.encode('utf-8'))
+    tag = hmac.new(k_mac, nonce + cipher, hashlib.sha256).digest()
+    return (
+        _SECRET_PREFIX
+        + base64.urlsafe_b64encode(nonce).decode('ascii') + ':'
+        + base64.urlsafe_b64encode(cipher).decode('ascii') + ':'
+        + base64.urlsafe_b64encode(tag).decode('ascii')
+    )
+
+
+def decrypt_router_secret(stored_val):
+    """Giải mã mật khẩu router đã lưu trong SQLite (hỗ trợ tương thích ngược nếu chưa mã hóa)."""
+    text = str(stored_val or '')
+    if not text:
+        return ''
+    if not text.startswith(_SECRET_PREFIX):
+        return text
+
+    try:
+        parts = text[len(_SECRET_PREFIX):].split(':')
+        if len(parts) != 3:
+            return ''
+        nonce = base64.urlsafe_b64decode(parts[0].encode('ascii'))
+        cipher = base64.urlsafe_b64decode(parts[1].encode('ascii'))
+        tag = base64.urlsafe_b64decode(parts[2].encode('ascii'))
+
+        master = _get_router_master_key()
+        k_enc = hmac.new(master, b'enc:' + nonce, hashlib.sha256).digest()
+        k_mac = hmac.new(master, b'mac:' + nonce, hashlib.sha256).digest()
+
+        expected_tag = hmac.new(k_mac, nonce + cipher, hashlib.sha256).digest()
+        if not hmac.compare_digest(tag, expected_tag):
+            return ''
+        plain = _keystream_xor(k_enc, nonce, cipher)
+        return plain.decode('utf-8')
+    except Exception:
+        return ''
 
 def get_db_connection():
-    """Hàm tạo kết nối tới database. Trả về object connection."""
-    conn = sqlite3.connect(DB_NAME)
-    # Lệnh này giúp trả về dữ liệu dưới dạng Dictionary thay vì Tuple, dễ xử lý bên Frontend hơn
-    conn.row_factory = sqlite3.Row 
+    """Hàm tạo kết nối tới database (bật WAL mode + timeout 15s để chống lỗi database is locked)."""
+    conn = sqlite3.connect(DB_NAME, timeout=15.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA busy_timeout=15000;")
+    except Exception:
+        pass
     return conn
 
 def init_db():
@@ -62,6 +177,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS cancellations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             teacher_name TEXT NOT NULL,
+            department TEXT DEFAULT '',
             room TEXT NOT NULL,
             cancel_date TEXT NOT NULL,
             period TEXT NOT NULL,
@@ -99,6 +215,11 @@ def init_db():
         
     try:
         cursor.execute("ALTER TABLE cancellations ADD COLUMN email TEXT")
+    except Exception:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE cancellations ADD COLUMN department TEXT DEFAULT ''")
     except Exception:
         pass
 
@@ -194,9 +315,48 @@ def init_db():
             target_ip TEXT DEFAULT '8.8.8.8',
             status TEXT DEFAULT 'online',
             ping_ms INTEGER DEFAULT 12,
-            updated_at TEXT
+            updated_at TEXT,
+            router_model TEXT DEFAULT 'GWN7062G',
+            https_port INTEGER DEFAULT 443,
+            lan_ip TEXT DEFAULT '',
+            room_state TEXT DEFAULT 'wan_ping_only',
+            room_state_label TEXT DEFAULT '',
+            online_clients INTEGER DEFAULT 0,
+            arp_count INTEGER DEFAULT 0,
+            rx_rate_bps INTEGER DEFAULT 0,
+            tx_rate_bps INTEGER DEFAULT 0,
+            total_rx_bytes INTEGER DEFAULT 0,
+            total_tx_bytes INTEGER DEFAULT 0,
+            cpu_usage INTEGER DEFAULT 0,
+            mem_usage INTEGER DEFAULT 0,
+            temp_c INTEGER DEFAULT 0,
+            telemetry_json TEXT DEFAULT '{}'
         )
     ''')
+
+    # [#QTTB-03] Migration an toàn cho bảng room_network_status (Grandstream GCC6010 & GWN7062G)
+    router_extra_cols = [
+        ("router_model", "TEXT DEFAULT 'GWN7062G'"),
+        ("https_port", "INTEGER DEFAULT 443"),
+        ("lan_ip", "TEXT DEFAULT ''"),
+        ("room_state", "TEXT DEFAULT 'wan_ping_only'"),
+        ("room_state_label", "TEXT DEFAULT ''"),
+        ("online_clients", "INTEGER DEFAULT 0"),
+        ("arp_count", "INTEGER DEFAULT 0"),
+        ("rx_rate_bps", "INTEGER DEFAULT 0"),
+        ("tx_rate_bps", "INTEGER DEFAULT 0"),
+        ("total_rx_bytes", "INTEGER DEFAULT 0"),
+        ("total_tx_bytes", "INTEGER DEFAULT 0"),
+        ("cpu_usage", "INTEGER DEFAULT 0"),
+        ("mem_usage", "INTEGER DEFAULT 0"),
+        ("temp_c", "INTEGER DEFAULT 0"),
+        ("telemetry_json", "TEXT DEFAULT '{}'"),
+    ]
+    for col_name, col_def in router_extra_cols:
+        try:
+            cursor.execute(f"ALTER TABLE room_network_status ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass
 
     # 7. Bảng quản lý Lịch trình & Giờ Tăng ca (OT)
     cursor.execute('''
@@ -342,6 +502,69 @@ def init_db():
             (b_key, b_val)
         )
 
+    # [#QTTB-03] Khởi tạo cấu hình mặc định cho 8 Router (không lưu mật khẩu thật trong mã nguồn)
+    default_router_settings = {
+        'router_admin_user': 'admin',
+        'router_admin_pass': '',
+        'router_default_port': '443',
+        'airpro_admin_user': 'admin',
+        'airpro_admin_pass': '',
+        'airpro_default_port': '80',
+        'pc_mac_ouis': '4C:D7:17,00:68:EB,80:E8:2C',
+        'ca1_start': '07:30',
+        'ca1_end': '10:00',
+        'ca2_start': '10:05',
+        'ca2_end': '12:00',
+        'ca3_start': '12:30',
+        'ca3_end': '14:50',
+        'ca4_start': '15:05',
+        'ca4_end': '17:00',
+    }
+    for r_key, r_val in default_router_settings.items():
+        cursor.execute(
+            "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
+            (r_key, r_val)
+        )
+
+    # Bảng theo dõi phiên sử dụng PC theo Phòng x Ngày x Ca (Tuần -> Tháng -> Học kỳ)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS room_ca_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            log_date TEXT NOT NULL,
+            day_of_week INTEGER NOT NULL,
+            room TEXT NOT NULL,
+            ca_slot INTEGER NOT NULL,
+            ca_start_cfg TEXT DEFAULT '',
+            ca_end_cfg TEXT DEFAULT '',
+            subject_name TEXT DEFAULT '',
+            class_code TEXT DEFAULT '',
+            department TEXT DEFAULT '',
+            first_online_at TEXT DEFAULT '',
+            last_online_at TEXT DEFAULT '',
+            last_sampled_at TEXT DEFAULT '',
+            active_minutes INTEGER DEFAULT 0,
+            idle_minutes INTEGER DEFAULT 0,
+            last_pc_count INTEGER DEFAULT 0,
+            peak_pc_count INTEGER DEFAULT 0,
+            avg_pc_count REAL DEFAULT 0.0,
+            sample_count INTEGER DEFAULT 0,
+            UNIQUE(log_date, room, ca_slot)
+        )
+    ''')
+
+    # Tự động mã hóa các mật khẩu router cũ đang lưu plaintext trong SQLite (nếu có)
+    for sec_key in ('router_admin_pass', 'airpro_admin_pass'):
+        sec_row = cursor.execute(
+            "SELECT value FROM system_settings WHERE key = ?",
+            (sec_key,)
+        ).fetchone()
+        if sec_row and sec_row['value'] and not str(sec_row['value']).startswith(_SECRET_PREFIX):
+            enc_val = encrypt_router_secret(sec_row['value'])
+            cursor.execute(
+                "UPDATE system_settings SET value = ? WHERE key = ?",
+                (enc_val, sec_key)
+            )
+
     default_router_ips = {
         '5.1': '10.29.37.53',
         '5.2': '10.29.37.54',
@@ -352,21 +575,71 @@ def init_db():
         '6.5': '10.29.37.63',
         '6.6': '10.29.37.61',
     }
+    default_router_models = {
+        '5.1': 'AIRPRO',
+        '5.2': 'GCC6010',
+        '5.3': 'AIRPRO',
+        '6.1': 'AIRPRO',
+        '6.2': 'AIRPRO',
+        '6.3': 'GCC6010',
+        '6.5': 'AIRPRO',
+        '6.6': 'AIRPRO',
+    }
+    default_lan_ips = {
+        '5.1': '192.168.51.1',
+        '5.2': '192.168.54.1',
+        '5.3': '192.168.53.1',
+        '6.1': '192.168.60.1',
+        '6.2': '192.168.62.1',
+        '6.3': '192.168.63.1',
+        '6.5': '192.168.65.1',
+        '6.6': '192.168.66.1',
+    }
+    cursor.execute("UPDATE room_network_status SET lan_ip = '192.168.60.1' WHERE room = '6.1' AND lan_ip = '192.168.61.1'")
     now_str = get_vn_now_str('%H:%M:%S %d/%m/%Y')
+    airpro_migrated = cursor.execute("SELECT value FROM system_settings WHERE key = 'airpro_migrated_v1'").fetchone()
+    if not airpro_migrated:
+        for ar_room in ('5.1', '5.3', '6.1', '6.2', '6.5', '6.6'):
+            cursor.execute(
+                "UPDATE room_network_status SET router_model = 'AIRPRO', https_port = 80 WHERE room = ?",
+                (ar_room,)
+            )
+        cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('airpro_migrated_v1', '1')")
+
     for r_code, real_ip in default_router_ips.items():
+        r_model = default_router_models.get(r_code, 'AIRPRO')
+        r_port = 80 if r_model == 'AIRPRO' else 443
+        r_lan = default_lan_ips.get(r_code, '192.168.1.1')
         existing_net = cursor.execute(
-            "SELECT room, target_ip FROM room_network_status WHERE room = ?", (r_code,)
+            "SELECT room, target_ip, router_model, https_port, lan_ip FROM room_network_status WHERE room = ?", (r_code,)
         ).fetchone()
         if not existing_net:
-            cursor.execute(
-                "INSERT INTO room_network_status (room, target_ip, status, ping_ms, updated_at) VALUES (?, ?, 'online', 46, ?)",
-                (r_code, real_ip, now_str)
-            )
-        elif existing_net['target_ip'] and existing_net['target_ip'].startswith('192.168.1.'):
-            cursor.execute(
-                "UPDATE room_network_status SET target_ip = ? WHERE room = ?",
-                (real_ip, r_code)
-            )
+            cursor.execute('''
+                INSERT INTO room_network_status (
+                    room, target_ip, status, ping_ms, updated_at, router_model, https_port, lan_ip
+                ) VALUES (?, ?, 'online', 46, ?, ?, ?, ?)
+            ''', (r_code, real_ip, now_str, r_model, r_port, r_lan))
+        else:
+            if existing_net['target_ip'] and existing_net['target_ip'].startswith('192.168.1.'):
+                cursor.execute(
+                    "UPDATE room_network_status SET target_ip = ? WHERE room = ?",
+                    (real_ip, r_code)
+                )
+            if not existing_net['router_model']:
+                cursor.execute(
+                    "UPDATE room_network_status SET router_model = ? WHERE room = ?",
+                    (r_model, r_code)
+                )
+            if not existing_net['https_port']:
+                cursor.execute(
+                    "UPDATE room_network_status SET https_port = ? WHERE room = ?",
+                    (r_port, r_code)
+                )
+            if not existing_net['lan_ip']:
+                cursor.execute(
+                    "UPDATE room_network_status SET lan_ip = ? WHERE room = ?",
+                    (r_lan, r_code)
+                )
 
     # Khởi tạo dữ liệu mẫu lần đầu cho Nhật ký công việc
     seeded_row = cursor.execute("SELECT value FROM system_settings WHERE key = 'work_logs_seeded'").fetchone()
@@ -417,6 +690,121 @@ def init_db():
                 INSERT OR IGNORE INTO deployment_checklists (campaign_name, room, checked_steps, notes, updated_by, updated_at)
                 VALUES (?, ?, '[]', '', 'Admin', ?)
             ''', (default_campaign, r_code, now_short))
+
+    # =========================================================================
+    # 14. [#QTTB-02] KÊNH THÔNG BÁO PHÒNG MÁY & ĐỀ XUẤT PHẦN MỀM KỲ TỚI
+    # =========================================================================
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS room_announcements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'info',
+            content TEXT NOT NULL,
+            is_pinned INTEGER DEFAULT 0,
+            created_by TEXT DEFAULT 'QTTB - Kỹ thuật phòng máy',
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS room_software_specs (
+            room TEXT PRIMARY KEY,
+            spec_summary TEXT NOT NULL,
+            updated_by TEXT DEFAULT 'Admin',
+            updated_at TEXT
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS room_software_proposals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room TEXT NOT NULL,
+            proposal_type TEXT NOT NULL DEFAULT 'software_next_sem',
+            target_scope TEXT NOT NULL DEFAULT 'next_semester',
+            title_software TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            proposer_name TEXT NOT NULL,
+            proposer_email TEXT NOT NULL,
+            upvotes INTEGER DEFAULT 1,
+            upvoted_emails TEXT DEFAULT '[]',
+            status TEXT DEFAULT 'recorded',
+            admin_reply TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT
+        )
+    ''')
+
+    cursor.execute(
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('semester_survey_banner', '0')"
+    )
+
+    default_room_specs = {
+        'ALL': 'Hệ thống 8 phòng máy B4.2 (328 máy tính học viên + 8 máy GV) • Windows 11 Pro 64-bit • Mạng nội bộ 1Gbps & Veyon Master.',
+        '5.1': '41 máy • Win 11 Pro • Visual Studio 2022, VS Code, Python 3.11, MATLAB R2024a, Dev-C++, Git, Veyon.',
+        '5.2': '41 máy • Win 11 Pro • Visual Studio 2022, VS Code, Python 3.11, SQL Server 2022, Docker Desktop, Postman.',
+        '5.3': '41 máy • Win 11 Pro • Visual Studio 2022, Android Studio, JDK 17/21, Node.js, Python 3.11, Git.',
+        '6.1': '41 máy • Win 11 Pro • MATLAB R2024a, Proteus 8, AutoCAD 2023, Keil C, Visual Studio 2022, Python 3.11.',
+        '6.2': '41 máy • Win 11 Pro • Anaconda Python, RStudio, SPSS, PowerBI Desktop, Visual Studio 2022, VS Code.',
+        '6.3': '41 máy • Win 11 Pro • VMware Workstation Pro, Cisco Packet Tracer, Wireshark, Linux Ubuntu VM, Python 3.11.',
+        '6.5': '41 máy • Win 11 Pro • Visual Studio 2022, IntelliJ IDEA, SQL Server, MySQL Workbench, Python 3.11.',
+        '6.6': '41 máy • Win 11 Pro • Visual Studio 2022, MATLAB R2024a, Python 3.11 (PyTorch/OpenCV), VS Code, Git.'
+    }
+    now_iso_str = get_vn_now_str('%Y-%m-%d %H:%M:%S')
+    for r_key, spec_txt in default_room_specs.items():
+        cursor.execute('''
+            INSERT OR IGNORE INTO room_software_specs (room, spec_summary, updated_by, updated_at)
+            VALUES (?, ?, 'Admin', ?)
+        ''', (r_key, spec_txt, now_iso_str))
+
+    hub_seeded = cursor.execute("SELECT value FROM system_settings WHERE key = 'room_hub_seeded'").fetchone()
+    if not hub_seeded:
+        ann_count = cursor.execute("SELECT COUNT(*) as c FROM room_announcements").fetchone()['c']
+        if ann_count == 0:
+            sample_anns = [
+                (
+                    'ALL', 'info',
+                    'Chào mừng Quý Thầy/Cô đến với Kênh Thông Báo & Đề Xuất Phần Mềm Phòng Máy B4.2. Quý Thầy/Cô có thể chọn từng phòng (5.1 -> 6.6) để theo dõi thông báo vận hành hoặc gửi đề xuất nâng cấp phần mềm/thư viện cho Học kỳ tới.',
+                    1, 'QTTB - Kỹ thuật phòng máy', now_iso_str
+                ),
+                (
+                    '5.1', 'maintenance',
+                    'Máy số 39 cuối phòng đang chờ bảo trì bộ nguồn. Quý Thầy/Cô vui lòng hướng dẫn sinh viên sử dụng các máy dự phòng 40 - 41.',
+                    1, 'QTTB - Kỹ thuật phòng máy', now_iso_str
+                ),
+                (
+                    '5.1', 'info',
+                    'Đã cập nhật đầy đủ bộ thư viện chuẩn C/C++ và Python (numpy, pandas, matplotlib) cho toàn bộ 41 máy tại Phòng 5.1.',
+                    0, 'QTTB - Kỹ thuật phòng máy', now_iso_str
+                )
+            ]
+            cursor.executemany('''
+                INSERT INTO room_announcements (room, category, content, is_pinned, created_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', sample_anns)
+
+        prop_count = cursor.execute("SELECT COUNT(*) as c FROM room_software_proposals").fetchone()['c']
+        if prop_count == 0:
+            sample_props = [
+                (
+                    '5.1', 'software_next_sem', 'next_semester',
+                    'Nâng cấp Python 3.12 & bổ sung thư viện PyTorch, OpenCV',
+                    'Học kỳ tới bộ môn có triển khai học phần Thị giác máy tính và Học máy tại P.5.1, nhờ QTTB tích hợp sẵn vào file Image mới.',
+                    'GV. Bộ môn KHMT', 'teacher_demo@hcmus.edu.vn', 2,
+                    '["teacher_demo@hcmus.edu.vn", "mlhang@hcmus.edu.vn"]',
+                    'planned_image',
+                    'QTTB đã ghi nhận và đưa vào Checklist tạo Image mẫu cho Học kỳ tới.',
+                    now_iso_str, now_iso_str
+                )
+            ]
+            cursor.executemany('''
+                INSERT INTO room_software_proposals (
+                    room, proposal_type, target_scope, title_software, description,
+                    proposer_name, proposer_email, upvotes, upvoted_emails, status,
+                    admin_reply, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', sample_props)
+
+        cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('room_hub_seeded', '1')")
 
     # Nếu là lần đầu chạy và tạo db, ta insert 1 dòng dữ liệu mẫu để test giao diện
     if not db_exists:

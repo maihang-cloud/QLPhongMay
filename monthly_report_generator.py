@@ -13,7 +13,9 @@ from timezone_utils import get_vn_today
 from report_exporter import (
     ROOMS_LIST,
     parse_report_date as parse_date_safe,
-    get_schedule_ca_slots
+    get_schedule_ca_slots,
+    get_ca_time_config_from_db,
+    format_ca_slots_label
 )
 import database
 
@@ -45,6 +47,7 @@ def get_monthly_report_data(month: int, year: int):
     month_end = datetime.date(year, month, last_day_num)
 
     conn = database.get_db_connection()
+    ca_cfg = get_ca_time_config_from_db(conn)
     all_schedules = conn.execute("SELECT * FROM schedules ORDER BY room ASC, day_of_week ASC, start_period ASC").fetchall()
     all_bookings = conn.execute("SELECT * FROM booking_requests ORDER BY id DESC").fetchall()
     all_issues = conn.execute("SELECT * FROM issue_reports ORDER BY id DESC").fetchall()
@@ -218,6 +221,7 @@ def get_monthly_report_data(month: int, year: int):
         'bookings': bookings_in_month,
         'issues': issues_in_month,
         'cancellations': cancels_in_month,
+        'ca_cfg': ca_cfg,
         'worklogs': worklogs_in_month
     }
 
@@ -410,7 +414,7 @@ def build_monthly_excel_report(month: int, year: int) -> io.BytesIO:
     ws2["A1"].font = f_title
     ws2["A1"].alignment = al_left
 
-    s2_headers = ["STT", "Phòng", "Thứ", "Tiết", "Mã lớp", "Tên môn học", "Khoa / Đơn vị", "Ghi chú", "Số buổi & Ca trong tháng", "Trạng thái"]
+    s2_headers = ["STT", "Phòng", "Thứ", "Ca học (Khung giờ & Tiết)", "Mã lớp", "Tên môn học", "Khoa / Đơn vị", "Ghi chú", "Số buổi & Ca trong tháng", "Trạng thái"]
     for c_idx, h in enumerate(s2_headers, 1):
         cell = ws2.cell(3, c_idx, h)
         cell.font = f_tbl_head
@@ -419,6 +423,7 @@ def build_monthly_excel_report(month: int, year: int) -> io.BytesIO:
         cell.border = border_all
 
     s2_row = 4
+    ca_cfg = data.get('ca_cfg')
     for idx, sch_item in enumerate(data['active_schedules'], 1):
         sch = sch_item['row']
         room_num = str(sch['room']).replace('Phòng ', '').replace('P.', '').strip()
@@ -429,7 +434,7 @@ def build_monthly_excel_report(month: int, year: int) -> io.BytesIO:
             idx,
             f"P.{room_num}",
             f"Thứ {sch['day_of_week']}",
-            f"Tiết {sch['start_period']}-{sch['end_period']}",
+            format_ca_slots_label(sch['start_period'], sch['end_period'], ca_cfg),
             sch['class_code'] or '',
             sch['subject_name'] or '',
             sch['department'] or '',
@@ -475,7 +480,7 @@ def build_monthly_excel_report(month: int, year: int) -> io.BytesIO:
             b['created_at'] or '',
             f"{b['requester_name']} ({b['department']})",
             f"P.{b['room']}",
-            f"Thứ {b['day_of_week']} (Tiết {b['start_period']}-{b['end_period']})",
+            f"Thứ {b['day_of_week']} • {format_ca_slots_label(b['start_period'], b['end_period'], ca_cfg)}",
             f"{b['purpose']}" + (f" - PM: {b['software_required']}" if b['software_required'] else ''),
             st_label,
             b['admin_note'] or ''

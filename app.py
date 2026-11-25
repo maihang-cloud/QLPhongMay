@@ -4,7 +4,7 @@ from werkzeug.utils import secure_filename
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from database import get_db_connection, init_db
+from database import get_db_connection, init_db, encrypt_router_secret, decrypt_router_secret, get_or_create_env_secret
 from report_exporter import (
     ROOMS_LIST,
     parse_report_date as parse_study_period_date,
@@ -25,6 +25,19 @@ from monthly_report_generator import (
     build_monthly_excel_report,
     build_monthly_word_report
 )
+from usage_report_generator import (
+    get_ca_time_config,
+    record_room_ca_session_sample,
+    get_live_room_session_summary
+)
+from grandstream_router_monitor import (
+    poll_all_routers_concurrently,
+    reboot_grandstream_router,
+    format_rate_human,
+    format_bytes_human,
+    DEFAULT_ROOM_MODELS,
+    DEFAULT_LAN_SUBNETS
+)
 from functools import wraps
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -34,9 +47,7 @@ import html as html_lib
 import pandas as pd
 import urllib.request
 import urllib.parse
-import subprocess
 import threading
-import platform
 import datetime
 import smtplib
 import secrets
@@ -322,6 +333,30 @@ def enforce_blocked_users():
     return None
 
 
+STANDARD_DEPARTMENTS = (
+    'Khoa Vật lý',
+    'Khoa Toán',
+    'Khoa Công nghệ Thông tin',
+    'Khoa Hóa',
+    'Khoa Sinh',
+    'Khoa Vật liệu',
+    'Khoa Môi trường',
+    'Khoa Địa chất',
+    'Khoa Liên ngành',
+    'Khoa Điện tử Viễn thông',
+    'Khác',
+)
+
+
+def get_vn_weekday_label(date_str):
+    """Chuyển đổi chuỗi ngày YYYY-MM-DD (hoặc DD/MM/YYYY) sang Thứ tiếng Việt."""
+    d_obj = parse_study_period_date(date_str)
+    if not d_obj:
+        return ''
+    wd = d_obj.weekday()  # 0=Mon .. 6=Sun
+    return 'Chủ Nhật' if wd == 6 else f'Thứ {wd + 2}'
+
+
 @app.context_processor
 def inject_user_info():
     email = get_current_user_email()
@@ -343,7 +378,8 @@ def inject_user_info():
         is_user_verified=is_verified,
         is_user_gmail=is_gmail,
         booking_status_cfg=booking_status_cfg,
-        is_booking_closed=(not booking_status_cfg['enabled'])
+        is_booking_closed=(not booking_status_cfg['enabled']),
+        standard_departments=STANDARD_DEPARTMENTS
     )
 
 
@@ -351,6 +387,12 @@ def inject_user_info():
 def jinja_vn_datetime(dt_val, fmt='%H:%M %d/%m/%Y'):
     """Jinja filter định dạng hiển thị ngày giờ chuẩn Việt Nam."""
     return format_vn_datetime(dt_val, fmt=fmt)
+
+
+@app.template_filter('vn_weekday')
+def jinja_vn_weekday(date_val):
+    """Jinja filter trả về Thứ (VD: Thứ 2 .. Chủ Nhật) từ chuỗi ngày."""
+    return get_vn_weekday_label(date_val)
 
 
 def login_required(f):
@@ -428,8 +470,8 @@ def admin_required(f):
     return decorated_function
 
 
-# Thiết lập secret_key để mã hóa session
-app.secret_key = os.environ.get('SECRET_KEY', 'KHTN_TKB_Secret_Key_@2026')
+# Thiết lập secret_key bảo mật từ biến môi trường / .env để mã hóa session
+app.secret_key = get_or_create_env_secret('SECRET_KEY')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
@@ -593,10 +635,13 @@ def build_request_notification_email(req_type, record, new_status, admin_note=''
             badge_bg, badge_color = "#DCFCE7", "#15803D"
             lead_msg = f"Thông báo nghỉ học tại <strong>Phòng {room}</strong> (Ngày {cancel_date}, {period_str}) của Quý Thầy/Cô đã được duyệt và chuyển thông tin tới bộ phận Trực đóng/mở cửa phòng máy."
 
+        cancel_wd = get_vn_weekday_label(cancel_date)
+        cancel_date_disp = f"{cancel_date} ({cancel_wd})" if cancel_wd else str(cancel_date)
         detail_rows = [
             ("Giảng viên thông báo", str(user_name)),
+            ("Khoa / Đơn vị", str(rec.get('department') or 'Chưa chọn')),
             ("Phòng máy", f"Phòng {room} - Tòa B4.2"),
-            ("Ngày báo nghỉ", str(cancel_date)),
+            ("Ngày báo nghỉ", cancel_date_disp),
             ("Ca / Tiết nghỉ", str(period_str)),
             ("Lý do", str(rec.get('reason') or 'Báo nghỉ đột xuất'))
         ]
@@ -840,11 +885,14 @@ def build_admin_alert_email(req_type, data, admin_panel_url=''):
             subject = f"[BÁO VẮNG GẤP] P.{room} - GV {user_name} (Ngày {cancel_date}, {period_str})"
             lead_msg = f"Giảng viên <strong>{html_lib.escape(str(user_name))}</strong> vừa gửi thông báo nghỉ học đột xuất tại <strong>Phòng {room}</strong>."
 
+            cancel_wd = get_vn_weekday_label(cancel_date)
+            cancel_date_disp = f"{cancel_date} ({cancel_wd})" if cancel_wd else str(cancel_date)
             detail_rows = [
                 ("Giảng viên báo nghỉ", str(user_name)),
+                ("Khoa / Đơn vị", str(rec.get('department') or 'Chưa chọn')),
                 ("Email liên hệ", user_email or 'Chưa cung cấp'),
                 ("Phòng máy", f"Phòng {room} - Tòa B4.2"),
-                ("Ngày báo nghỉ", str(cancel_date)),
+                ("Ngày báo nghỉ", cancel_date_disp),
                 ("Ca / Tiết nghỉ", str(period_str)),
                 ("Lý do báo vắng", str(rec.get('reason') or 'Báo nghỉ đột xuất'))
             ]
@@ -1423,12 +1471,16 @@ def submit_issue():
         flash(f"⚠️ Giới hạn tốc độ gửi: Mỗi tài khoản chỉ được gửi tối đa 2 đơn trong vòng 1 phút để chống spam. Vui lòng đợi {retry_after} giây nữa trước khi gửi tiếp.", "danger")
         return redirect(url_for('report_page'))
 
-    reporter_name = request.form.get('reporter_name') or get_current_user_name()
-    department = request.form.get('department')
-    room = request.form.get('room')
-    machine_number = request.form.get('machine_number')
-    issue_category = request.form.get('issue_category')
-    description = request.form.get('description')
+    reporter_name = (request.form.get('reporter_name') or get_current_user_name() or '').strip()
+    department = (request.form.get('department') or '').strip()
+    room = (request.form.get('room') or '').strip()
+    machine_number = (request.form.get('machine_number') or '').strip()
+    issue_category = (request.form.get('issue_category') or '').strip()
+    description = (request.form.get('description') or '').strip()
+
+    if not department or not description:
+        flash("⚠️ Vui lòng chọn Khoa / Đơn vị và nhập Mô tả tình trạng chi tiết (bắt buộc) trước khi gửi!", "danger")
+        return redirect(url_for('report_page', room=room))
     
     conn = get_db_connection()
     try:
@@ -1826,21 +1878,27 @@ def submit_cancellation():
         flash(f"⚠️ Giới hạn tốc độ gửi: Mỗi tài khoản chỉ được gửi tối đa 2 đơn trong vòng 1 phút để chống spam. Vui lòng đợi {retry_after} giây nữa trước khi gửi tiếp.", "danger")
         return redirect(url_for('cancellation_page'))
 
-    teacher_name = request.form.get('teacher_name') or get_current_user_name()
-    room = request.form.get('room')
-    cancel_date = request.form.get('cancel_date')
-    period = request.form.get('period')
-    reason = request.form.get('reason')
-    
+    teacher_name = (request.form.get('teacher_name') or get_current_user_name() or '').strip()
+    department = (request.form.get('department') or '').strip()
+    room = (request.form.get('room') or '').strip()
+    cancel_date = (request.form.get('cancel_date') or '').strip()
+    period = (request.form.get('period') or '').strip()
+    reason = (request.form.get('reason') or '').strip()
+
+    if not department or not cancel_date or not room or not period:
+        flash("⚠️ Vui lòng điền đầy đủ Ngày vắng, Phòng, Ca/Tiết và Khoa / Đơn vị!", "danger")
+        return redirect(url_for('cancellation_page'))
+
     conn = get_db_connection()
     conn.execute('''
-        INSERT INTO cancellations (teacher_name, room, cancel_date, period, reason, status, email, created_at)
-        VALUES (?, ?, ?, ?, ?, 'Processing', ?, ?)
-    ''', (teacher_name, room, cancel_date, period, reason, user_email, get_vn_now_iso()))
+        INSERT INTO cancellations (teacher_name, department, room, cancel_date, period, reason, status, email, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'Processing', ?, ?)
+    ''', (teacher_name, department, room, cancel_date, period, reason, user_email, get_vn_now_iso()))
     record_submission_rate_log(user_email, action_type='cancellation', conn=conn)
     conn.commit()
     email_suffix = notify_user_on_status_change('cancellation', {
         'teacher_name': teacher_name,
+        'department': department,
         'room': room,
         'cancel_date': cancel_date,
         'period': period,
@@ -1849,6 +1907,7 @@ def submit_cancellation():
     }, 'Processing', conn=conn)
     notify_admin_on_new_request('cancellation', {
         'teacher_name': teacher_name,
+        'department': department,
         'room': room,
         'cancel_date': cancel_date,
         'period': period,
@@ -1934,7 +1993,9 @@ def admin_panel():
 
     cancellations = conn.execute("SELECT * FROM cancellations ORDER BY created_at DESC").fetchall()
     approved_cancellations = [c for c in cancellations if (c['status'] or '') == 'Approved']
+    pending_cancellations = [c for c in cancellations if (c['status'] or '') in ('Pending', 'Processing')]
     issues = conn.execute("SELECT * FROM issue_reports ORDER BY created_at DESC").fetchall()
+    pending_issues = [i for i in issues if (i['status'] or '') != 'Resolved']
 
     schedules_grid = conn.execute('SELECT * FROM schedules WHERE room = ? ORDER BY start_period ASC', (selected_room,)).fetchall()
     week_data = {day: [] for day in range(2, 8)}
@@ -1976,14 +2037,27 @@ def admin_panel():
     ak_row = conn.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
     netagent_key = ak_row['value'] if (ak_row and ak_row['value']) else "b42lab-secret-2026"
 
+    router_cfg_rows = conn.execute(
+        "SELECT key, value FROM system_settings WHERE key IN ('router_admin_user', 'router_admin_pass', 'router_default_port', 'airpro_admin_user', 'airpro_admin_pass', 'airpro_default_port', 'pc_mac_ouis')"
+    ).fetchall()
+    router_cfg_map = {row['key']: (row['value'] or '') for row in router_cfg_rows}
+    router_admin_user = router_cfg_map.get('router_admin_user') or 'admin'
+    router_admin_pass_set = bool(decrypt_router_secret(router_cfg_map.get('router_admin_pass') or ''))
+    router_default_port = int(router_cfg_map.get('router_default_port') or 443)
+    airpro_admin_user = router_cfg_map.get('airpro_admin_user') or 'admin'
+    airpro_admin_pass_set = bool(decrypt_router_secret(router_cfg_map.get('airpro_admin_pass') or ''))
+    airpro_default_port = int(router_cfg_map.get('airpro_default_port') or 80)
+    pc_mac_ouis = router_cfg_map.get('pc_mac_ouis') or '4C:D7:17,00:68:EB,80:E8:2C'
+    ca_times = get_ca_time_config(conn)
+
     net_rows = conn.execute("SELECT * FROM room_network_status").fetchall()
     net_map = {row['room']: dict(row) for row in net_rows}
 
-    # Đếm số ca học theo từng phòng (theo chuẩn 1 ca = 2.5 tiết, tối đa 24 ca/tuần/phòng, 192 ca/tuần toàn hệ thống)
+    # Đếm số ca học theo từng phòng (chỉ tính các lớp đang mở tuần này, không cộng lớp khóa và loại trùng slot ca)
     room_stats = {}
     max_room_sessions = 24
-    total_ca_used = 0
-    day_ca_used = {d: 0 for d in range(2, 8)}
+    active_slot_set = set()
+    day_slot_sets = {d: set() for d in range(2, 8)}
 
     for r in rooms:
         r_active = [s for s in all_enriched_schedules if s['room'] == r and s['door_open']]
@@ -1993,17 +2067,20 @@ def admin_panel():
         r_total_ca = r_active_ca + r_locked_ca
         if r_total_ca > max_room_sessions:
             max_room_sessions = r_total_ca
-        for s in (r_active + r_locked):
-            num_ca = len(get_schedule_ca_slots(s['start_period'], s['end_period']))
-            total_ca_used += num_ca
+        for s in r_active:
             dow = int(s['day_of_week'])
-            if dow in day_ca_used:
-                day_ca_used[dow] += num_ca
+            for slot in get_schedule_ca_slots(s['start_period'], s['end_period']):
+                active_slot_set.add((r, dow, slot))
+                if dow in day_slot_sets:
+                    day_slot_sets[dow].add((r, slot))
         room_stats[r] = {
             'active': r_active_ca,
             'locked': r_locked_ca,
             'total': r_total_ca
         }
+
+    total_ca_used = len(active_slot_set)
+    day_ca_used = {d: len(day_slot_sets[d]) for d in range(2, 8)}
 
     for r in rooms:
         room_stats[r]['height_pct'] = int(round((room_stats[r]['total'] / max_room_sessions) * 85)) if room_stats[r]['total'] > 0 else 8
@@ -2075,6 +2152,9 @@ def admin_panel():
     room_live_cards = []
     online_rooms_count = 0
     offline_rooms_list = []
+    open_active_count = 0
+    lan_idle_count = 0
+    closed_cb_count = 0
     last_net_update = ''
 
     for r in rooms:
@@ -2122,12 +2202,38 @@ def admin_panel():
         else:
             offline_rooms_list.append(f"P.{r}")
 
+        r_model = net_info.get('router_model') or DEFAULT_ROOM_MODELS.get(r, 'GWN7062G')
+        r_port = int(net_info.get('https_port') or 443)
+        r_lan = net_info.get('lan_ip') or DEFAULT_LAN_SUBNETS.get(r, '192.168.1.1')
+        r_state = net_info.get('room_state') or ('wan_ping_only' if net_status == 'online' else 'offline')
+        r_state_lbl = net_info.get('room_state_label') or (f"Ping WAN Online ({net_ping or 12}ms)" if net_status == 'online' else 'Mất kết nối WAN')
+        if r_state == 'open_active':
+            open_active_count += 1
+        elif r_state == 'lan_up_idle':
+            lan_idle_count += 1
+        elif r_state == 'closed_cb_off':
+            closed_cb_count += 1
+
         room_live_cards.append({
             'room': r,
             'activity_label': activity_label,
             'activity_class': activity_class,
+            'live_session': get_live_room_session_summary(conn, r),
             'issue_count': pending_issues_by_room.get(r, 0),
             'target_ip': net_info.get('target_ip') or '8.8.8.8',
+            'https_port': r_port,
+            'router_model': r_model,
+            'lan_ip': r_lan,
+            'room_state': r_state,
+            'room_state_label': r_state_lbl,
+            'online_clients': int(net_info.get('online_clients') or 0),
+            'arp_count': int(net_info.get('arp_count') or 0),
+            'rx_rate_str': format_rate_human(net_info.get('rx_rate_bps') or 0),
+            'tx_rate_str': format_rate_human(net_info.get('tx_rate_bps') or 0),
+            'total_rx_str': format_bytes_human(net_info.get('total_rx_bytes') or 0),
+            'cpu_usage': int(net_info.get('cpu_usage') or 0),
+            'mem_usage': int(net_info.get('mem_usage') or 0),
+            'temp_c': int(net_info.get('temp_c') or 0),
             'net_status': net_status,
             'ping_ms': net_ping,
             'updated_at': net_info.get('updated_at') or ''
@@ -2194,8 +2300,19 @@ def admin_panel():
         'afternoon_closed_groups': afternoon_closed_groups,
         'online_rooms_count': online_rooms_count,
         'offline_rooms_list': offline_rooms_list,
+        'open_active_count': open_active_count,
+        'lan_idle_count': lan_idle_count,
+        'closed_cb_count': closed_cb_count,
         'last_net_update': last_net_update,
-        'netagent_key': netagent_key
+        'netagent_key': netagent_key,
+        'router_admin_user': router_admin_user,
+        'router_admin_pass_set': router_admin_pass_set,
+        'router_default_port': router_default_port,
+        'airpro_admin_user': airpro_admin_user,
+        'airpro_admin_pass_set': airpro_admin_pass_set,
+        'airpro_default_port': airpro_default_port,
+        'pc_mac_ouis': pc_mac_ouis,
+        'ca_times': ca_times
     }
 
     semester_summary = summarize_available_semesters(raw_schedules)
@@ -2358,7 +2475,9 @@ def admin_panel():
         next_week_date_str=next_week_date_str,
         week_range_label=week_range_label,
         cancellations=cancellations,
+        pending_cancellations=pending_cancellations,
         issues=issues,
+        pending_issues=pending_issues,
         dashboard_stats=dashboard_stats,
         semester_summary=semester_summary,
         ot_data=ot_data,
@@ -2372,29 +2491,10 @@ def admin_panel():
         admin_permissions=admin_permissions
     )
 
-def measure_host_ping_ms(target_ip):
-    """Đo ping (ms) tới 1 địa chỉ IP/Host trên cả Windows và Linux."""
-    target_ip = (target_ip or '').strip()
-    if not target_ip:
-        return False, None
-
-    is_win = platform.system().lower().startswith('win')
-    cmd = ['ping', '-n', '1', '-w', '1000', target_ip] if is_win else ['ping', '-c', '1', '-W', '1', target_ip]
-    try:
-        t0 = time.time()
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=2.5)
-        elapsed_ms = max(1, int(round((time.time() - t0) * 1000)))
-        if res.returncode == 0:
-            m = re.search(r'(?:time|thời gian)[=<](\d+)\s*ms', res.stdout, re.IGNORECASE)
-            ping_val = int(m.group(1)) if m else elapsed_ms
-            return True, ping_val
-        return False, None
-    except Exception:
-        return False, None
-
 @app.route('/api/network-heartbeat', methods=['POST'])
 def api_network_heartbeat():
-    """API nhận tín hiệu Heartbeat Push từ B42Lab NetAgent chạy tại phòng máy."""
+    """[#QTTB-03 Hybrid Push] API nhận dữ liệu quét 8 Router (full telemetry hoặc ping-only) từ B42Lab NetAgent tại trường."""
+    import hmac as _hmac
     data = request.get_json(silent=True) or {}
     provided_key = (data.get('agent_key') or request.headers.get('X-Agent-Key') or '').strip()
 
@@ -2402,18 +2502,26 @@ def api_network_heartbeat():
     ak_row = conn.execute("SELECT value FROM system_settings WHERE key = 'netagent_key'").fetchone()
     expected_key = ak_row['value'] if ak_row and ak_row['value'] else 'b42lab-secret-2026'
 
-    if provided_key != expected_key:
+    if not provided_key or not _hmac.compare_digest(provided_key, expected_key):
         conn.close()
         return jsonify({'success': False, 'message': 'Invalid agent_key'}), 403
 
     now_str = get_vn_now_str('%H:%M:%S %d/%m/%Y')
     results = data.get('rooms', {})
-    # Hỗ trợ cả trường hợp gửi lẻ 1 phòng: {"room": "5.1", "status": "online", "ping_ms": 11}
     if not results and data.get('room'):
         results = {str(data['room']): {'status': data.get('status', 'online'), 'ping_ms': data.get('ping_ms')}}
 
+    persisted_count = 0
     for r_code, r_info in results.items():
-        if r_code in ROOMS_LIST:
+        if r_code not in ROOMS_LIST or not isinstance(r_info, dict):
+            continue
+        if 'telemetry' in r_info or 'room_state' in r_info:
+            poll_res = dict(r_info)
+            poll_res['room'] = r_code
+            poll_res['updated_at'] = r_info.get('updated_at') or now_str
+            _persist_router_poll_result(conn, poll_res)
+            persisted_count += 1
+        else:
             st = 'online' if r_info.get('status') in ('online', 1, True, '1') else 'offline'
             p_ms = r_info.get('ping_ms')
             conn.execute('''
@@ -2421,47 +2529,92 @@ def api_network_heartbeat():
                 SET status = ?, ping_ms = ?, updated_at = ?
                 WHERE room = ?
             ''', (st, p_ms, now_str, r_code))
+            persisted_count += 1
 
+    conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('last_netagent_push_at', ?)", (now_str,))
     conn.commit()
-    rows = conn.execute("SELECT room, target_ip FROM room_network_status").fetchall()
+
+    rows = conn.execute("SELECT room, target_ip, https_port, router_model FROM room_network_status ORDER BY room").fetchall()
     targets = {row['room']: row['target_ip'] for row in rows}
+    room_configs_out = [dict(row) for row in rows]
+    oui_row = conn.execute("SELECT value FROM system_settings WHERE key = 'pc_mac_ouis'").fetchone()
+    pc_mac_ouis = (oui_row['value'] if oui_row and oui_row['value'] else '4C:D7:17,00:68:EB,80:E8:2C')
     conn.close()
 
     return jsonify({
         'success': True,
         'updated_at': now_str,
-        'targets': targets
+        'persisted_count': persisted_count,
+        'targets': targets,
+        'room_configs': room_configs_out,
+        'pc_mac_ouis': pc_mac_ouis
     })
 
 @app.route('/api/network-status')
 @admin_required
 def api_network_status():
-    """API trả về trạng thái mạng 8 phòng máy theo thời gian thực cho Dashboard."""
+    """[#QTTB-03] API trả về trạng thái mạng & thông số 8 Router Grandstream (GCC6010 & GWN7062G) theo thời gian thực."""
     conn = get_db_connection()
-    rows = conn.execute("SELECT room, target_ip, status, ping_ms, updated_at FROM room_network_status").fetchall()
-    conn.close()
+    rows = conn.execute("SELECT * FROM room_network_status").fetchall()
+    cfg_rows = conn.execute(
+        "SELECT key, value FROM system_settings WHERE key IN ('router_admin_user', 'router_admin_pass', 'router_default_port')"
+    ).fetchall()
 
+    cfg_map = {r['key']: (r['value'] or '') for r in cfg_rows}
     room_map = {}
     online_count = 0
     offline_rooms = []
     last_update = ''
 
     for row in rows:
-        r = row['room']
-        st = row['status'] or 'online'
+        d = dict(row)
+        r = d['room']
+        st = d.get('status') or 'online'
         if st == 'online':
             online_count += 1
         else:
             offline_rooms.append(f"P.{r}")
-        if row['updated_at']:
-            last_update = row['updated_at']
+        if d.get('updated_at'):
+            last_update = d['updated_at']
+
+        try:
+            telem = json.loads(d.get('telemetry_json') or '{}')
+            if not isinstance(telem, dict):
+                telem = {}
+        except Exception:
+            telem = {}
+
+        rx_bps = int(d.get('rx_rate_bps') or 0)
+        tx_bps = int(d.get('tx_rate_bps') or 0)
+        tot_rx = int(d.get('total_rx_bytes') or 0)
+        tot_tx = int(d.get('total_tx_bytes') or 0)
+
         room_map[r] = {
             'room': r,
-            'target_ip': row['target_ip'],
+            'target_ip': d.get('target_ip') or '8.8.8.8',
+            'https_port': int(d.get('https_port') or 443),
+            'router_model': d.get('router_model') or DEFAULT_ROOM_MODELS.get(r, 'GWN7062G'),
+            'lan_ip': d.get('lan_ip') or DEFAULT_LAN_SUBNETS.get(r, '192.168.1.1'),
             'status': st,
-            'ping_ms': row['ping_ms'],
-            'updated_at': row['updated_at'] or ''
+            'room_state': d.get('room_state') or ('wan_ping_only' if st == 'online' else 'offline'),
+            'room_state_label': d.get('room_state_label') or (f"Ping WAN Online ({d.get('ping_ms') or 12}ms)" if st == 'online' else 'Mất kết nối WAN'),
+            'ping_ms': d.get('ping_ms'),
+            'online_clients': int(d.get('online_clients') or 0),
+            'arp_count': int(d.get('arp_count') or 0),
+            'rx_rate_bps': rx_bps,
+            'tx_rate_bps': tx_bps,
+            'rx_rate_str': format_rate_human(rx_bps),
+            'tx_rate_str': format_rate_human(tx_bps),
+            'total_rx_str': format_bytes_human(tot_rx),
+            'total_tx_str': format_bytes_human(tot_tx),
+            'cpu_usage': int(d.get('cpu_usage') or 0),
+            'mem_usage': int(d.get('mem_usage') or 0),
+            'temp_c': int(d.get('temp_c') or 0),
+            'updated_at': d.get('updated_at') or '',
+            'live_session': get_live_room_session_summary(conn, r),
+            'telemetry': telem
         }
+    conn.close()
 
     return jsonify({
         'success': True,
@@ -2469,43 +2622,265 @@ def api_network_status():
         'total_rooms': len(rows),
         'offline_rooms': offline_rooms,
         'last_update': last_update,
+        'router_config': {
+            'admin_user': cfg_map.get('router_admin_user') or 'admin',
+            'default_port': int(cfg_map.get('router_default_port') or 443)
+        },
         'room_map': room_map
     })
+
+
+def _persist_router_poll_result(conn, poll_res):
+    """Lưu kết quả quét 1 Router Grandstream vào bảng room_network_status."""
+    r = poll_res['room']
+    telem_str = json.dumps(poll_res.get('telemetry') or {}, ensure_ascii=False)
+    conn.execute('''
+        UPDATE room_network_status
+        SET status = ?,
+            ping_ms = ?,
+            updated_at = ?,
+            router_model = ?,
+            https_port = ?,
+            lan_ip = ?,
+            room_state = ?,
+            room_state_label = ?,
+            online_clients = ?,
+            arp_count = ?,
+            rx_rate_bps = ?,
+            tx_rate_bps = ?,
+            total_rx_bytes = ?,
+            total_tx_bytes = ?,
+            cpu_usage = ?,
+            mem_usage = ?,
+            temp_c = ?,
+            telemetry_json = ?
+        WHERE room = ?
+    ''', (
+        poll_res.get('status', 'online'),
+        poll_res.get('ping_ms', 0),
+        poll_res.get('updated_at', get_vn_now_str('%H:%M:%S %d/%m/%Y')),
+        poll_res.get('router_model') or DEFAULT_ROOM_MODELS.get(r, 'AIRPRO'),
+        int(poll_res.get('https_port') or 443),
+        poll_res.get('lan_ip') or DEFAULT_LAN_SUBNETS.get(r, '192.168.1.1'),
+        poll_res.get('room_state', 'wan_ping_only'),
+        poll_res.get('room_state_label', ''),
+        int(poll_res.get('online_clients') or 0),
+        int(poll_res.get('arp_count') or 0),
+        int(poll_res.get('rx_rate_bps') or 0),
+        int(poll_res.get('tx_rate_bps') or 0),
+        int(poll_res.get('total_rx_bytes') or 0),
+        int(poll_res.get('total_tx_bytes') or 0),
+        int(poll_res.get('cpu_usage') or 0),
+        int(poll_res.get('mem_usage') or 0),
+        int(poll_res.get('temp_c') or 0),
+        telem_str,
+        r
+    ))
+    record_room_ca_session_sample(conn, poll_res)
+
 
 @app.route('/admin/network-config', methods=['POST'])
 @admin_required
 def save_network_config():
-    """Lưu cấu hình IP của 8 phòng máy từ giao diện Admin."""
+    """[#QTTB-03] Lưu cấu hình IP WAN, Port, Model (GCC6010 / AirPro / GWN7062G) và 2 tài khoản Admin của 8 Router."""
     return_tab = (request.form.get('return_tab') or 'settings').strip()
+    admin_user = (request.form.get('router_admin_user') or '').strip()
+    admin_pass = (request.form.get('router_admin_pass') or '').strip()
+    default_port = (request.form.get('router_default_port') or '').strip()
+
+    airpro_user = (request.form.get('airpro_admin_user') or '').strip()
+    airpro_pass = (request.form.get('airpro_admin_pass') or '').strip()
+    airpro_port = (request.form.get('airpro_default_port') or '').strip()
+
     conn = get_db_connection()
+    if admin_user:
+        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('router_admin_user', ?)", (admin_user,))
+    if admin_pass:
+        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('router_admin_pass', ?)", (encrypt_router_secret(admin_pass),))
+    if default_port and default_port.isdigit():
+        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('router_default_port', ?)", (default_port,))
+
+    if airpro_user:
+        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('airpro_admin_user', ?)", (airpro_user,))
+    if airpro_pass:
+        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('airpro_admin_pass', ?)", (encrypt_router_secret(airpro_pass),))
+    if airpro_port and airpro_port.isdigit():
+        conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('airpro_default_port', ?)", (airpro_port,))
+
     for r in ROOMS_LIST:
         ip_val = (request.form.get(f"ip_{r}") or '8.8.8.8').strip()
-        conn.execute("UPDATE room_network_status SET target_ip = ? WHERE room = ?", (ip_val, r))
-    conn.commit()
-    conn.close()
-    flash("✅ Đã lưu danh sách địa chỉ IP Router cho 8 phòng máy!", "success")
-    return redirect(url_for('admin_panel', tab=return_tab))
-
-@app.route('/admin/network-ping-now', methods=['POST'])
-@admin_required
-def admin_network_ping_now():
-    """Thực hiện Ping kiểm tra ngay lập tức tới 8 phòng máy."""
-    conn = get_db_connection()
-    rows = conn.execute("SELECT room, target_ip FROM room_network_status").fetchall()
-    now_str = get_vn_now_str('%H:%M:%S %d/%m/%Y')
-
-    for row in rows:
-        r = row['room']
-        ip_addr = row['target_ip'] or '8.8.8.8'
-        is_up, ping_ms = measure_host_ping_ms(ip_addr)
-        st = 'online' if is_up else 'offline'
+        model_val = (request.form.get(f"model_{r}") or DEFAULT_ROOM_MODELS.get(r, 'AIRPRO')).strip()
+        fallback_port = airpro_port if model_val.upper() == 'AIRPRO' else (default_port or '443')
+        port_raw = (request.form.get(f"port_{r}") or fallback_port or '80').strip()
+        port_val = int(port_raw) if port_raw.isdigit() else (80 if model_val.upper() == 'AIRPRO' else 443)
         conn.execute(
-            "UPDATE room_network_status SET status = ?, ping_ms = ?, updated_at = ? WHERE room = ?",
-            (st, ping_ms, now_str, r)
+            "UPDATE room_network_status SET target_ip = ?, https_port = ?, router_model = ? WHERE room = ?",
+            (ip_val, port_val, model_val, r)
         )
     conn.commit()
     conn.close()
-    return jsonify({'success': True, 'updated_at': now_str})
+
+    if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': 'Đã lưu cấu hình IP WAN, Port, Model & Tài khoản cho 8 Router!'})
+
+    flash("✅ Đã lưu cấu hình IP WAN, Port, Model (GCC6010 / AirPro) & 2 Tài khoản Admin cho 8 Router!", "success")
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
+_SCAN_COOLDOWN_SEC = 5.0
+_LAST_FULL_SCAN_TS = 0.0
+_SCAN_COOLDOWN_LOCK = threading.Lock()
+
+
+@app.route('/admin/network-ping-now', methods=['POST'])
+@app.route('/api/router-monitor/scan-now', methods=['POST'])
+@admin_required
+def admin_network_ping_now():
+    """[#QTTB-03] Quét Realtime đồng thời cả 8 Router (GCC6010, AirPro & GWN7062G), có cooldown 5s chống spam."""
+    global _LAST_FULL_SCAN_TS
+    req_data = request.get_json(silent=True) or {}
+    single_room = (req_data.get('room') or '').strip()
+
+    if not single_room:
+        with _SCAN_COOLDOWN_LOCK:
+            now_mono = time.monotonic()
+            if (now_mono - _LAST_FULL_SCAN_TS) < _SCAN_COOLDOWN_SEC:
+                return jsonify({
+                    'success': True,
+                    'cached': True,
+                    'updated_at': get_vn_now_str('%H:%M:%S %d/%m/%Y'),
+                    'scanned_rooms': list(ROOMS_LIST)
+                })
+            _LAST_FULL_SCAN_TS = now_mono
+
+    conn = get_db_connection()
+    cfg_rows = conn.execute(
+        "SELECT key, value FROM system_settings WHERE key IN ('router_admin_user', 'router_admin_pass', 'airpro_admin_user', 'airpro_admin_pass', 'pc_mac_ouis')"
+    ).fetchall()
+    cfg_map = {r['key']: (r['value'] or '') for r in cfg_rows}
+    r_user = cfg_map.get('router_admin_user') or 'admin'
+    r_pass = decrypt_router_secret(cfg_map.get('router_admin_pass') or '')
+    a_user = cfg_map.get('airpro_admin_user') or 'admin'
+    a_pass = decrypt_router_secret(cfg_map.get('airpro_admin_pass') or '')
+    pc_mac_ouis = cfg_map.get('pc_mac_ouis') or '4C:D7:17,00:68:EB,80:E8:2C'
+
+    if single_room and single_room in ROOMS_LIST:
+        rows = conn.execute("SELECT * FROM room_network_status WHERE room = ?", (single_room,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM room_network_status").fetchall()
+
+    room_configs = [dict(r) for r in rows]
+    poll_results = poll_all_routers_concurrently(
+        room_configs,
+        username=r_user,
+        password=r_pass,
+        airpro_user=a_user,
+        airpro_pass=a_pass,
+        pc_mac_ouis=pc_mac_ouis
+    )
+
+    now_str = get_vn_now_str('%H:%M:%S %d/%m/%Y')
+    for r_code, res in poll_results.items():
+        _persist_router_poll_result(conn, res)
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'updated_at': now_str,
+        'scanned_rooms': list(poll_results.keys())
+    })
+
+
+@app.route('/api/router-monitor/reboot/<room>', methods=['POST'])
+@admin_required
+def api_router_monitor_reboot(room):
+    """[#QTTB-03] Khởi động lại (Reboot) Router Grandstream của phòng chỉ định từ xa."""
+    if get_user_admin_role() != 'super_admin':
+        return jsonify({'success': False, 'message': 'Chỉ Super Admin mới có quyền khởi động lại Router.'}), 403
+    if room not in ROOMS_LIST:
+        return jsonify({'success': False, 'message': 'Mã phòng không hợp lệ.'}), 400
+
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM room_network_status WHERE room = ?", (room,)).fetchone()
+    cfg_rows = conn.execute(
+        "SELECT key, value FROM system_settings WHERE key IN ('router_admin_user', 'router_admin_pass')"
+    ).fetchall()
+    conn.close()
+
+    if not row:
+        return jsonify({'success': False, 'message': 'Không tìm thấy cấu hình Router của phòng này.'}), 404
+
+    cfg_map = {r['key']: (r['value'] or '') for r in cfg_rows}
+    r_user = cfg_map.get('router_admin_user') or 'admin'
+    r_pass = decrypt_router_secret(cfg_map.get('router_admin_pass') or '')
+    d = dict(row)
+
+    ok, msg = reboot_grandstream_router(
+        d.get('target_ip') or '8.8.8.8',
+        https_port=int(d.get('https_port') or 443),
+        username=r_user,
+        password=r_pass,
+        model_hint=d.get('router_model') or 'auto'
+    )
+    return jsonify({'success': ok, 'message': msg}), (200 if ok else 400)
+
+
+@app.route('/api/router-monitor/pc-ouis', methods=['POST'])
+@admin_required
+def api_router_monitor_save_pc_ouis():
+    """Lưu danh sách tiền tố MAC OUI chuẩn của PC phòng máy."""
+    from grandstream_router_monitor import parse_pc_mac_ouis
+    data = request.get_json(silent=True) or {}
+    raw_ouis = (data.get('pc_mac_ouis') or '').strip()
+    norm_set = sorted(parse_pc_mac_ouis(raw_ouis))
+    norm_str = ','.join(norm_set)
+    conn = get_db_connection()
+    conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('pc_mac_ouis', ?)", (norm_str,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'pc_mac_ouis': norm_str})
+
+
+@app.route('/admin/ca-time-config', methods=['POST'])
+@admin_required
+def save_ca_time_config():
+    """Lưu cấu hình giờ Bắt đầu / Kết thúc của 4 Ca học."""
+    return_tab = (request.form.get('return_tab') or 'overview').strip()
+    conn = get_db_connection()
+    for slot in range(1, 5):
+        s_val = (request.form.get(f'ca{slot}_start') or '').strip()
+        e_val = (request.form.get(f'ca{slot}_end') or '').strip()
+        if s_val and ':' in s_val:
+            conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", (f'ca{slot}_start', s_val))
+        if e_val and ':' in e_val:
+            conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", (f'ca{slot}_end', e_val))
+    conn.commit()
+    conn.close()
+    flash("✅ Đã cập nhật khung giờ 4 Ca học thành công!", "success")
+    return redirect(url_for('admin_panel', tab=return_tab))
+
+
+@app.route('/admin/export-usage-report')
+@admin_required
+def export_usage_report():
+    """Xuất báo cáo Excel hiệu suất sử dụng PC 8 phòng theo Tuần / Tháng / Học kỳ."""
+    import importlib
+    import usage_report_generator as _urg
+    importlib.reload(_urg)
+    mode = (request.args.get('mode') or 'week').strip().lower()
+    if mode not in ('week', 'month', 'semester'):
+        mode = 'week'
+    conn = get_db_connection()
+    buf, _ = _urg.build_usage_excel_report(conn, mode=mode)
+    conn.close()
+    filename = f"Bao_Cao_Su_Dung_PC_{mode}_{get_vn_today_iso()}.xlsx"
+    return send_file(
+        buf,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
 
 @app.route('/admin/download-netagent')
 @admin_required
@@ -4076,6 +4451,551 @@ def my_dashboard():
     
     return render_template('my_dashboard.html', bookings=my_bookings, issues=my_issues, cancellations=my_cancellations)
 
+
+# ==============================================================================
+# [#QTTB-02] KÊNH THÔNG BÁO PHÒNG MÁY & BẢNG ĐỀ XUẤT PHẦN MỀM KỲ TỚI (ROOM HUB)
+# ==============================================================================
+VALID_HUB_ROOMS = ['ALL'] + list(ROOMS_LIST)
+
+
+@app.route('/api/room-hub/state', methods=['GET'])
+def api_room_hub_state():
+    """API trả về toàn bộ trạng thái Bong bóng Kênh Phòng Máy (#QTTB-02):
+    - Trạng thái mạng 8 phòng (đồng bộ B42Lab NetAgent)
+    - Luồng thông báo vận hành & Tin ghim từng phòng
+    - Cấu hình phần mềm hiện có của từng phòng
+    - Danh sách đề xuất phần mềm / thư viện / cải thiện cho học kỳ tới
+    """
+    user_email = (get_current_user_email() or '').strip()
+    user_email_lower = user_email.lower()
+    user_name = get_current_user_name() or 'Giảng viên'
+
+    conn = get_db_connection()
+    try:
+        admin_role = get_user_admin_role(user_email, conn=conn) if user_email else None
+        is_super = (admin_role == 'super_admin')
+        is_ver = is_current_user_verified(conn=conn) if user_email else False
+
+        # 1. Trạng thái mạng 8 phòng
+        net_rows = conn.execute(
+            "SELECT room, status, ping_ms, updated_at FROM room_network_status"
+        ).fetchall()
+        net_map = {}
+        for r in net_rows:
+            net_map[r['room']] = {
+                'status': r['status'] or 'online',
+                'ping_ms': r['ping_ms'] or 0,
+                'updated_at': r['updated_at'] or ''
+            }
+
+        # 2. Cấu hình & Phần mềm hiện có của từng phòng
+        spec_rows = conn.execute(
+            "SELECT room, spec_summary, updated_by, updated_at FROM room_software_specs"
+        ).fetchall()
+        specs_map = {}
+        for s in spec_rows:
+            specs_map[s['room']] = {
+                'spec_summary': s['spec_summary'] or '',
+                'updated_by': s['updated_by'] or 'Admin',
+                'updated_at': format_vn_datetime(s['updated_at'], '%H:%M %d/%m/%Y') if s['updated_at'] else ''
+            }
+
+        # 3. Danh sách thông báo vận hành
+        ann_rows = conn.execute('''
+            SELECT id, room, category, content, is_pinned, created_by, created_at
+            FROM room_announcements
+            ORDER BY is_pinned DESC, id DESC
+            LIMIT 250
+        ''').fetchall()
+        announcements = []
+        latest_urgent = None
+        max_ann_id = 0
+        for a in ann_rows:
+            aid = int(a['id'])
+            if aid > max_ann_id:
+                max_ann_id = aid
+            item = {
+                'id': aid,
+                'room': a['room'],
+                'category': a['category'] or 'info',
+                'content': a['content'] or '',
+                'is_pinned': bool(a['is_pinned']),
+                'created_by': a['created_by'] or 'QTTB - Kỹ thuật phòng máy',
+                'created_at_raw': a['created_at'] or '',
+                'created_at_display': format_vn_datetime(a['created_at'], '%H:%M - %d/%m/%Y')
+            }
+            announcements.append(item)
+            if item['category'] == 'urgent' and latest_urgent is None:
+                latest_urgent = item
+
+        # 4. Danh sách đề xuất phần mềm / thư viện / cải thiện
+        prop_rows = conn.execute('''
+            SELECT id, room, proposal_type, target_scope, title_software, description,
+                   proposer_name, proposer_email, upvotes, upvoted_emails, status,
+                   admin_reply, created_at, updated_at
+            FROM room_software_proposals
+            ORDER BY
+                CASE status
+                    WHEN 'planned_image' THEN 0
+                    WHEN 'recorded' THEN 1
+                    ELSE 2
+                END,
+                upvotes DESC,
+                id DESC
+            LIMIT 300
+        ''').fetchall()
+        proposals = []
+        for p in prop_rows:
+            try:
+                up_list = json.loads(p['upvoted_emails'] or '[]')
+                if not isinstance(up_list, list):
+                    up_list = []
+            except Exception:
+                up_list = []
+            up_list_lower = [str(x).strip().lower() for x in up_list if x]
+            proposals.append({
+                'id': int(p['id']),
+                'room': p['room'],
+                'proposal_type': p['proposal_type'] or 'software_next_sem',
+                'target_scope': p['target_scope'] or 'next_semester',
+                'title_software': p['title_software'] or '',
+                'description': p['description'] or '',
+                'proposer_name': p['proposer_name'] or 'Giảng viên',
+                'proposer_email': p['proposer_email'] or '',
+                'upvotes': max(1, len(up_list_lower) or int(p['upvotes'] or 1)),
+                'has_upvoted': bool(user_email_lower and user_email_lower in up_list_lower),
+                'status': p['status'] or 'recorded',
+                'admin_reply': p['admin_reply'] or '',
+                'created_at_display': format_vn_datetime(p['created_at'], '%H:%M - %d/%m/%Y')
+            })
+
+        # 5. Trạng thái Banner nhắc rà soát phần mềm cuối kỳ
+        banner_row = conn.execute(
+            "SELECT value FROM system_settings WHERE key = 'semester_survey_banner'"
+        ).fetchone()
+        survey_banner_enabled = bool(banner_row and str(banner_row['value']) == '1')
+    finally:
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'max_ann_id': max_ann_id,
+        'latest_urgent': latest_urgent,
+        'survey_banner_enabled': survey_banner_enabled,
+        'net_map': net_map,
+        'specs_map': specs_map,
+        'announcements': announcements,
+        'proposals': proposals,
+        'permissions': {
+            'is_logged_in': bool(user_email),
+            'can_propose': bool(user_email and is_ver),
+            'can_broadcast': bool(is_super),
+            'is_admin_viewer': bool(admin_role in ('super_admin', 'contributor')),
+            'user_name': user_name,
+            'user_email': user_email
+        }
+    })
+
+
+@app.route('/api/room-hub/announcements', methods=['POST'])
+@login_required
+def api_room_hub_create_announcement():
+    """Admin phát thông báo vào 1 phòng hoặc Broadcast nhiều phòng cùng lúc."""
+    if get_user_admin_role() != 'super_admin':
+        return jsonify({'success': False, 'message': 'Chỉ Super Admin mới có quyền phát thông báo vận hành.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    raw_rooms = data.get('target_rooms') or []
+    if isinstance(raw_rooms, str):
+        raw_rooms = [raw_rooms]
+    target_rooms = [str(r).strip() for r in raw_rooms if str(r).strip() in VALID_HUB_ROOMS]
+    if not target_rooms:
+        return jsonify({'success': False, 'message': 'Vui lòng chọn ít nhất 1 phòng nhận thông báo.'}), 400
+
+    category = (data.get('category') or 'info').strip()
+    if category not in ('urgent', 'resolved', 'info', 'maintenance'):
+        category = 'info'
+
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'success': False, 'message': 'Vui lòng nhập nội dung thông báo.'}), 400
+
+    is_pinned = 1 if data.get('is_pinned') else 0
+    now_iso = get_vn_now_iso()
+    sender_label = 'QTTB - Kỹ thuật phòng máy'
+
+    conn = get_db_connection()
+    try:
+        for room_code in target_rooms:
+            if is_pinned:
+                conn.execute(
+                    "UPDATE room_announcements SET is_pinned = 0 WHERE room = ?",
+                    (room_code,)
+                )
+            conn.execute('''
+                INSERT INTO room_announcements (room, category, content, is_pinned, created_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (room_code, category, content, is_pinned, sender_label, now_iso))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': f"Đã phát thông báo tới {len(target_rooms)} kênh ({', '.join(target_rooms)}) thành công!"
+    })
+
+
+@app.route('/api/room-hub/announcements/<int:ann_id>/toggle-pin', methods=['POST'])
+@login_required
+def api_room_hub_toggle_pin(ann_id):
+    """Admin Ghim hoặc Bỏ ghim 1 thông báo đầu phòng."""
+    if get_user_admin_role() != 'super_admin':
+        return jsonify({'success': False, 'message': 'Chỉ Super Admin mới có quyền ghim thông báo.'}), 403
+
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT id, room, is_pinned FROM room_announcements WHERE id = ?", (ann_id,)).fetchone()
+        if not row:
+            return jsonify({'success': False, 'message': 'Không tìm thấy thông báo.'}), 404
+        new_pin = 0 if row['is_pinned'] else 1
+        if new_pin == 1:
+            conn.execute("UPDATE room_announcements SET is_pinned = 0 WHERE room = ?", (row['room'],))
+        conn.execute("UPDATE room_announcements SET is_pinned = ? WHERE id = ?", (new_pin, ann_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'is_pinned': bool(new_pin),
+        'message': 'Đã ghim thông báo lên đầu phòng!' if new_pin else 'Đã bỏ ghim thông báo.'
+    })
+
+
+@app.route('/api/room-hub/announcements/<int:ann_id>', methods=['DELETE'])
+@login_required
+def api_room_hub_delete_announcement(ann_id):
+    """Admin xóa 1 thông báo."""
+    if get_user_admin_role() != 'super_admin':
+        return jsonify({'success': False, 'message': 'Chỉ Super Admin mới có quyền xóa thông báo.'}), 403
+
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM room_announcements WHERE id = ?", (ann_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({'success': True, 'message': 'Đã xóa thông báo.'})
+
+
+@app.route('/api/room-hub/semester-reset', methods=['POST'])
+@login_required
+def api_room_hub_semester_reset():
+    """Admin làm mới lịch sử thông báo học kỳ cũ (giữ lại cấu hình phần mềm & các đề xuất kỳ tới chưa hoàn tất)."""
+    if get_user_admin_role() != 'super_admin':
+        return jsonify({'success': False, 'message': 'Chỉ Super Admin mới có quyền làm mới học kỳ.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    clear_completed_proposals = bool(data.get('clear_completed_proposals', True))
+    now_iso = get_vn_now_iso()
+
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM room_announcements")
+        if clear_completed_proposals:
+            conn.execute("DELETE FROM room_software_proposals WHERE status = 'completed'")
+        conn.execute('''
+            INSERT INTO room_announcements (room, category, content, is_pinned, created_by, created_at)
+            VALUES ('ALL', 'info', 'Đã làm mới Kênh thông báo cho Học kỳ mới. Quý Thầy/Cô có thể theo dõi tình trạng vận hành hoặc gửi đề xuất phần mềm tại từng phòng.', 1, 'QTTB - Kỹ thuật phòng máy', ?)
+        ''', (now_iso,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': 'Đã làm mới lịch sử thông báo cho Học kỳ mới thành công!'
+    })
+
+
+@app.route('/api/room-hub/specs', methods=['POST'])
+@login_required
+def api_room_hub_update_specs():
+    """Admin cập nhật danh sách phần mềm & cấu hình hiện có của phòng máy."""
+    if get_user_admin_role() != 'super_admin':
+        return jsonify({'success': False, 'message': 'Chỉ Super Admin mới có quyền cập nhật cấu hình phần mềm.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    room = (data.get('room') or '').strip()
+    spec_summary = (data.get('spec_summary') or '').strip()
+    if room not in VALID_HUB_ROOMS or not spec_summary:
+        return jsonify({'success': False, 'message': 'Thông tin phòng hoặc cấu hình phần mềm không hợp lệ.'}), 400
+
+    now_iso = get_vn_now_iso()
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT INTO room_software_specs (room, spec_summary, updated_by, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(room) DO UPDATE SET
+                spec_summary = excluded.spec_summary,
+                updated_by = excluded.updated_by,
+                updated_at = excluded.updated_at
+        ''', (room, spec_summary, get_current_user_name() or 'Admin', now_iso))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({'success': True, 'message': f'Đã cập nhật danh sách phần mềm hiện có cho kênh {room}!'})
+
+
+@app.route('/api/room-hub/toggle-survey-banner', methods=['POST'])
+@login_required
+def api_room_hub_toggle_survey_banner():
+    """Admin bật/tắt Banner nhắc Giảng viên rà soát phần mềm cho Học kỳ mới."""
+    if get_user_admin_role() != 'super_admin':
+        return jsonify({'success': False, 'message': 'Chỉ Super Admin mới có quyền thực hiện.'}), 403
+
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'semester_survey_banner'").fetchone()
+        current_val = str(row['value']) if row else '0'
+        new_val = '0' if current_val == '1' else '1'
+        conn.execute(
+            "INSERT OR REPLACE INTO system_settings (key, value) VALUES ('semester_survey_banner', ?)",
+            (new_val,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'survey_banner_enabled': (new_val == '1'),
+        'message': 'Đã BẬT đợt nhắc Giảng viên đề xuất phần mềm cho Học kỳ mới!' if new_val == '1' else 'Đã TẮT thông báo nhắc rà soát phần mềm cuối kỳ.'
+    })
+
+
+@app.route('/api/room-hub/proposals', methods=['POST'])
+@login_required
+def api_room_hub_create_proposal():
+    """Giảng viên (đã xác thực) hoặc Admin gửi đề xuất Phần mềm / Thư viện / Cải thiện cho 1 hoặc nhiều phòng."""
+    user_email = (get_current_user_email() or '').strip()
+    user_name = (get_current_user_name() or 'Giảng viên').strip()
+    is_admin = (get_user_admin_role(user_email) in ('super_admin', 'contributor'))
+
+    if not is_admin:
+        allowed, retry_after = check_submission_rate_limit(user_email)
+        if not allowed:
+            return jsonify({
+                'success': False,
+                'message': f'Mỗi tài khoản chỉ gửi tối đa 2 đề xuất trong 1 phút. Vui lòng đợi {retry_after} giây.'
+            }), 429
+
+    data = request.get_json(silent=True) or {}
+    raw_rooms = data.get('rooms') or data.get('room') or []
+    if isinstance(raw_rooms, str):
+        raw_rooms = [raw_rooms]
+    target_rooms = [str(r).strip() for r in raw_rooms if str(r).strip() in VALID_HUB_ROOMS]
+    if not target_rooms:
+        return jsonify({'success': False, 'message': 'Vui lòng chọn ít nhất 1 phòng máy cần đề xuất.'}), 400
+
+    proposal_type = (data.get('proposal_type') or 'software_next_sem').strip()
+    if proposal_type not in ('software_next_sem', 'library_update', 'hardware_improve'):
+        proposal_type = 'software_next_sem'
+
+    target_scope = (data.get('target_scope') or 'next_semester').strip()
+    if target_scope not in ('current_semester', 'next_semester'):
+        target_scope = 'next_semester'
+
+    title_software = (data.get('title_software') or '').strip()
+    description = (data.get('description') or '').strip()
+    if not title_software:
+        return jsonify({'success': False, 'message': 'Vui lòng nhập tên phần mềm, thư viện hoặc nội dung cần cải thiện.'}), 400
+
+    now_iso = get_vn_now_iso()
+    initial_voters = json.dumps([user_email.lower()])
+
+    conn = get_db_connection()
+    try:
+        for room_code in target_rooms:
+            conn.execute('''
+                INSERT INTO room_software_proposals (
+                    room, proposal_type, target_scope, title_software, description,
+                    proposer_name, proposer_email, upvotes, upvoted_emails, status,
+                    admin_reply, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'recorded', '', ?, ?)
+            ''', (
+                room_code, proposal_type, target_scope, title_software, description,
+                user_name, user_email, initial_voters, now_iso, now_iso
+            ))
+        if not is_admin:
+            record_submission_rate_log(user_email, action_type='software_proposal', conn=conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': f"Đã ghi nhận đề xuất vào {', '.join(target_rooms)}! Các giảng viên khác dạy cùng phòng có thể xem và bấm đồng tình (+1)."
+    })
+
+
+@app.route('/api/room-hub/proposals/<int:prop_id>/upvote', methods=['POST'])
+@login_required
+def api_room_hub_upvote_proposal(prop_id):
+    """Giảng viên bấm '👍 Tôi cũng cần (+1)' trên một đề xuất đã có của phòng."""
+    user_email = (get_current_user_email() or '').strip().lower()
+    if not user_email:
+        return jsonify({'success': False, 'message': 'Vui lòng đăng nhập để bấm đồng tình.'}), 401
+
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT id, upvotes, upvoted_emails FROM room_software_proposals WHERE id = ?",
+            (prop_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'success': False, 'message': 'Không tìm thấy đề xuất này.'}), 404
+
+        try:
+            voters = json.loads(row['upvoted_emails'] or '[]')
+            if not isinstance(voters, list):
+                voters = []
+        except Exception:
+            voters = []
+        voters = [str(v).strip().lower() for v in voters if v]
+
+        if user_email in voters:
+            if len(voters) > 1:
+                voters.remove(user_email)
+                action_msg = 'Đã bỏ đánh dấu (+1).'
+            else:
+                action_msg = 'Bạn là người khởi tạo đề xuất này.'
+        else:
+            voters.append(user_email)
+            action_msg = 'Đã cộng (+1) nhu cầu sử dụng cho đề xuất này!'
+
+        new_count = max(1, len(voters))
+        conn.execute(
+            "UPDATE room_software_proposals SET upvotes = ?, upvoted_emails = ? WHERE id = ?",
+            (new_count, json.dumps(voters), prop_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({'success': True, 'upvotes': new_count, 'message': action_msg})
+
+
+@app.route('/api/room-hub/proposals/<int:prop_id>/admin-update', methods=['POST'])
+@login_required
+def api_room_hub_admin_update_proposal(prop_id):
+    """Admin cập nhật trạng thái ('recorded', 'planned_image', 'completed'), ghi chú phản hồi hoặc xóa đề xuất."""
+    if get_user_admin_role() != 'super_admin':
+        return jsonify({'success': False, 'message': 'Chỉ Super Admin mới có quyền cập nhật trạng thái đề xuất.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    action = (data.get('action') or 'update').strip()
+
+    conn = get_db_connection()
+    try:
+        if action == 'delete':
+            conn.execute("DELETE FROM room_software_proposals WHERE id = ?", (prop_id,))
+            conn.commit()
+            return jsonify({'success': True, 'message': 'Đã xóa đề xuất phần mềm.'})
+
+        status = (data.get('status') or 'recorded').strip()
+        if status not in ('recorded', 'planned_image', 'completed'):
+            status = 'recorded'
+        admin_reply = (data.get('admin_reply') or '').strip()
+        now_iso = get_vn_now_iso()
+
+        conn.execute('''
+            UPDATE room_software_proposals
+            SET status = ?, admin_reply = ?, updated_at = ?
+            WHERE id = ?
+        ''', (status, admin_reply, now_iso, prop_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({'success': True, 'message': 'Đã cập nhật trạng thái & phản hồi cho đề xuất!'})
+
+
+_AUTO_POLLER_STARTED = False
+_AUTO_POLLER_LOCK = threading.Lock()
+
+
+def _run_scheduled_router_poll_once():
+    """Thực hiện 1 chu kỳ quét tự động 8 Router trong khung giờ 4 Ca học (Thứ 2 – Thứ 7)."""
+    from usage_report_generator import detect_current_ca_slot
+    now_dt = get_vn_now()
+    if now_dt.weekday() >= 6:  # Bỏ qua Chủ Nhật
+        return
+
+    conn = get_db_connection()
+    try:
+        ca_cfg = get_ca_time_config(conn)
+        ca_slot, _, _ = detect_current_ca_slot(now_dt, ca_cfg)
+        if ca_slot not in (1, 2, 3, 4):
+            return
+
+        cfg_rows = conn.execute(
+            "SELECT key, value FROM system_settings WHERE key IN ('router_admin_user', 'router_admin_pass', 'airpro_admin_user', 'airpro_admin_pass', 'pc_mac_ouis')"
+        ).fetchall()
+        cfg_map = {r['key']: (r['value'] or '') for r in cfg_rows}
+        r_user = cfg_map.get('router_admin_user') or 'admin'
+        r_pass = decrypt_router_secret(cfg_map.get('router_admin_pass') or '')
+        a_user = cfg_map.get('airpro_admin_user') or 'admin'
+        a_pass = decrypt_router_secret(cfg_map.get('airpro_admin_pass') or '')
+        pc_mac_ouis = cfg_map.get('pc_mac_ouis') or '4C:D7:17,00:68:EB,80:E8:2C'
+
+        rows = conn.execute("SELECT * FROM room_network_status").fetchall()
+        room_configs = [dict(r) for r in rows]
+        if not room_configs:
+            return
+
+        poll_results = poll_all_routers_concurrently(
+            room_configs,
+            username=r_user,
+            password=r_pass,
+            airpro_user=a_user,
+            airpro_pass=a_pass,
+            pc_mac_ouis=pc_mac_ouis
+        )
+        for _, res in poll_results.items():
+            _persist_router_poll_result(conn, res)
+        conn.commit()
+    except Exception as ex:
+        print(f"[Router Auto-Poll Error] {ex}")
+    finally:
+        conn.close()
+
+
+def _start_router_auto_poller(interval_sec=600):
+    """Khởi chạy luồng nền tự động quét 8 Router mỗi 10 phút trong khung giờ 4 Ca học."""
+    global _AUTO_POLLER_STARTED
+    with _AUTO_POLLER_LOCK:
+        if _AUTO_POLLER_STARTED:
+            return
+        _AUTO_POLLER_STARTED = True
+
+    def _loop():
+        time.sleep(20)
+        while True:
+            try:
+                _run_scheduled_router_poll_once()
+            except Exception as ex:
+                print(f"[Router Auto-Poll Loop Error] {ex}")
+            time.sleep(interval_sec)
+
+    t = threading.Thread(target=_loop, name='router-auto-poller', daemon=True)
+    t.start()
+
+
 if __name__ == '__main__':
     import sys
     is_pythonw = sys.executable.lower().endswith('pythonw.exe') or sys.stdout is None
@@ -4083,4 +5003,6 @@ if __name__ == '__main__':
         sys.stdout = open(os.devnull, 'w', encoding='utf-8')
         sys.stderr = open(os.devnull, 'w', encoding='utf-8')
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    if not debug_mode or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        _start_router_auto_poller(interval_sec=600)
     app.run(debug=debug_mode, use_reloader=(debug_mode and not is_pythonw), host='127.0.0.1', port=5000)

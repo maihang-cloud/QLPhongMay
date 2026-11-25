@@ -42,10 +42,11 @@
                         <div class="row g-2 g-md-3">
                             <div class="col-6 mb-3">
                                 <label class="form-label text-muted small fw-bold">Phòng máy *</label>
+                                {% set preselected_room = request.args.get('room', '') %}
                                 <select class="form-select bg-light border-0 py-2" name="room" required>
-                                    <option value="" disabled selected>Chọn phòng...</option>
+                                    <option value="" disabled {% if not preselected_room %}selected{% endif %}>Chọn phòng...</option>
                                     {% for r in ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6'] %}
-                                        <option value="{{ r }}">Phòng {{ r }}</option>
+                                        <option value="{{ r }}" {% if preselected_room == r %}selected{% endif %}>Phòng {{ r }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -75,22 +76,27 @@
 
                         <!-- 3. THÔNG TIN NGƯỜI BÁO CÁO -->
                         <div class="row g-2 g-md-3">
-                            <div class="col-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label class="form-label text-muted small fw-bold">Họ và tên *</label>
                                 <input type="text" class="form-control bg-light border-0 py-2" name="reporter_name" placeholder="VD: Nguyễn Văn A" required value="{{ current_user_name }}">
                             </div>
-                            <div class="col-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label class="form-label text-muted small fw-bold">Khoa / Đơn vị *</label>
-                                <input type="text" class="form-control bg-light border-0 py-2" name="department" placeholder="VD: Khoa Toán,..." required>
+                                <select class="form-select bg-light border-0 py-2" name="department" required>
+                                    <option value="" disabled selected>Chọn đơn vị...</option>
+                                    {% for dept in standard_departments %}
+                                        <option value="{{ dept }}">{{ dept }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                         </div>
 
-                        <!-- 4. MÔ TẢ TÌNH TRẠNG CHI TIẾT -->
+                        <!-- 4. MÔ TẢ TÌNH TRẠNG CHI TIẾT (BẮT BUỘC NHẬP) -->
                         <div class="mb-4">
-                            <label class="form-label text-muted small fw-bold">Mô tả tình trạng chi tiết *</label>
-                            <textarea class="form-control bg-light border-0" name="description" rows="3" placeholder="Mô tả rõ số máy bị lỗi (nếu là máy học viên) và biểu hiện của lỗi để kỹ thuật viên dễ dàng chuẩn bị thiết bị thay thế..." required></textarea>
+                            <label class="form-label text-muted small fw-bold">Mô tả tình trạng chi tiết <span class="text-danger">*</span></label>
+                            <textarea class="form-control bg-light border-0" name="description" id="issue_description" rows="3" placeholder="Bắt buộc nhập: Mô tả rõ số máy bị lỗi (nếu là máy học viên) và biểu hiện của lỗi để kỹ thuật viên dễ dàng chuẩn bị thiết bị thay thế..." required minlength="3"></textarea>
                             <div class="text-muted small mt-1" style="font-size: 0.78rem;">
-                                * Kỹ thuật viên sẽ kiểm tra trực tiếp và cập nhật tiến độ xử lý trên trang Lịch sử của tôi.
+                                * Kỹ thuật viên sẽ kiểm tra trực tiếp và cập nhật tiến độ xử lý qua Email & tab Lịch sử của tôi.
                             </div>
                         </div>
 
@@ -117,26 +123,19 @@
                 <h6 class="fw-bold text-dark mb-3 d-flex align-items-center">
                     <i class="bi bi-clock-history text-primary me-2 fs-5"></i>Quy Trình Tiếp Nhận & Xử Lý
                 </h6>
-                <p class="text-muted small mb-3">Theo dõi cập nhật từ Admin tại Tab <strong>Lịch sử của tôi</strong>:</p>
+                <p class="text-muted small mb-3">Theo dõi cập nhật nhanh tại Tab <strong>Lịch sử của tôi</strong>:</p>
                 <div class="d-flex flex-column gap-3 small">
                     <div class="d-flex align-items-start">
-                        <span class="badge bg-warning bg-opacity-25 text-dark border border-warning px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 1</span>
-                        <div>
-                            <strong>Chờ xử lý (Mặc định):</strong>
-                            <div class="text-secondary">Hệ thống đã tiếp nhận yêu cầu được gửi.</div>
-                        </div>
-                    </div>
-                    <div class="d-flex align-items-start">
-                        <span class="badge bg-info bg-opacity-25 text-dark border border-info px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 2</span>
+                        <span class="badge bg-info bg-opacity-25 text-dark border border-info px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 1</span>
                         <div>
                             <strong>Đã tiếp nhận:</strong>
-                            <div class="text-secondary">Admin đang chuẩn bị thiết bị và sẽ xử lý yêu cầu được gửi.</div>
+                            <div class="text-secondary">Kiểm tra Email hoặc tab Lịch sử của tôi, admin đã tiếp nhận và đang chuẩn bị thiết bị xử lý yêu cầu được gửi.</div>
                         </div>
                     </div>
                     <div class="d-flex align-items-start">
-                        <span class="badge bg-success bg-opacity-25 text-success border border-success px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 3</span>
+                        <span class="badge bg-success bg-opacity-25 text-success border border-success px-2 py-1 me-2 flex-shrink-0 fw-bold">Bước 2</span>
                         <div>
-                            <strong>Đã duyệt (Hoàn tất):</strong>
+                            <strong>Đã xử lý:</strong>
                             <div class="text-secondary">Sau khi hoàn tất sửa chữa/thay thế thiết bị tại phòng, trạng thái sẽ tự động đổi sang màu xanh trên trang Lịch sử.</div>
                         </div>
                     </div>
@@ -168,4 +167,19 @@
 
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const descEl = document.getElementById('issue_description');
+    if (descEl && descEl.form) {
+        descEl.form.addEventListener('submit', function(e) {
+            if (!descEl.value || !descEl.value.trim()) {
+                e.preventDefault();
+                descEl.value = '';
+                descEl.focus();
+                alert('Vui lòng nhập Mô tả tình trạng chi tiết trước khi gửi báo cáo sự cố!');
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

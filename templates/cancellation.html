@@ -38,10 +38,16 @@
                 <div class="card-body p-3 p-md-5">
                     <form action="{{ url_for('submit_cancellation') }}" method="POST">
                         
-                        <!-- 1. NGÀY VẮNG / NGHỈ HỌC ĐƯA LÊN ĐẦU -->
-                        <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">Ngày vắng / nghỉ học *</label>
-                            <input type="date" class="form-control bg-light border-0 py-2" name="cancel_date" id="cancel_date" required>
+                        <!-- 1. NGÀY VẮNG / NGHỈ HỌC & THỨ TỰ ĐỘNG -->
+                        <div class="row g-2 g-md-3">
+                            <div class="col-7 col-md-8 mb-3">
+                                <label class="form-label text-muted small fw-bold">Ngày vắng / nghỉ học *</label>
+                                <input type="date" class="form-control bg-light border-0 py-2" name="cancel_date" id="cancel_date" required>
+                            </div>
+                            <div class="col-5 col-md-4 mb-3">
+                                <label class="form-label text-muted small fw-bold">Thứ (Tự động)</label>
+                                <input type="text" class="form-control bg-light border-0 py-2 fw-bold text-primary" id="cancel_day_display" readonly placeholder="Tự động...">
+                            </div>
                         </div>
 
                         <!-- 2. PHÒNG HỌC & CA / TIẾT NGHỈ (NẰM GỌN 1 HÀNG TRÊN MOBILE) -->
@@ -60,10 +66,21 @@
                             </div>
                         </div>
 
-                        <!-- 3. TÊN GIẢNG VIÊN -->
-                        <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">Tên Giảng viên *</label>
-                            <input type="text" class="form-control bg-light border-0 py-2" name="teacher_name" placeholder="Ví dụ: Nguyễn Văn A" required value="{{ current_user_name }}">
+                        <!-- 3. TÊN GIẢNG VIÊN & KHOA / ĐƠN VỊ -->
+                        <div class="row g-2 g-md-3">
+                            <div class="col-12 col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Tên Giảng viên *</label>
+                                <input type="text" class="form-control bg-light border-0 py-2" name="teacher_name" placeholder="Ví dụ: Nguyễn Văn A" required value="{{ current_user_name }}">
+                            </div>
+                            <div class="col-12 col-md-6 mb-3">
+                                <label class="form-label text-muted small fw-bold">Khoa / Đơn vị *</label>
+                                <select class="form-select bg-light border-0 py-2" name="department" required>
+                                    <option value="" disabled selected>Chọn đơn vị...</option>
+                                    {% for dept in standard_departments %}
+                                        <option value="{{ dept }}">{{ dept }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                         </div>
 
                         <!-- 4. LÝ DO VẮNG & KẾ HOẠCH HỌC BÙ -->
@@ -120,12 +137,35 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const cancelDateInput = document.getElementById('cancel_date');
-    if (cancelDateInput && !cancelDateInput.value) {
-        const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        cancelDateInput.value = `${yyyy}-${mm}-${dd}`;
+    const cancelDayDisplay = document.getElementById('cancel_day_display');
+
+    function updateCancelWeekday() {
+        if (!cancelDateInput || !cancelDayDisplay) return;
+        const val = (cancelDateInput.value || '').trim();
+        if (!val) {
+            cancelDayDisplay.value = '';
+            return;
+        }
+        const d = new Date(val + 'T00:00:00');
+        if (isNaN(d.getTime())) {
+            cancelDayDisplay.value = '';
+            return;
+        }
+        const wd = d.getDay();
+        cancelDayDisplay.value = (wd === 0) ? 'Chủ Nhật' : ('Thứ ' + (wd + 1));
+    }
+
+    if (cancelDateInput) {
+        if (!cancelDateInput.value) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            cancelDateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+        updateCancelWeekday();
+        cancelDateInput.addEventListener('change', updateCancelWeekday);
+        cancelDateInput.addEventListener('input', updateCancelWeekday);
     }
 });
 </script>

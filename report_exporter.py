@@ -39,14 +39,56 @@ def parse_report_date(raw_val):
     return None
 
 
+def get_ca_time_config_from_db(conn=None):
+    """Đọc cấu hình giờ Bắt đầu / Kết thúc 4 Ca học từ bảng system_settings."""
+    defaults = {
+        1: ('07:30', '10:00'),
+        2: ('10:05', '12:00'),
+        3: ('12:30', '14:50'),
+        4: ('15:05', '17:00'),
+    }
+    smap = {}
+    close_after = False
+    try:
+        if conn is None:
+            import database
+            conn = database.get_db_connection()
+            close_after = True
+        keys = [f'ca{i}_{part}' for i in range(1, 5) for part in ('start', 'end')]
+        placeholders = ','.join('?' for _ in keys)
+        rows = conn.execute(
+            f"SELECT key, value FROM system_settings WHERE key IN ({placeholders})",
+            keys
+        ).fetchall()
+        smap = {r['key']: (r['value'] or '').strip() for r in rows}
+    except Exception:
+        smap = {}
+    finally:
+        if close_after and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    cfg = {}
+    for slot in range(1, 5):
+        def_s, def_e = defaults[slot]
+        cfg[slot] = {
+            'start': smap.get(f'ca{slot}_start') or def_s,
+            'end': smap.get(f'ca{slot}_end') or def_e,
+        }
+    return cfg
+
+
 def get_schedule_ca_slots(start_period, end_period):
     """
     Quy đổi khoảng tiết (start_period -> end_period) thành danh sách các Ca chuẩn trong ngày:
-    - Ca 1 (Sáng 1): Tiết 1 – 3.5 (07h30 – 10h00)
-    - Ca 2 (Sáng 2): Tiết 3.5 – 5 (10h05 – 12h00)
-    - Ca 3 (Chiều 1): Tiết 6 – 8.5 (12h30 – 14h50)
-    - Ca 4 (Chiều 2): Tiết 8.5 – 10 (15h05 – 17h00)
-    Mỗi ca chuẩn = 2,5 tiết. Lớp kéo dài cả buổi (VD: Tiết 1-5 hoặc Tiết 6-10) chiếm 2 ca.
+    - Ca 1 (Sáng 1): Tiết 1 – 3.5 (07:30 – 10:00)
+    - Ca 2 (Sáng 2): Tiết 3.5 – 5 (10:05 – 12:00)
+    - Ca 3 (Chiều 1): Tiết 6 – 8.5 (12:30 – 14:50)
+    - Ca 4 (Chiều 2): Tiết 8.5 – 10 (15:05 – 17:00)
+    Mỗi ca chuẩn = 2,5 tiết. Chỉ các lớp kéo dài cả buổi (độ phủ >= 3 tiết, VD: Tiết 1-5, 1-4, 6-10)
+    mới chiếm 2 ca; các lớp <= 2,5 tiết lệch ranh giới (VD: Tiết 2-4) được quy về 1 ca có độ phủ lớn hơn.
     """
     try:
         start = float(start_period)
@@ -54,26 +96,72 @@ def get_schedule_ca_slots(start_period, end_period):
     except (ValueError, TypeError):
         return [1]
 
+    if end < start:
+        start, end = end, start
+
     slots = []
     # Xét buổi sáng (Tiết 1 -> 5, ranh giới tách 2 ca tại tiết 3.5)
     if start < 5.5:
-        if start < 3.5 and end > 3.5:
-            slots.extend([1, 2])
-        elif start >= 3.0:
+        m_start = max(1.0, start)
+        m_end = min(5.0, end)
+        if m_start < 3.5 and m_end > 3.5:
+            if (m_end - m_start) >= 3.0:
+                slots.extend([1, 2])
+            else:
+                ov1 = max(0.0, min(m_end, 3.5) - m_start)
+                ov2 = max(0.0, m_end - max(m_start, 3.5))
+                slots.append(1 if ov1 >= ov2 else 2)
+        elif m_start >= 3.0:
             slots.append(2)
         else:
             slots.append(1)
 
     # Xét buổi chiều (Tiết 6 -> 10, ranh giới tách 2 ca tại tiết 8.5)
     if end > 5.5:
-        if start < 8.5 and end > 8.5:
-            slots.extend([3, 4])
-        elif start >= 8.0:
+        a_start = max(6.0, start)
+        a_end = min(10.0, end)
+        if a_start < 8.5 and a_end > 8.5:
+            if (a_end - a_start) >= 3.0:
+                slots.extend([3, 4])
+            else:
+                ov3 = max(0.0, min(a_end, 8.5) - a_start)
+                ov4 = max(0.0, a_end - max(a_start, 8.5))
+                slots.append(3 if ov3 >= ov4 else 4)
+        elif a_start >= 8.0:
             slots.append(4)
         else:
             slots.append(3)
 
     return slots if slots else [1]
+
+
+def format_ca_slots_label(start_period, end_period, ca_cfg=None, include_periods=True):
+    """Định dạng nhãn Ca học chuẩn kèm khung giờ cấu hình và tiết học (VD: 'Ca 1 + Ca 2 (07:30-12:00) • Tiết 1-5')."""
+    ca_cfg = ca_cfg or get_ca_time_config_from_db()
+    slots = get_schedule_ca_slots(start_period, end_period)
+    if slots == [1, 2]:
+        ca_name = "Ca 1 + Ca 2 (Sáng)"
+        t_str = f"{ca_cfg[1]['start']}-{ca_cfg[2]['end']}"
+    elif slots == [3, 4]:
+        ca_name = "Ca 3 + Ca 4 (Chiều)"
+        t_str = f"{ca_cfg[3]['start']}-{ca_cfg[4]['end']}"
+    elif len(slots) == 1:
+        sl = slots[0]
+        ca_name = f"Ca {sl}"
+        t_str = f"{ca_cfg[sl]['start']}-{ca_cfg[sl]['end']}"
+    else:
+        ca_name = " + ".join(f"Ca {s}" for s in slots)
+        t_str = f"{ca_cfg[slots[0]]['start']}-{ca_cfg[slots[-1]]['end']}"
+
+    base = f"{ca_name} ({t_str})"
+    if include_periods and start_period is not None and end_period is not None:
+        try:
+            sp_txt = f"{float(start_period):g}"
+            ep_txt = f"{float(end_period):g}"
+            return f"{base} • Tiết {sp_txt}-{ep_txt}"
+        except (ValueError, TypeError):
+            return f"{base} • Tiết {start_period}-{end_period}"
+    return base
 
 
 def get_course_date_span(row):
@@ -569,7 +657,7 @@ def build_semester_report_excel(
     ws1.row_dimensions[r_curr].height = 24
 
     r_curr += 1
-    slot_periods = ["Tiết học chuẩn", "Tiết 1 – 3.5 (2,5 tiết)", "Tiết 3.5 – 5 (2,5 tiết)", "Tiết 6 – 8.5 (2,5 tiết)", "Tiết 8.5 – 10 (2,5 tiết)", "10 tiết / 4 ca chuẩn"]
+    slot_periods = ["Tiết học chuẩn", "Tiết 1 – 3.5 (2,5 tiết đầu)", "Tiết 3.5 – 5 (2,5 tiết sau)", "Tiết 6 – 8.5 (2,5 tiết đầu)", "Tiết 8.5 – 10 (2,5 tiết sau)", "10 tiết / 4 ca chuẩn"]
     for idx, val in enumerate(slot_periods, 1):
         c = ws1.cell(r_curr, idx, val)
         c.font = f_data_bold if idx in (1, 6) else f_data
@@ -579,7 +667,15 @@ def build_semester_report_excel(
     ws1.row_dimensions[r_curr].height = 22
 
     r_curr += 1
-    slot_times = ["Khung giờ học", "07h30 – 10h00", "10h05 – 12h00", "12h30 – 14h50", "15h05 – 17h00", "07h30 – 17h00"]
+    ca_cfg = get_ca_time_config_from_db()
+    slot_times = [
+        "Khung giờ cấu hình",
+        f"{ca_cfg[1]['start']} – {ca_cfg[1]['end']}",
+        f"{ca_cfg[2]['start']} – {ca_cfg[2]['end']}",
+        f"{ca_cfg[3]['start']} – {ca_cfg[3]['end']}",
+        f"{ca_cfg[4]['start']} – {ca_cfg[4]['end']}",
+        f"{ca_cfg[1]['start']} – {ca_cfg[4]['end']}"
+    ]
     for idx, val in enumerate(slot_times, 1):
         c = ws1.cell(r_curr, idx, val)
         c.font = f_data_bold if idx == 1 else f_data_blue
@@ -1342,7 +1438,7 @@ def build_semester_report_excel(
     add_section_banner(ws4, r4, max_c4, "III. TỔNG HỢP YÊU CẦU MƯỢN PHÒNG / DẠY BÙ & CÀI ĐẶT PHẦN MỀM CHUYÊN NGÀNH")
 
     r4 += 1
-    bk_headers = ["STT", "Phòng", "Thứ / Tiết", "Môn học / Mục đích", "Giảng viên / Đơn vị", "Phần mềm yêu cầu cài đặt", "Ngày bắt đầu", "Trạng thái duyệt"]
+    bk_headers = ["STT", "Phòng", "Thứ / Ca học (Tiết)", "Môn học / Mục đích", "Giảng viên / Đơn vị", "Phần mềm yêu cầu cài đặt", "Ngày bắt đầu", "Trạng thái duyệt"]
     for idx, h_text in enumerate(bk_headers, 1):
         c = ws4.cell(r4, idx, h_text)
         c.font = f_tbl_hdr
@@ -1378,7 +1474,7 @@ def build_semester_report_excel(
             vals = [
                 idx,
                 f"P.{bk['room']}",
-                f"Thứ {bk['day_of_week']} (T.{bk['start_period']:g}-{bk['end_period']:g})",
+                f"Thứ {bk['day_of_week']} • {format_ca_slots_label(bk['start_period'], bk['end_period'], ca_cfg)}",
                 subj_txt,
                 req_who,
                 sw_txt,

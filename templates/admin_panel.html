@@ -28,612 +28,7 @@
 
 <!-- ========================================== -->
 <!-- THANH ĐIỀU HƯỚNG CÁC TAB (LƯỚI 2 DÒNG × 4 CỘT) & CSS ĐỒNG BỘ DESKTOP/MOBILE -->
-<style>
-    .admin-wrapper-font {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        letter-spacing: -0.01em;
-    }
-    #adminTabs.admin-grid-nav {
-        display: grid !important;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
-        background: #ffffff;
-        padding: 10px;
-        border-radius: 16px;
-        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
-        border: 1px solid #e2e8f0;
-        list-style: none;
-    }
-    #adminTabs.admin-grid-nav .nav-item {
-        margin: 0;
-        width: 100%;
-    }
-    #adminTabs.admin-grid-nav .nav-link {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        padding: 0.65rem 0.5rem;
-        color: #334155;
-        background-color: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        transition: all 0.18s ease;
-        text-align: center;
-        line-height: 1.2;
-    }
-    #adminTabs.admin-grid-nav .nav-link .tab-icon {
-        font-size: 1.15rem;
-        line-height: 1;
-    }
-    #adminTabs.admin-grid-nav .nav-link .badge-dot {
-        position: absolute;
-        top: -5px;
-        right: -5px;
-        background: #dc3545;
-        color: #fff;
-        font-size: 0.68rem;
-        font-weight: 700;
-        padding: 2px 6px;
-        border-radius: 999px;
-        border: 2px solid #fff;
-        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
-        z-index: 2;
-    }
-    #adminTabs.admin-grid-nav .nav-link:hover:not(.active) {
-        background-color: #f1f5f9;
-        border-color: #cbd5e1;
-        color: #0f172a;
-    }
-    #adminTabs.admin-grid-nav .nav-link.active {
-        background-color: #0D9488 !important;
-        border-color: #0D9488 !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
-    }
-
-    /* Badge tự động làm mới sau 10s cho các tab xử lý gấp */
-    .auto-reload-badge {
-        background-color: #F0FDFA;
-        border: 1px solid #99F6E4;
-        color: #0D9488;
-        font-size: 0.76rem;
-        cursor: pointer;
-        user-select: none;
-        transition: all 0.2s ease;
-    }
-    .auto-reload-badge:hover {
-        background-color: #CCFBF1;
-        border-color: #5EEAD4;
-    }
-    .auto-reload-badge.paused {
-        background-color: #FFFBEB !important;
-        border-color: #FDE68A !important;
-        color: #92400E !important;
-    }
-    @keyframes spin-reload {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-    .spin-reload-active {
-        animation: spin-reload 1s linear infinite;
-        display: inline-block;
-    }
-
-    /* Thẻ duyệt nhanh trên Mobile (Yêu cầu, Sự cố, Báo nghỉ) */
-    .mobile-action-card {
-        background: #ffffff;
-        border-radius: 14px;
-        padding: 14px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-        margin-bottom: 12px;
-    }
-    .mobile-action-meta {
-        font-size: 0.82rem;
-        color: #475569;
-        margin-bottom: 5px;
-    }
-
-    /* Dãy nút chọn nhanh Thứ trên Tab Thời khóa biểu */
-    .tt-day-pills {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 5px;
-    }
-    .tt-day-pill {
-        text-align: center;
-        padding: 6px 2px;
-        font-size: 0.76rem;
-        font-weight: 700;
-        border-radius: 8px;
-        background: #f1f5f9;
-        color: #475569;
-        border: 1px solid #cbd5e1;
-        text-decoration: none;
-        transition: all 0.15s ease;
-    }
-    .tt-day-pill:hover {
-        background: #e2e8f0;
-        color: #0f172a;
-    }
-    .tt-day-pill.active {
-        background: #0D9488;
-        color: #ffffff;
-        border-color: #0D9488;
-        box-shadow: 0 2px 6px rgba(13, 148, 136, 0.28);
-    }
-
-    /* Cố định cột Tiết khi cuộn ngang trên bảng Thời khóa biểu */
-    .tt-sticky-col {
-        position: sticky;
-        left: 0;
-        z-index: 6;
-        background-color: #f8fafc !important;
-        box-shadow: 2px 0 5px rgba(15, 23, 42, 0.04);
-    }
-
-    /* Bộ lọc nhanh trên Tab Lịch học */
-    .schedule-filter-pill {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        font-size: 0.76rem;
-        padding: 5px 11px;
-        border-radius: 8px;
-        font-weight: 600;
-        text-decoration: none;
-        border: 1px solid #cbd5e1;
-        background: #f8fafc;
-        color: #475569;
-        transition: all 0.15s ease;
-        white-space: nowrap;
-    }
-    .schedule-filter-pill:hover {
-        background: #f1f5f9;
-        color: #0f172a;
-    }
-    .schedule-filter-pill.active-all {
-        background: #0D9488;
-        color: #ffffff;
-        border-color: #0D9488;
-    }
-    .schedule-filter-pill.active-open {
-        background: #059669;
-        color: #ffffff;
-        border-color: #059669;
-    }
-    .schedule-filter-pill.active-locked {
-        background: #dc2626;
-        color: #ffffff;
-        border-color: #dc2626;
-    }
-
-    /* Bảng Lịch học */
-    .schedule-mgmt-table th {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-        color: #475569;
-        background-color: #f8fafc !important;
-        padding: 11px 8px;
-        white-space: nowrap;
-        border-bottom: 1px solid #e2e8f0;
-    }
-    .schedule-mgmt-table td {
-        font-size: 0.82rem;
-        padding: 10px 8px;
-        vertical-align: middle;
-    }
-    .row-ended-early {
-        background-color: #fff5f5 !important;
-    }
-    .row-ended-early td {
-        color: #64748b;
-    }
-
-    /* Thanh công cụ Google Calendar trên Tab Thời khóa biểu */
-    .gcal-toolbar {
-        background: #ffffff;
-        border-radius: 14px;
-        padding: 12px 14px;
-        box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
-        border: 1px solid #e2e8f0;
-    }
-    .btn-gcal {
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        color: #1e293b;
-        font-weight: 600;
-        font-size: 0.79rem;
-        padding: 5px 10px;
-        border-radius: 8px;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        transition: all 0.15s ease;
-        white-space: nowrap;
-    }
-    .btn-gcal:hover {
-        background: #f8fafc;
-        border-color: #94a3b8;
-        color: #0f172a;
-    }
-    .week-range-badge {
-        background: #F0FDFA;
-        border: 1px solid #99F6E4;
-        color: #0D9488;
-        font-weight: 700;
-        font-size: 0.78rem;
-        padding: 5px 11px;
-        border-radius: 999px;
-        white-space: nowrap;
-    }
-
-    /* Thẻ môn học trên Lưới Thời khóa biểu */
-    .tt-course-card {
-        border-radius: 8px;
-        padding: 6px 8px;
-        height: 100%;
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
-        overflow: hidden;
-        transition: transform 0.12s ease, box-shadow 0.12s ease;
-    }
-    .tt-course-card:hover {
-        z-index: 10;
-        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
-    }
-    .tt-theme-green {
-        background-color: #ecfdf5;
-        border: 1px solid #a7f3d0;
-        border-left: 4px solid #10b981 !important;
-        color: #065f46;
-    }
-    .tt-theme-blue {
-        background-color: #F0FDFA;
-        border: 1px solid #99F6E4;
-        border-left: 4px solid #0D9488 !important;
-        color: #0F2942;
-    }
-    .tt-theme-amber {
-        background-color: #fffbeb;
-        border: 1px solid #fde68a;
-        border-left: 4px solid #f59e0b !important;
-        color: #92400e;
-    }
-    .tt-theme-ended {
-        background: repeating-linear-gradient(135deg, #fff5f5, #fff5f5 10px, #fef2f2 10px, #fef2f2 20px);
-        border: 1.5px dashed #f87171;
-        border-left: 4px solid #ef4444 !important;
-        color: #7f1d1d;
-    }
-    .tt-subject-title {
-        font-size: 0.76rem;
-        font-weight: 700;
-        line-height: 1.25;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        margin-bottom: 2px;
-    }
-    .tt-mini-btn {
-        font-size: 0.64rem;
-        font-weight: 700;
-        padding: 2px 5px;
-        border-radius: 5px;
-        border: 1px solid rgba(15, 23, 42, 0.16);
-        background: rgba(255, 255, 255, 0.92);
-        cursor: pointer;
-        text-decoration: none;
-        white-space: nowrap;
-        line-height: 1.3;
-    }
-    .tt-mini-btn:hover {
-        background: #ffffff;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-    }
-
-    @media (max-width: 767.98px) {
-        #adminTabs.admin-grid-nav {
-            gap: 6px;
-            padding: 8px;
-        }
-        #adminTabs.admin-grid-nav .nav-link {
-            flex-direction: column;
-            gap: 3px;
-            padding: 8px 4px;
-            font-size: 0.72rem;
-            border-radius: 10px;
-        }
-        #adminTabs.admin-grid-nav .nav-link .tab-icon {
-            font-size: 1.15rem;
-            margin-bottom: 1px;
-        }
-        .gcal-toolbar {
-            padding: 10px;
-        }
-        .schedule-mgmt-table th,
-        .schedule-mgmt-table td {
-            font-size: 0.78rem;
-            padding: 8px 6px;
-        }
-    }
-
-    /* CSS cho Tab 📊 Dashboard Mới */
-    .dash-kpi-card {
-        background: #ffffff;
-        border-radius: 14px;
-        padding: 14px 16px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-        height: 100%;
-    }
-    .dash-kpi-title {
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: #64748b;
-        letter-spacing: 0.02em;
-    }
-    .dash-kpi-val {
-        font-size: 1.65rem;
-        font-weight: 800;
-        line-height: 1.2;
-        margin: 4px 0;
-    }
-    .dash-kpi-sub {
-        font-size: 0.75rem;
-        color: #64748b;
-    }
-    .dash-section-card {
-        background: #ffffff;
-        border-radius: 16px;
-        padding: 16px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
-    }
-    .room-status-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 10px;
-    }
-    @media (max-width: 767.98px) {
-        .room-status-grid {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-        }
-        .dash-kpi-card {
-            padding: 10px 12px;
-        }
-        .dash-kpi-val {
-            font-size: 1.35rem;
-        }
-    }
-    .room-node {
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 10px 12px;
-        background: #f8fafc;
-        border-left: 4px solid #10b981;
-        transition: all 0.2s ease;
-    }
-    .room-node.status-online {
-        border-left-color: #10b981;
-        background: #f8fafc;
-    }
-    .room-node.status-warn {
-        border-left-color: #f59e0b;
-        background: #fffbeb;
-    }
-    .room-node.status-offline {
-        border-left-color: #ef4444;
-        background: #fef2f2;
-    }
-    .ping-pill {
-        font-size: 0.68rem;
-        font-weight: 700;
-        padding: 2px 8px;
-        border-radius: 999px;
-        white-space: nowrap;
-    }
-    .ping-ok { background: #d1fae5; color: #065f46; }
-    .ping-warn { background: #fef3c7; color: #92400e; }
-    .ping-err { background: #fee2e2; color: #991b1b; }
-    .ping-wait { background: #e2e8f0; color: #475569; }
-
-    .dash-bar-chart {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        height: 150px;
-        padding: 18px 8px 0 8px;
-        border-bottom: 1px solid #cbd5e1;
-        gap: 8px;
-    }
-    .dash-bar-col {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        height: 100%;
-        justify-content: flex-end;
-    }
-    .dash-bar-fill {
-        width: 100%;
-        max-width: 36px;
-        border-radius: 6px 6px 0 0;
-        background: linear-gradient(180deg, #14B8A6, #0D9488);
-        transition: height 0.3s ease;
-    }
-    .dash-donut-ring {
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 auto;
-    }
-    .dash-donut-hole {
-        width: 72px;
-        height: 72px;
-        border-radius: 50%;
-        background: #ffffff;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 0.95rem;
-        line-height: 1.1;
-    }
-
-    /* Tab Nhật ký công việc & Checklist Deploy Hệ thống */
-    #adminTabs.admin-grid-nav .nav-item.worklog-nav-span {
-        grid-column: 1 / -1;
-    }
-    #adminTabs.admin-grid-nav .nav-item.worklog-nav-span .nav-link {
-        flex-direction: row !important;
-        padding: 0.6rem 0.85rem;
-        font-size: 0.84rem;
-        background: linear-gradient(135deg, #F0FDFA 0%, #CCFBF1 100%);
-        border: 1px solid #99F6E4;
-        color: #0F2942;
-    }
-    #adminTabs.admin-grid-nav .nav-item.worklog-nav-span .nav-link.active {
-        background: linear-gradient(135deg, #0F2942 0%, #0D9488 100%) !important;
-        border-color: #0D9488 !important;
-        color: #ffffff !important;
-    }
-    .wl-note-box {
-        background-color: #FFFBEB;
-        border: 1px solid #FDE68A;
-        color: #92400E;
-        padding: 7px 10px;
-        border-radius: 8px;
-        font-size: 0.78rem;
-        line-height: 1.35;
-    }
-    .wl-room-chip {
-        cursor: pointer;
-        user-select: none;
-        padding: 5px 11px;
-        border-radius: 999px;
-        font-size: 0.76rem;
-        font-weight: 700;
-        border: 1.5px solid #CBD5E1;
-        background: #F8FAFC;
-        color: #334155;
-        transition: all 0.15s ease;
-    }
-    .wl-room-chip.active {
-        background: #0F2942;
-        color: #2DD4BF;
-        border-color: #0F2942;
-    }
-    .deploy-rooms-grid {
-        display: grid;
-        grid-template-columns: repeat(8, 1fr);
-        gap: 8px;
-    }
-    @media (max-width: 991.98px) {
-        .deploy-rooms-grid {
-            grid-template-columns: repeat(4, 1fr);
-        }
-    }
-    @media (max-width: 575.98px) {
-        .deploy-rooms-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-    .deploy-room-card {
-        border: 2px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 9px 6px;
-        text-align: center;
-        cursor: pointer;
-        background: #F8FAFC;
-        transition: all 0.18s ease;
-    }
-    .deploy-room-card:hover {
-        border-color: #0D9488;
-        transform: translateY(-1px);
-    }
-    .deploy-room-card.active {
-        border-color: #0D9488;
-        background: #F0FDFA;
-        box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
-    }
-    .deploy-room-card.done {
-        border-color: #22C55E;
-        background: #F0FDF4;
-    }
-    .deploy-step-item {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 8px 10px;
-        border-radius: 9px;
-        border: 1px solid #E2E8F0;
-        background: #F8FAFC;
-        cursor: pointer;
-        transition: all 0.12s ease;
-        margin-bottom: 6px;
-    }
-    .deploy-step-item:hover {
-        border-color: #94A3B8;
-        background: #F1F5F9;
-    }
-    .deploy-step-item.checked {
-        background: #F0FDF4;
-        border-color: #BBF7D0;
-    }
-    .deploy-step-item.sub-step {
-        margin-left: 18px;
-        background: #FFFFFF;
-        border-left: 3.5px solid #0D9488;
-    }
-    .deploy-step-item.sub-step.checked {
-        background: #F0FDF4;
-        border-left-color: #22C55E;
-    }
-    .deploy-step-item.checked .deploy-step-title {
-        text-decoration: line-through;
-        color: #15803D;
-    }
-    .deploy-code-pill {
-        display: inline-block;
-        background: #E2E8F0;
-        color: #0F2942;
-        font-family: monospace;
-        font-weight: 700;
-        font-size: 0.75rem;
-        padding: 1px 6px;
-        border-radius: 4px;
-    }
-    .deploy-secret-pill {
-        display: inline-block;
-        background: #FEF3C7;
-        color: #92400E;
-        border: 1px solid #FDE68A;
-        font-family: monospace;
-        font-weight: 700;
-        font-size: 0.75rem;
-        padding: 1px 6px;
-        border-radius: 4px;
-    }
-</style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_panel.css') }}">
 {% set active_tab = request.args.get('tab', 'dashboard') %}
 {% set pending_issues = issues|selectattr("status", "in", ["Pending", "Processing"])|list %}
 {% set pending_cancellations = cancellations|selectattr("status", "in", ["Pending", "Processing"])|list %}
@@ -766,60 +161,373 @@
                         {% if dashboard_stats['offline_rooms_list'] %}
                             <span class="text-danger fw-bold">{{ dashboard_stats['offline_rooms_list']|join(', ') }} mất kết nối</span>
                         {% else %}
-                            <span class="text-success fw-semibold">Tất cả phòng kết nối ổn định</span>
+                            <span class="text-success fw-semibold">{{ dashboard_stats['open_active_count'] }} mở học • {{ dashboard_stats['lan_idle_count'] }} bật Switch • {{ dashboard_stats['closed_cb_count'] }} tắt CB</span>
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- HÀNG 2: LIVE STATUS PAGE — TÌNH TRẠNG INTERNET (B42LAB NETAGENT) & HOẠT ĐỘNG 8 PHÒNG -->
+        <!-- [#QTTB-03] HÀNG 2: TRUNG TÂM GIÁM SÁT 8 ROUTER GRANDSTREAM (GCC6010 & GWN7062G) -->
         <div class="dash-section-card mb-3">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                 <div>
-                    <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-broadcast text-primary me-1"></i>Live Status Page — Tình trạng Internet &amp; Hoạt động 8 Phòng máy</h6>
+                    <h6 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-router-fill text-primary me-1"></i>Trung tâm Giám sát Router Lab
+                    </h6>
                     <div class="text-muted" style="font-size: 0.74rem;" id="netSyncStatusText">
-                        Cơ chế: <strong>B42Lab NetAgent (Heartbeat Push)</strong> • Cập nhật lúc: <span id="lastNetUpdateLabel" class="fw-semibold text-primary">{{ dashboard_stats['last_net_update'] or 'Vừa xong' }}</span>
+                        Giao thức: <strong>WebSocket Realtime (Port 443) + Ping WAN</strong> • Cập nhật lúc:
+                        <span id="lastNetUpdateLabel" class="fw-semibold text-primary">{{ dashboard_stats['last_net_update'] or 'Vừa xong' }}</span>
                     </div>
                 </div>
                 <div class="d-flex flex-wrap align-items-center gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-success fw-bold py-1 px-2.5" style="font-size: 0.75rem;" id="btnPingNow" onclick="triggerPingNow()">
-                        <i class="bi bi-activity me-1"></i>Ping kiểm tra ngay
+                    <button type="button" class="btn btn-sm btn-outline-primary fw-bold py-1 px-2.5" style="font-size: 0.75rem;" onclick="openRouterConfigModal()">
+                        <i class="bi bi-gear-fill me-1"></i>Cấu hình IP WAN / Port / Account
+                    </button>
+                    <button type="button" class="btn btn-sm btn-success fw-bold py-1 px-2.5" style="font-size: 0.75rem;" id="btnPingNow" onclick="triggerPingNow()">
+                        <i class="bi bi-arrow-repeat me-1"></i>Quét Realtime 8 Router
                     </button>
                 </div>
             </div>
 
-            <!-- Lưới 8 Phòng máy (4 cột trên Desktop, 2 cột trên Mobile) -->
+            <!-- Lưới 8 Thẻ Router Phòng máy (Lớp 1) -->
             <div class="room-status-grid" id="roomStatusGrid">
                 {% for rc in dashboard_stats['room_live_cards'] %}
+                {% set safe_id = rc['room']|replace('.', '_') %}
                 {% set is_off = (rc['net_status'] == 'offline') %}
-                {% set is_high_ping = (rc['net_status'] == 'online' and rc['ping_ms'] and rc['ping_ms'] > 150) %}
-                <div class="room-node {% if is_off %}status-offline{% elif is_high_ping %}status-warn{% else %}status-online{% endif %}" id="room-node-{{ rc['room']|replace('.', '_') }}" data-room="{{ rc['room'] }}">
+                {% set r_state = rc['room_state'] or 'wan_ping_only' %}
+                <div class="room-node {% if is_off %}status-offline{% elif r_state == 'closed_cb_off' %}status-warn{% else %}status-online{% endif %} p-2.5"
+                     id="room-node-{{ safe_id }}"
+                     data-room="{{ rc['room'] }}"
+                     style="cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease;"
+                     onclick="openRouterDetailModal('{{ rc['room'] }}')">
+                    <!-- Hàng 1: Tên Phòng + Model Badge -->
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <div>
-                            <strong style="font-size: 0.86rem;">Phòng {{ rc['room'] }}</strong>
-                            <span class="text-muted d-none d-xl-inline ms-1" style="font-size: 0.65rem;" id="room-ip-{{ rc['room']|replace('.', '_') }}">({{ rc['target_ip'] }})</span>
+                        <div class="d-flex align-items-center gap-1">
+                            <strong style="font-size: 0.9rem; color: #0F172A;">Phòng {{ rc['room'] }}</strong>
+                            <span class="badge bg-dark text-info fw-semibold" style="font-size: 0.63rem;" id="room-model-{{ safe_id }}">{{ rc['router_model'] }}</span>
                         </div>
-                        {% if is_off %}
-                            <span class="ping-pill ping-err" id="room-ping-{{ rc['room']|replace('.', '_') }}">Offline</span>
-                        {% elif is_high_ping %}
-                            <span class="ping-pill ping-warn" id="room-ping-{{ rc['room']|replace('.', '_') }}">{{ rc['ping_ms'] }}ms</span>
-                        {% else %}
-                            <span class="ping-pill ping-ok" id="room-ping-{{ rc['room']|replace('.', '_') }}">{{ rc['ping_ms'] or 12 }}ms</span>
-                        {% endif %}
+                        <span class="ping-pill {% if is_off %}ping-err{% elif r_state == 'closed_cb_off' %}ping-warn{% else %}ping-ok{% endif %}" id="room-ping-{{ safe_id }}">
+                            {% if is_off %}Offline{% else %}{{ rc['ping_ms'] or 12 }}ms{% endif %}
+                        </span>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center gap-1">
-                        <div class="{{ rc['activity_class'] }} text-truncate" style="font-size: 0.73rem;" title="{{ rc['activity_label'] }}">
-                            {{ rc['activity_label'] }}
-                        </div>
-                        {% if rc['issue_count'] > 0 %}
-                        <a href="{{ url_for('admin_panel', tab='issues') }}" class="badge bg-warning bg-opacity-25 text-dark border border-warning text-decoration-none" style="font-size: 0.62rem;" title="Phòng này đang có {{ rc['issue_count'] }} báo cáo sự cố thiết bị chưa đóng ở Tab Sự cố">
-                            {{ rc['issue_count'] }} sự cố
-                        </a>
-                        {% endif %}
+
+                    <!-- Hàng 2: Nhãn Trạng thái thông minh (4 mức) -->
+                    <div class="mb-1.5">
+                        <span id="room-state-badge-{{ safe_id }}"
+                              class="badge w-100 text-start py-1 px-2 fw-semibold text-wrap lh-sm {% if r_state == 'open_active' %}bg-success-subtle text-success border border-success-subtle{% elif r_state == 'closed_cb_off' %}bg-warning-subtle text-warning-emphasis border border-warning-subtle{% elif r_state == 'offline' %}bg-danger-subtle text-danger border border-danger-subtle{% else %}bg-info-subtle text-info-emphasis border border-info-subtle{% endif %}"
+                              style="font-size: 0.7rem;">
+                            ● {{ rc['room_state_label'] }}
+                        </span>
+                    </div>
+
+                    <!-- Hàng 3: IP WAN & IP LAN -->
+                    <div class="text-muted text-break lh-sm mb-1" style="font-size: 0.69rem;" id="room-ip-{{ safe_id }}">
+                        WAN: <strong class="text-dark">{{ rc['target_ip'] }}:{{ rc['https_port'] }}</strong> • LAN: <span class="text-secondary">{{ rc['lan_ip'] }}</span>
+                    </div>
+
+                    <!-- Hàng 4: Băng thông Down/Up & Thiết bị -->
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-1" style="font-size: 0.71rem;" id="room-bw-{{ safe_id }}">
+                        <span class="fw-semibold text-teal" style="color: #0F766E;">
+                            ⬇ {{ rc['rx_rate_str'] }} | ⬆ {{ rc['tx_rate_str'] }}
+                        </span>
+                        <span class="text-muted" style="font-size: 0.67rem;" id="room-clients-{{ safe_id }}">
+                            PC: <strong>{{ rc['online_clients'] }}</strong> (ARP: {{ rc['arp_count'] }})
+                        </span>
+                    </div>
+
+                    <!-- Hàng 5: Thông tin Ca học / Môn / Thời gian sử dụng + Chi tiết -->
+                    <div class="d-flex justify-content-between align-items-center pt-1 border-top gap-1" style="font-size: 0.68rem;">
+                        {% set ls = rc.get('live_session') or {} %}
+                        <span class="text-muted text-truncate" id="room-sys-{{ safe_id }}">
+                            {% if ls.get('subject_name') %}
+                                {{ ls['ca_label'] }} • {{ ls['subject_name'] }}{% if ls.get('department') %} ({{ ls['department'] }}){% endif %} • {{ ls['active_duration_str'] }}
+                            {% elif rc['cpu_usage'] or rc['mem_usage'] %}
+                                CPU {{ rc['cpu_usage'] }}% • RAM {{ rc['mem_usage'] }}% • {{ rc['temp_c'] }}°C
+                            {% else %}
+                                {{ ls.get('ca_label') or rc['activity_label'] }} • {{ ls.get('active_duration_str', '0 phút') }}
+                            {% endif %}
+                        </span>
+                        <span class="text-primary fw-bold flex-shrink-0" style="font-size: 0.68rem;">
+                            Chi tiết &raquo;
+                        </span>
                     </div>
                 </div>
                 {% endfor %}
+            </div>
+
+            <!-- Thanh Cấu hình 4 Ca học & Xuất Báo cáo Hiệu suất Sử dụng PC -->
+            <div class="mt-3 pt-3 border-top">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <div class="fw-bold text-dark" style="font-size: 0.82rem;">
+                        <i class="bi bi-clock-fill text-primary me-1"></i>Cấu hình Giờ 4 Ca học &amp; Xuất Báo cáo Sử dụng PC (Kế thừa TKB + Đơn vị)
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-1">
+                        <a href="{{ url_for('export_usage_report', mode='week') }}" class="btn btn-sm btn-outline-success fw-bold py-1 px-2" style="font-size: 0.72rem;">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Báo cáo Tuần
+                        </a>
+                        <a href="{{ url_for('export_usage_report', mode='month') }}" class="btn btn-sm btn-outline-primary fw-bold py-1 px-2" style="font-size: 0.72rem;">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Báo cáo Tháng
+                        </a>
+                        <a href="{{ url_for('export_usage_report', mode='semester') }}" class="btn btn-sm btn-outline-dark fw-bold py-1 px-2" style="font-size: 0.72rem;">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Báo cáo Học kỳ
+                        </a>
+                    </div>
+                </div>
+                <form action="{{ url_for('save_ca_time_config') }}" method="POST" class="row g-2 align-items-end">
+                    <input type="hidden" name="return_tab" value="dashboard">
+                    {% for slot in [1, 2, 3, 4] %}
+                    <div class="col-6 col-md-3 col-xl">
+                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.7rem;">Ca {{ slot }} (BĐ - KT)</label>
+                        <div class="input-group input-group-sm">
+                            <input type="time" class="form-control px-1" name="ca{{ slot }}_start" value="{{ dashboard_stats['ca_times'][slot]['start'] }}" required style="font-size:0.72rem;">
+                            <input type="time" class="form-control px-1" name="ca{{ slot }}_end" value="{{ dashboard_stats['ca_times'][slot]['end'] }}" required style="font-size:0.72rem;">
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div class="col-12 col-xl-auto">
+                        <button type="submit" class="btn btn-sm btn-primary fw-bold w-100 px-3 py-1" style="font-size: 0.74rem;">
+                            <i class="bi bi-save me-1"></i>Lưu giờ 4 Ca
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- [#QTTB-03] LỚP 2: MODAL CHI TIẾT ROUTER & DANH SÁCH MÁY (COMPUTER NAME TỪ DHCP) -->
+        <div class="modal fade" id="routerDetailModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                    <div class="modal-header text-white py-2.5 px-3 px-md-4" style="background: linear-gradient(135deg, #0F172A 0%, #0F2942 100%);">
+                        <div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary" style="font-size: 0.68rem;" id="rdModalModelBadge">GCC6010</span>
+                                <h6 class="modal-title fw-bold mb-0" id="rdModalTitle">CHI TIẾT ROUTER PHÒNG 5.2</h6>
+                            </div>
+                            <small class="text-white-50" style="font-size: 0.73rem;" id="rdModalSub">WAN: 10.29.37.54:443 • LAN: 192.168.54.1/24</small>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-info py-1 px-2.5 fw-bold" style="font-size: 0.73rem;" id="rdBtnScanSingle" onclick="scanSingleRouterFromModal()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Làm mới phòng này
+                            </button>
+                            {% if is_super_admin %}
+                            <button type="button" class="btn btn-sm btn-danger py-1 px-2.5 fw-bold" style="font-size: 0.73rem;" id="rdBtnReboot" onclick="triggerRebootRouterFromModal()">
+                                <i class="bi bi-power me-1"></i>Reboot Router
+                            </button>
+                            {% endif %}
+                            <button type="button" class="btn-close btn-close-white ms-1" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                    </div>
+                    <div class="modal-body p-3 bg-light">
+                        <div class="row g-3">
+                            <!-- Cột trái: Sơ đồ Cổng Vật Lý & Thông số Phần cứng -->
+                            <div class="col-12 col-lg-5">
+                                <div class="card border-0 shadow-sm rounded-3 mb-3">
+                                    <div class="card-body p-3">
+                                        <div class="fw-bold text-dark mb-1" style="font-size: 0.84rem;">
+                                            <i class="bi bi-ethernet text-primary me-1"></i>1. Sơ đồ Trạng thái Cổng Vật Lý (get|port info)
+                                        </div>
+                                        <div class="text-muted mb-2" style="font-size: 0.72rem;">
+                                            Giúp nhận biết ngay Switch nội bộ trong phòng đang bật (<span class="text-success fw-bold">UP</span>) hay đã tắt CB phòng (<span class="text-secondary fw-bold">DOWN</span>)
+                                        </div>
+                                        <div id="rdPortsGrid" class="d-flex flex-wrap gap-2 mb-2"></div>
+                                        <div id="rdDiagnosticBox" class="alert alert-warning py-2 px-2.5 mb-0 rounded-3 border-warning" style="font-size: 0.74rem;"></div>
+                                    </div>
+                                </div>
+
+                                <div class="card border-0 shadow-sm rounded-3">
+                                    <div class="card-body p-3">
+                                        <div class="fw-bold text-dark mb-2" style="font-size: 0.84rem;">
+                                            <i class="bi bi-cpu text-primary me-1"></i>2. Thông số Phần cứng &amp; Lưu lượng WAN
+                                        </div>
+                                        <div class="row g-2" id="rdMetricsGrid"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Cột phải: Bảng Thiết bị trong phòng (Computer Name từ DHCP + Clients + ARP) -->
+                            <div class="col-12 col-lg-7">
+                                <div class="card border-0 shadow-sm rounded-3 h-100">
+                                    <div class="card-body p-3 d-flex flex-column">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                            <div>
+                                                <div class="fw-bold text-dark" style="font-size: 0.84rem;">
+                                                    <i class="bi bi-pc-display text-primary me-1"></i>3. Danh sách Máy tính (Lọc theo MAC OUI &amp; Computer Name)
+                                                </div>
+                                                <div class="text-muted" style="font-size: 0.71rem;" id="rdDevicesSummaryLabel">
+                                                    Mặc định chỉ hiển thị PC cố định của phòng máy; bật nút gạt bên cạnh nếu muốn xem thiết bị Wi-Fi/khác
+                                                </div>
+                                            </div>
+                                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                                <div class="form-check form-switch mb-0 d-flex align-items-center gap-1" style="font-size: 0.71rem;">
+                                                    <input class="form-check-input mt-0" type="checkbox" role="switch" id="rdShowOtherDevicesToggle" onchange="renderRouterModalDevices()" style="cursor:pointer;">
+                                                    <label class="form-check-label text-muted fw-semibold" for="rdShowOtherDevicesToggle" style="cursor:pointer;">
+                                                        Hiện thiết bị khác / Wi-Fi (<span id="rdOtherCount">0</span>)
+                                                    </label>
+                                                </div>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <button type="button" class="btn btn-outline-primary active py-0 px-2" style="font-size: 0.72rem;" id="rdFilterAllBtn" onclick="setRouterDeviceFilter('all')">
+                                                        Tất cả (<span id="rdCountAll">0</span>)
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-primary py-0 px-2" style="font-size: 0.72rem;" id="rdFilterOnlineBtn" onclick="setRouterDeviceFilter('online')">
+                                                        Online (<span id="rdCountOnline">0</span>)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-2">
+                                            <input type="text" id="rdDeviceSearchInput" class="form-control form-control-sm" style="font-size: 0.75rem;" placeholder="🔍 Tìm nhanh theo Computer Name, Địa chỉ IP (VD: 192.168.54.73) hoặc MAC..." oninput="renderRouterModalDevices()">
+                                        </div>
+
+                                        <div class="table-responsive" style="max-height: 335px; overflow-y: auto;">
+                                            <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.75rem;">
+                                                <thead class="table-dark sticky-top">
+                                                    <tr>
+                                                        <th style="width: 42px;">STT</th>
+                                                        <th>Computer Name</th>
+                                                        <th>Địa chỉ IP LAN</th>
+                                                        <th>Địa chỉ MAC</th>
+                                                        <th>Phân loại</th>
+                                                        <th>Cổng / Nguồn</th>
+                                                        <th class="text-end">Tốc độ / Lưu lượng</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="rdDevicesTableBody"></tbody>
+                                            </table>
+                                        </div>
+
+                                        <div class="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 border-top" style="font-size: 0.73rem;">
+                                            <span class="text-muted fw-bold text-nowrap"><i class="bi bi-hdd-rack me-1 text-primary"></i>OUI MAC PC chuẩn:</span>
+                                            <input type="text" id="rdPcMacOuisInput" class="form-control form-control-sm font-monospace flex-grow-1" style="font-size: 0.72rem; min-width: 190px;" value="{{ dashboard_stats['pc_mac_ouis'] }}" placeholder="VD: 4C:D7:17,00:68:EB,80:E8:2C">
+                                            <button type="button" class="btn btn-sm btn-success fw-bold px-2.5 py-1" style="font-size: 0.72rem;" id="rdBtnSaveOuis" onclick="savePcMacOuisFromModal()">
+                                                <i class="bi bi-check2 me-1"></i>Lưu &amp; Quét lại
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- [#QTTB-03] MODAL CẤU HÌNH NHANH IP WAN / PORT / MODEL / ACCOUNT CHO 8 ROUTER -->
+        <div class="modal fade" id="routerConfigModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                    <form action="{{ url_for('save_network_config') }}" method="POST">
+                        <input type="hidden" name="return_tab" value="overview">
+                        <div class="modal-header text-white py-2.5 px-4" style="background: #0F2942;">
+                            <h6 class="modal-title fw-bold mb-0">
+                                <i class="bi bi-sliders me-1 text-info"></i>Cấu hình Kết nối 8 Router (2 GCC6010 &amp; 6 AirPro UTM)
+                            </h6>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-3 p-md-4 bg-light">
+                            <!-- Khung 1A: Tài khoản Admin 1 - Grandstream GCC6010 -->
+                            <div class="p-3 rounded-3 bg-white border mb-2">
+                                <div class="fw-bold text-primary small mb-2">
+                                    <i class="bi bi-key-fill me-1"></i>1A. Tài khoản Admin cụm Grandstream GCC6010 (Phòng 5.2 &amp; 6.3):
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.73rem;">Username Admin</label>
+                                        <input type="text" class="form-control form-control-sm fw-semibold" name="router_admin_user" value="{{ dashboard_stats['router_admin_user'] or 'admin' }}" required>
+                                    </div>
+                                    <div class="col-12 col-md-5">
+                                        <label class="form-label text-muted fw-bold mb-1 d-flex justify-content-between align-items-center" style="font-size: 0.73rem;">
+                                            <span>Password Admin</span>
+                                            {% if dashboard_stats['router_admin_pass_set'] %}
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">Đã lưu (Mã hóa)</span>
+                                            {% endif %}
+                                        </label>
+                                        <input type="password" class="form-control form-control-sm fw-semibold" name="router_admin_pass" value="" autocomplete="new-password" placeholder="{{ '•••••••• (Để trống nếu giữ nguyên)' if dashboard_stats['router_admin_pass_set'] else 'Nhập mật khẩu GCC6010...' }}">
+                                    </div>
+                                    <div class="col-12 col-md-3">
+                                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.73rem;">Port HTTPS mặc định</label>
+                                        <input type="number" class="form-control form-control-sm fw-semibold" name="router_default_port" value="{{ dashboard_stats['router_default_port'] or 443 }}" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Khung 1B: Tài khoản Admin 2 - AirPro UTM -->
+                            <div class="p-3 rounded-3 bg-white border mb-3">
+                                <div class="fw-bold text-success small mb-2">
+                                    <i class="bi bi-shield-lock-fill me-1"></i>1B. Tài khoản Admin cụm Router AirPro UTM (6 phòng: 5.1, 5.3, 6.1, 6.2, 6.5, 6.6):
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.73rem;">Username AirPro</label>
+                                        <input type="text" class="form-control form-control-sm fw-semibold" name="airpro_admin_user" value="{{ dashboard_stats['airpro_admin_user'] or 'admin' }}" required>
+                                    </div>
+                                    <div class="col-12 col-md-5">
+                                        <label class="form-label text-muted fw-bold mb-1 d-flex justify-content-between align-items-center" style="font-size: 0.73rem;">
+                                            <span>Password AirPro</span>
+                                            {% if dashboard_stats['airpro_admin_pass_set'] %}
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">Đã lưu (Mã hóa)</span>
+                                            {% endif %}
+                                        </label>
+                                        <input type="password" class="form-control form-control-sm fw-semibold" name="airpro_admin_pass" value="" autocomplete="new-password" placeholder="{{ '•••••••• (Để trống nếu giữ nguyên)' if dashboard_stats['airpro_admin_pass_set'] else 'Nhập mật khẩu AirPro...' }}">
+                                    </div>
+                                    <div class="col-12 col-md-3">
+                                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.73rem;">Port HTTP mặc định</label>
+                                        <input type="number" class="form-control form-control-sm fw-semibold" name="airpro_default_port" value="{{ dashboard_stats['airpro_default_port'] or 80 }}" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Khung 2: Địa chỉ IP WAN, Port & Dòng thiết bị của từng phòng -->
+                            <div class="p-3 rounded-3 bg-white border">
+                                <div class="fw-bold text-primary small mb-2">
+                                    <i class="bi bi-hdd-network me-1"></i>2. Địa chỉ IP WAN Remote, Cổng Web &amp; Model từng phòng:
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0" style="font-size: 0.76rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Phòng</th>
+                                                <th>Địa chỉ IP WAN Remote</th>
+                                                <th style="width: 110px;">Port (80/443)</th>
+                                                <th style="width: 190px;">Dòng Router (Model)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for rc in dashboard_stats['room_live_cards'] %}
+                                            <tr>
+                                                <td class="fw-bold text-dark">Phòng {{ rc['room'] }}</td>
+                                                <td>
+                                                    <input type="text" class="form-control form-control-sm fw-semibold text-primary" name="ip_{{ rc['room'] }}" value="{{ rc['target_ip'] }}" required>
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" name="port_{{ rc['room'] }}" value="{{ rc['https_port'] or (80 if rc['router_model'] == 'AIRPRO' else 443) }}" required>
+                                                </td>
+                                                <td>
+                                                    <select class="form-select form-select-sm" name="model_{{ rc['room'] }}">
+                                                        <option value="AIRPRO" {% if rc['router_model'] == 'AIRPRO' %}selected{% endif %}>AirPro UTM (HTTP)</option>
+                                                        <option value="GCC6010" {% if rc['router_model'] == 'GCC6010' %}selected{% endif %}>Grandstream GCC6010</option>
+                                                        <option value="GWN7062G" {% if rc['router_model'] == 'GWN7062G' %}selected{% endif %}>Grandstream GWN7062G</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="text-muted mt-2" style="font-size: 0.72rem;">
+                                    💡 <strong>Lưu ý:</strong> Giao diện Web của <strong>AirPro</strong> có mã CAPTCHA ở màn hình đăng nhập nên hệ thống tự động giám sát Ping + Port HTTP; nếu muốn đọc sâu băng thông &amp; ARP trên AirPro, hãy bật <strong>SNMPv2c</strong> trong mục cài đặt của AirPro.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-white py-2 px-4">
+                            <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Đóng</button>
+                            <button type="submit" class="btn btn-sm btn-primary fw-bold px-4">
+                                <i class="bi bi-check2-circle me-1"></i>Lưu cấu hình 8 Router
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 
@@ -1607,7 +1315,7 @@
                                         <div class="p-1" style="position: absolute; top: {{ block['top'] }}%; height: {{ block['height'] }}%; width: 100%; z-index: 2;">
                                             {% if mon['is_ended_early'] %}
                                             <div class="tt-course-card tt-theme-ended">
-                                                <div class="d-flex justify-content-between align-items-center gap-1 mb-1">
+                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-1">
                                                     <span class="badge bg-danger text-white" style="font-size: 0.61rem;">KHÓA CỬA • KT SỚM</span>
                                                     <span class="badge bg-secondary text-white" style="font-size: 0.61rem;">Dừng T.{{ mon['stopped_week'] }}/{{ mon['num_weeks'] }}</span>
                                                 </div>
@@ -1634,7 +1342,7 @@
                                             </div>
                                             {% elif mon['is_cancelled_on_date'] %}
                                             <div class="tt-course-card tt-theme-ended">
-                                                <div class="d-flex justify-content-between align-items-center gap-1 mb-1">
+                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-1">
                                                     <span class="badge bg-danger text-white" style="font-size: 0.61rem;">KHÓA CỬA • BÁO VẮNG</span>
                                                     <span class="badge bg-secondary text-white" style="font-size: 0.61rem;">Nghỉ {{ dh['short_date'] }}</span>
                                                 </div>
@@ -1652,7 +1360,7 @@
                                             </div>
                                             {% else %}
                                             <div class="tt-course-card {{ card_theme }}">
-                                                <div class="d-flex justify-content-between align-items-center gap-1 mb-1">
+                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-1">
                                                     <span class="badge {{ badge_bg }} text-white" style="font-size: 0.62rem;">MỞ PHÒNG</span>
                                                     <span class="badge bg-white {{ badge_outline }} border" style="font-size: 0.62rem;">Tuần {{ mon['week_num'] }} / {{ mon['num_weeks'] }}</span>
                                                 </div>
@@ -2191,28 +1899,84 @@
                 <div class="card border-0 shadow-sm rounded-4 h-100">
                     <div class="card-header bg-white py-3 px-3 px-md-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
-                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-hdd-network text-primary me-1"></i>1. Cấu hình Giám sát Mạng 8 Phòng (B42Lab NetAgent)</h6>
-                            <small class="text-muted">Thiết lập địa chỉ IP Ping &amp; tải script đẩy trạng thái mạng từ Trường</small>
+                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-router text-primary me-1"></i>1. Cấu hình 8 Router (GCC6010 &amp; AirPro UTM)</h6>
+                            <small class="text-muted">Thiết lập IP WAN, Port, Dòng thiết bị &amp; 2 Tài khoản Admin Router</small>
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-success fw-bold py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="triggerPingNow()">
-                            Ping kiểm tra ngay
+                            Quét 8 Router ngay
                         </button>
                     </div>
                     <div class="card-body p-3 p-md-4 bg-light">
                         <form action="{{ url_for('save_network_config') }}" method="POST">
                             <input type="hidden" name="return_tab" value="settings">
                             <div class="p-3 rounded-3 bg-white border mb-3">
-                                <div class="fw-bold text-dark small mb-2">Địa chỉ IP thiết bị đại diện của từng Phòng máy (Router / Switch / Máy giáo viên):</div>
+                                <div class="fw-bold text-primary small mb-2">Tài khoản Admin 1 — Grandstream GCC6010 (P.5.2 &amp; P.6.3):</div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-4">
+                                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.72rem;">Username</label>
+                                        <input type="text" class="form-control form-control-sm fw-semibold" name="router_admin_user" value="{{ dashboard_stats['router_admin_user'] or 'admin' }}">
+                                    </div>
+                                    <div class="col-5">
+                                        <label class="form-label text-muted fw-bold mb-1 d-flex justify-content-between align-items-center" style="font-size: 0.72rem;">
+                                            <span>Password</span>
+                                            {% if dashboard_stats['router_admin_pass_set'] %}
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.62rem;">Mã hóa</span>
+                                            {% endif %}
+                                        </label>
+                                        <input type="password" class="form-control form-control-sm fw-semibold" name="router_admin_pass" value="" autocomplete="new-password" placeholder="{{ '•••••••• (Giữ nguyên)' if dashboard_stats['router_admin_pass_set'] else 'Nhập mật khẩu...' }}">
+                                    </div>
+                                    <div class="col-3">
+                                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.72rem;">Port HTTPS</label>
+                                        <input type="number" class="form-control form-control-sm fw-semibold" name="router_default_port" value="{{ dashboard_stats['router_default_port'] or 443 }}">
+                                    </div>
+                                </div>
+
+                                <div class="fw-bold text-success small mb-2">Tài khoản Admin 2 — AirPro UTM (6 phòng còn lại):</div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-4">
+                                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.72rem;">Username</label>
+                                        <input type="text" class="form-control form-control-sm fw-semibold" name="airpro_admin_user" value="{{ dashboard_stats['airpro_admin_user'] or 'admin' }}">
+                                    </div>
+                                    <div class="col-5">
+                                        <label class="form-label text-muted fw-bold mb-1 d-flex justify-content-between align-items-center" style="font-size: 0.72rem;">
+                                            <span>Password</span>
+                                            {% if dashboard_stats['airpro_admin_pass_set'] %}
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.62rem;">Mã hóa</span>
+                                            {% endif %}
+                                        </label>
+                                        <input type="password" class="form-control form-control-sm fw-semibold" name="airpro_admin_pass" value="" autocomplete="new-password" placeholder="{{ '•••••••• (Giữ nguyên)' if dashboard_stats['airpro_admin_pass_set'] else 'Nhập mật khẩu...' }}">
+                                    </div>
+                                    <div class="col-3">
+                                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.72rem;">Port HTTP</label>
+                                        <input type="number" class="form-control form-control-sm fw-semibold" name="airpro_default_port" value="{{ dashboard_stats['airpro_default_port'] or 80 }}">
+                                    </div>
+                                </div>
+
+                                <div class="fw-bold text-dark small mb-2">Địa chỉ IP WAN, Cổng Web &amp; Model của từng Phòng máy:</div>
                                 <div class="row g-2">
                                     {% for rc in dashboard_stats['room_live_cards'] %}
-                                    <div class="col-6 col-md-3">
-                                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.74rem;">Phòng {{ rc['room'] }}</label>
-                                        <input type="text" class="form-control form-control-sm fw-semibold text-primary" name="ip_{{ rc['room'] }}" value="{{ rc['target_ip'] }}" placeholder="VD: 192.168.1.101">
+                                    <div class="col-12 col-md-6">
+                                        <div class="p-2 rounded border bg-light">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <label class="form-label text-dark fw-bold mb-0" style="font-size: 0.76rem;">Phòng {{ rc['room'] }}</label>
+                                                <select class="form-select form-select-sm py-0 px-2" name="model_{{ rc['room'] }}" style="width: auto; font-size: 0.71rem; height: 24px;">
+                                                    <option value="AIRPRO" {% if rc['router_model'] == 'AIRPRO' %}selected{% endif %}>AirPro</option>
+                                                    <option value="GCC6010" {% if rc['router_model'] == 'GCC6010' %}selected{% endif %}>GCC6010</option>
+                                                    <option value="GWN7062G" {% if rc['router_model'] == 'GWN7062G' %}selected{% endif %}>GWN7062G</option>
+                                                </select>
+                                            </div>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text bg-white text-muted" style="font-size: 0.71rem;">IP</span>
+                                                <input type="text" class="form-control fw-semibold text-primary" name="ip_{{ rc['room'] }}" value="{{ rc['target_ip'] }}" placeholder="10.29.37.xx">
+                                                <span class="input-group-text bg-white text-muted" style="font-size: 0.71rem;">Port</span>
+                                                <input type="number" class="form-control" name="port_{{ rc['room'] }}" value="{{ rc['https_port'] or (80 if rc['router_model'] == 'AIRPRO' else 443) }}" style="max-width: 72px;">
+                                            </div>
+                                        </div>
                                     </div>
                                     {% endfor %}
                                 </div>
-                                <div class="text-muted mt-2" style="font-size: 0.74rem;">
-                                    Khi đổi IP tại đây và bấm Lưu, script <code>b42_network_agent.py</code> đang chạy ở trường sẽ tự động cập nhật danh sách IP mới này.
+                                <div class="text-muted mt-2" style="font-size: 0.73rem;">
+                                    Khi đổi IP/Port/Model tại đây và bấm Lưu, hệ thống Giám sát Realtime và script <code>b42_network_agent.py</code> sẽ tự động cập nhật theo cấu hình mới.
                                 </div>
                             </div>
 
@@ -2224,7 +1988,7 @@
                                     </a>
                                 </div>
                                 <div class="text-muted mb-2" style="font-size: 0.76rem;">
-                                    Chạy lệnh sau trên 1 máy tính ở phòng máy/phòng kỹ thuật (tự động đẩy Ping ms lên Web mỗi 30 giây):
+                                    Chạy lệnh sau trên 1 máy tính ở phòng máy/phòng kỹ thuật (tự động đẩy thông số lên Web mỗi 30 giây):
                                 </div>
                                 <div class="p-2 rounded bg-dark text-light font-monospace" style="font-size: 0.73rem; overflow-x: auto;">
                                     python b42_network_agent.py --server {{ request.host_url.rstrip('/') }} --key {{ dashboard_stats['netagent_key'] }}
@@ -2233,7 +1997,7 @@
 
                             <div class="d-flex justify-content-end">
                                 <button type="submit" class="btn btn-sm btn-primary fw-bold px-4 py-2 rounded-3 shadow-sm">
-                                    Lưu cấu hình IP
+                                    Lưu cấu hình 8 Router
                                 </button>
                             </div>
                         </form>
@@ -2618,13 +2382,14 @@
                 <div class="mobile-action-card admin-list-item-cancellations"
                      data-status="{{ can_status }}"
                      data-room="{{ req['room']|replace('Phòng ', '')|replace('P.', '')|trim }}"
-                     data-search="{{ (req['teacher_name'] ~ ' ' ~ req['room'] ~ ' ' ~ req['cancel_date'] ~ ' ' ~ req['period'] ~ ' ' ~ (req['reason'] or ''))|lower }}"
+                     data-search="{{ (req['teacher_name'] ~ ' ' ~ (req['department'] or '') ~ ' ' ~ req['room'] ~ ' ' ~ req['cancel_date'] ~ ' ' ~ (req['cancel_date'] | vn_weekday) ~ ' ' ~ req['period'] ~ ' ' ~ (req['reason'] or ''))|lower }}"
                      style="border-left: 4px solid {% if can_status == 'Approved' %}#10b981{% else %}#0dcaf0{% endif %};">
                     <div class="d-flex justify-content-between align-items-start mb-1">
-                        <div class="d-flex align-items-center gap-2">
+                        <div class="d-flex flex-wrap align-items-center gap-1">
                             <input type="checkbox" class="form-check-input item-check-cancellations m-0" value="{{ req['id'] }}" onchange="syncRowCheckbox('cancellations', this)">
                             <span class="badge bg-danger">P.{{ req['room'] }}</span>
-                            <strong style="font-size: 0.88rem;">{{ req['cancel_date'] }} • {{ req['period'] }}</strong>
+                            {% set wd_lbl = req['cancel_date'] | vn_weekday %}
+                            <strong style="font-size: 0.86rem;">{% if wd_lbl %}{{ wd_lbl }}, {% endif %}{{ req['cancel_date'] }} • {{ req['period'] }}</strong>
                         </div>
                         {% if can_status == 'Approved' %}
                             <span class="badge bg-success" style="font-size: 0.7rem;">Đã duyệt</span>
@@ -2633,7 +2398,9 @@
                         {% endif %}
                     </div>
                     <div class="mobile-action-meta">
-                        <strong>{{ req['teacher_name'] }}</strong> <span class="text-muted" style="font-size: 0.72rem;">({{ req['created_at'] | vn_datetime }})</span>
+                        <strong>{{ req['teacher_name'] }}</strong>
+                        {% if req['department'] %}<span class="badge bg-secondary-subtle text-secondary border ms-1" style="font-size:0.68rem;">{{ req['department'] }}</span>{% endif %}
+                        <span class="text-muted" style="font-size: 0.72rem;">({{ req['created_at'] | vn_datetime }})</span>
                         {% if req['email'] %}
                             <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
                                 <span class="text-primary small fw-semibold">{{ req['email'] }}</span>
@@ -2691,9 +2458,9 @@
                                 <input type="checkbox" class="form-check-input" id="selectAllDesktop-cancellations" onchange="toggleSelectAll('cancellations', this.checked)" title="Chọn tất cả">
                             </th>
                             <th class="text-center" style="width: 125px;">Thời gian gửi</th>
-                            <th style="width: 180px;">Giáo viên</th>
+                            <th style="width: 195px;">Giáo viên &amp; Đơn vị</th>
                             <th class="text-center" style="width: 95px;">Phòng</th>
-                            <th style="width: 165px;">Thời gian vắng</th>
+                            <th style="width: 175px;">Thời gian vắng</th>
                             <th>Lịch học bù &amp; Lý do</th>
                             <th class="text-center" style="width: 160px;">Trạng thái</th>
                             <th class="text-center pe-3" style="width: 80px;">Thao tác</th>
@@ -2705,7 +2472,7 @@
                         <tr class="admin-list-item-cancellations"
                             data-status="{{ can_status }}"
                             data-room="{{ req['room']|replace('Phòng ', '')|replace('P.', '')|trim }}"
-                            data-search="{{ (req['teacher_name'] ~ ' ' ~ req['room'] ~ ' ' ~ req['cancel_date'] ~ ' ' ~ req['period'] ~ ' ' ~ (req['reason'] or ''))|lower }}">
+                            data-search="{{ (req['teacher_name'] ~ ' ' ~ (req['department'] or '') ~ ' ' ~ req['room'] ~ ' ' ~ req['cancel_date'] ~ ' ' ~ (req['cancel_date'] | vn_weekday) ~ ' ' ~ req['period'] ~ ' ' ~ (req['reason'] or ''))|lower }}">
                             <td class="ps-3 text-center">
                                 <input type="checkbox" class="form-check-input item-check-cancellations" value="{{ req['id'] }}" onchange="syncRowCheckbox('cancellations', this)">
                             </td>
@@ -2713,7 +2480,8 @@
                                 <span class="small text-muted fw-semibold">{{ req['created_at'] | vn_datetime if req['created_at'] else '—' }}</span>
                             </td>
                             <td>
-                                <strong>{{ req['teacher_name'] }}</strong><br>
+                                <strong>{{ req['teacher_name'] }}</strong>
+                                {% if req['department'] %}<br><span class="badge bg-secondary-subtle text-secondary border mt-0.5" style="font-size: 0.69rem;">{{ req['department'] }}</span>{% endif %}<br>
                                 {% if req['email'] %}
                                     <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
                                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle" style="font-size: 0.69rem;" title="Email nhận kết quả">{{ req['email'] }}</span>
@@ -2733,7 +2501,8 @@
                                 <span class="badge bg-danger px-2.5 py-1.5" style="font-size: 0.8rem;">P.{{ req['room'] }}</span>
                             </td>
                             <td>
-                                <div class="fw-bold text-danger">{{ req['cancel_date'] }}</div>
+                                {% set wd_lbl = req['cancel_date'] | vn_weekday %}
+                                <div class="fw-bold text-danger">{% if wd_lbl %}{{ wd_lbl }}, {% endif %}{{ req['cancel_date'] }}</div>
                                 <span class="badge bg-light text-dark border mt-0.5">{{ req['period'] }}</span>
                             </td>
                             <td>
@@ -4361,1373 +4130,15 @@
 </div>
 
 <script>
-
-    // Cập nhật URL tải Báo cáo Tích hợp Tháng (Excel & Word) khi chọn tháng/năm
-    function updateMonthlyExportLinks() {
-        const mEl = document.getElementById('monthlyReportMonth');
-        const yEl = document.getElementById('monthlyReportYear');
-        const m = mEl ? mEl.value : 11;
-        const y = yEl ? yEl.value : 2026;
-        const btnExcel = document.getElementById('btnExportMonthlyExcel');
-        const btnWord = document.getElementById('btnExportMonthlyWord');
-        if (btnExcel) {
-            btnExcel.href = `{{ url_for('export_monthly_report_excel') }}?month=${m}&year=${y}`;
-        }
-        if (btnWord) {
-            btnWord.href = `{{ url_for('export_monthly_report_word') }}?month=${m}&year=${y}`;
-        }
-    }
-
-    // ====================================================
-    // BỘ LỌC, TÌM KIẾM & CHỌN XÓA HÀNG LOẠT (3 TAB ADMIN)
-    // ====================================================
-    const currentTabStatusFilter = {
-        requests: 'all',
-        issues: 'all',
-        cancellations: 'all'
-    };
-
-    function filterAdminList(tabName, statusVal, btnEl) {
-        currentTabStatusFilter[tabName] = statusVal;
-        const buttons = document.querySelectorAll(`button[data-tab-filter="${tabName}"]`);
-        buttons.forEach(b => {
-            b.classList.remove('active-all', 'active-open', 'active-locked');
-        });
-        if (btnEl) {
-            btnEl.classList.add('active-all');
-        }
-        applyAdminTabFilters(tabName);
-    }
-
-    function applyAdminTabFilters(tabName) {
-        const statusFilter = currentTabStatusFilter[tabName] || 'all';
-        const searchInput = document.getElementById(`searchInput-${tabName}`);
-        const roomSelect = document.getElementById(`roomFilter-${tabName}`);
-        const keyword = (searchInput ? searchInput.value : '').trim().toLowerCase();
-        const roomVal = roomSelect ? roomSelect.value : 'all';
-
-        const items = document.querySelectorAll(`.admin-list-item-${tabName}`);
-        items.forEach(item => {
-            const itemStatus = item.getAttribute('data-status') || 'Pending';
-            const itemRoom = item.getAttribute('data-room') || '';
-            const itemSearch = item.getAttribute('data-search') || '';
-
-            const matchStatus = (statusFilter === 'all') || (itemStatus === statusFilter);
-            const matchRoom = (roomVal === 'all') || (itemRoom === roomVal);
-            const matchSearch = (!keyword) || itemSearch.includes(keyword);
-
-            if (matchStatus && matchRoom && matchSearch) {
-                item.style.display = '';
-            } else {
-                item.style.display = 'none';
-            }
-        });
-        updateSelectedCount(tabName);
-    }
-
-    function syncRowCheckbox(tabName, changedCheckbox) {
-        const val = changedCheckbox.value;
-        const isChecked = changedCheckbox.checked;
-        // Đồng bộ trạng thái tích giữa thẻ Mobile và dòng Desktop của cùng 1 ID
-        document.querySelectorAll(`.item-check-${tabName}[value="${val}"]`).forEach(cb => {
-            cb.checked = isChecked;
-        });
-        updateSelectedCount(tabName);
-    }
-
-    function toggleSelectAll(tabName, isChecked) {
-        const items = document.querySelectorAll(`.admin-list-item-${tabName}`);
-        const visibleIds = new Set();
-        items.forEach(item => {
-            if (item.style.display !== 'none') {
-                const cb = item.querySelector(`.item-check-${tabName}`);
-                if (cb) visibleIds.add(cb.value);
-            }
-        });
-
-        document.querySelectorAll(`.item-check-${tabName}`).forEach(cb => {
-            if (visibleIds.has(cb.value)) {
-                cb.checked = isChecked;
-            }
-        });
-
-        const desktopAll = document.getElementById(`selectAllDesktop-${tabName}`);
-        const mobileAll = document.getElementById(`selectAllMobile-${tabName}`);
-        if (desktopAll) desktopAll.checked = isChecked;
-        if (mobileAll) mobileAll.checked = isChecked;
-
-        updateSelectedCount(tabName);
-    }
-
-    function updateSelectedCount(tabName) {
-        const selectedIds = new Set();
-        document.querySelectorAll(`.item-check-${tabName}:checked`).forEach(cb => {
-            selectedIds.add(cb.value);
-        });
-
-        const countSpan = document.getElementById(`selectedCount-${tabName}`);
-        const bulkBtn = document.getElementById(`btnBulkDelete-${tabName}`);
-        const hiddenContainer = document.getElementById(`bulkHiddenInputs-${tabName}`);
-
-        if (countSpan) countSpan.textContent = selectedIds.size;
-        if (bulkBtn) bulkBtn.disabled = (selectedIds.size === 0);
-        if (hiddenContainer) {
-            hiddenContainer.innerHTML = '';
-            selectedIds.forEach(id => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'selected_ids';
-                input.value = id;
-                hiddenContainer.appendChild(input);
-            });
-        }
-    }
-
-    function confirmBulkDelete(tabName, labelName) {
-        const selectedIds = new Set();
-        document.querySelectorAll(`.item-check-${tabName}:checked`).forEach(cb => {
-            selectedIds.add(cb.value);
-        });
-        if (selectedIds.size === 0) {
-            alert('Vui lòng tích chọn ít nhất 1 mục để xóa!');
-            return false;
-        }
-        return confirm(`⚠️ Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedIds.size} ${labelName} đã chọn không?`);
-    }
-
-    function applyScheduleFilters() {
-        const searchInput = document.getElementById('searchInput-schedules');
-        const roomSelect = document.getElementById('roomFilter-schedules');
-        const daySelect = document.getElementById('dayFilter-schedules');
-        const clearBtn = document.getElementById('btnClearSearch-schedules');
-
-        const keyword = (searchInput ? searchInput.value : '').trim().toLowerCase();
-        const roomVal = roomSelect ? roomSelect.value : 'all';
-        const dayVal = daySelect ? daySelect.value : 'all';
-
-        if (clearBtn) {
-            if (keyword || roomVal !== 'all' || dayVal !== 'all') {
-                clearBtn.classList.remove('d-none');
-            } else {
-                clearBtn.classList.add('d-none');
-            }
-        }
-
-        const rows = document.querySelectorAll('.admin-list-item-schedules');
-        let visibleCount = 0;
-
-        rows.forEach(row => {
-            const rRoom = row.getAttribute('data-room') || '';
-            const rDay = row.getAttribute('data-day') || '';
-            const rSearch = row.getAttribute('data-search') || '';
-
-            const matchRoom = (roomVal === 'all') || (rRoom === roomVal);
-            const matchDay = (dayVal === 'all') || (rDay === dayVal);
-            const matchKeyword = (!keyword) || rSearch.includes(keyword);
-
-            if (matchRoom && matchDay && matchKeyword) {
-                row.style.display = '';
-                visibleCount++;
-            } else {
-                row.style.display = 'none';
-                const cb = row.querySelector('.item-check-schedules');
-                if (cb && cb.checked) cb.checked = false;
-            }
-        });
-
-        const countEl = document.getElementById('visibleScheduleCount');
-        if (countEl) countEl.textContent = visibleCount;
-
-        const noMatchRow = document.getElementById('noScheduleMatchRow');
-        if (noMatchRow && rows.length > 0) {
-            if (visibleCount === 0) {
-                noMatchRow.classList.remove('d-none');
-            } else {
-                noMatchRow.classList.add('d-none');
-            }
-        }
-
-        const desktopAll = document.getElementById('selectAllDesktop-schedules');
-        if (desktopAll) desktopAll.checked = false;
-        updateSelectedCount('schedules');
-    }
-
-    function clearScheduleFilters() {
-        const searchInput = document.getElementById('searchInput-schedules');
-        const roomSelect = document.getElementById('roomFilter-schedules');
-        const daySelect = document.getElementById('dayFilter-schedules');
-        if (searchInput) searchInput.value = '';
-        if (roomSelect) roomSelect.value = 'all';
-        if (daySelect) daySelect.value = 'all';
-        applyScheduleFilters();
-    }
-
-    function openUpdateWeeksModal(scheduleId, subjectName, roomLabel, currentWeeks, returnTab) {
-        const form = document.getElementById('updateWeeksForm');
-        form.action = `/admin/schedule/${scheduleId}/update_weeks`;
-        document.getElementById('uw_course_label').textContent = `${subjectName} (${roomLabel})`;
-        document.getElementById('uw_num_weeks').value = currentWeeks;
-        document.getElementById('uw_return_tab').value = returnTab || 'schedules';
-        const modal = new bootstrap.Modal(document.getElementById('updateWeeksModal'));
-        modal.show();
-    }
-
-    function handleExportSemesterChange() {
-        const selectEl = document.getElementById('exportSemesterSelect');
-        if (!selectEl) return;
-        const selectedOpt = selectEl.options[selectEl.selectedIndex];
-        const val = selectEl.value;
-        const count = parseInt(selectedOpt.getAttribute('data-count') || '0', 10);
-        const yearVal = selectedOpt.getAttribute('data-year') || '';
-
-        const customBox = document.getElementById('customDateRangeBox');
-        const warnBox = document.getElementById('emptySemesterWarning');
-        const submitBtn = document.getElementById('btnSubmitExportReport');
-        const yearInput = document.getElementById('exportAcademicYearInput');
-
-        if (yearInput && yearVal) {
-            yearInput.value = yearVal;
-        }
-
-        if (customBox) {
-            if (val === 'custom') {
-                customBox.classList.remove('d-none');
-            } else {
-                customBox.classList.add('d-none');
-            }
-        }
-
-        if (warnBox && submitBtn) {
-            if (val !== 'custom' && count === 0) {
-                warnBox.classList.remove('d-none');
-                submitBtn.disabled = true;
-            } else {
-                warnBox.classList.add('d-none');
-                submitBtn.disabled = false;
-            }
-        }
-    }
-
-    // Cập nhật giao diện 8 ô Phòng máy từ API B42Lab NetAgent
-    function applyNetworkStatusData(data) {
-        if (!data || !data.room_map) return;
-        const roomsList = ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6'];
-
-        roomsList.forEach(r => {
-            const safeId = r.replace('.', '_');
-            const nodeEl = document.getElementById(`room-node-${safeId}`);
-            const pingEl = document.getElementById(`room-ping-${safeId}`);
-            const ipEl = document.getElementById(`room-ip-${safeId}`);
-            const info = data.room_map[r];
-            if (!info || !nodeEl || !pingEl) return;
-
-            if (ipEl && info.target_ip) {
-                ipEl.textContent = `(${info.target_ip})`;
-            }
-
-            nodeEl.classList.remove('status-online', 'status-warn', 'status-offline');
-            pingEl.classList.remove('ping-ok', 'ping-warn', 'ping-err', 'ping-wait');
-
-            if (info.status === 'online') {
-                const pingVal = info.ping_ms != null ? `${Math.round(info.ping_ms)}ms` : 'Online';
-                if (info.ping_ms != null && info.ping_ms > 150) {
-                    nodeEl.classList.add('status-warn');
-                    pingEl.classList.add('ping-warn');
-                    pingEl.textContent = pingVal;
-                } else {
-                    nodeEl.classList.add('status-online');
-                    pingEl.classList.add('ping-ok');
-                    pingEl.textContent = pingVal;
-                }
-            } else {
-                nodeEl.classList.add('status-offline');
-                pingEl.classList.add('ping-err');
-                pingEl.textContent = 'Offline';
-            }
-        });
-
-        const kpiVal = document.getElementById('kpiNetworkVal');
-        const kpiSub = document.getElementById('kpiNetworkSub');
-        const lastLbl = document.getElementById('lastNetUpdateLabel');
-
-        if (lastLbl && data.last_update) {
-            lastLbl.textContent = data.last_update;
-        }
-        if (kpiVal) {
-            const hasOff = (data.offline_rooms && data.offline_rooms.length > 0);
-            kpiVal.innerHTML = `${data.online_count}/${data.total_rooms || 8} <span class="fs-6 fw-semibold ${hasOff ? 'text-danger' : 'text-success'}">Online</span>`;
-        }
-        if (kpiSub) {
-            if (data.offline_rooms && data.offline_rooms.length > 0) {
-                kpiSub.innerHTML = `<span class="text-danger fw-bold">${data.offline_rooms.join(', ')} mất kết nối</span>`;
-            } else {
-                kpiSub.innerHTML = `<span class="text-success fw-semibold">Tất cả phòng kết nối ổn định</span>`;
-            }
-        }
-    }
-
-    function updateBookingSwitchHint(el) {
-        const hint = document.getElementById('bookingSwitchLabel');
-        if (!hint) return;
-        if (el.checked) {
-            hint.innerHTML = '<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill me-1"></i>Đang MỞ:</span> Giảng viên có thể truy cập trang và gửi đơn mượn phòng bình thường.';
-        } else {
-            hint.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-lock-fill me-1"></i>Đang KHÓA:</span> Giảng viên sẽ thấy màn hình thông báo tạm ngưng và không thể gửi đơn.';
-        }
-    }
-
-    async function syncNetworkStatus() {
-        try {
-            const res = await fetch('/api/network-status');
-            const data = await res.json();
-            if (data && data.success) {
-                applyNetworkStatusData(data);
-            }
-        } catch (err) {
-            console.warn('Network status sync error:', err);
-        }
-    }
-
-    async function triggerPingNow() {
-        const btn = document.getElementById('btnPingNow');
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Đang đo Ping 8 phòng...';
-        }
-        try {
-            await fetch('/admin/network-ping-now', { method: 'POST' });
-            await syncNetworkStatus();
-        } catch (err) {
-            console.error(err);
-        } finally {
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="bi bi-activity me-1"></i>Ping kiểm tra ngay';
-            }
-        }
-    }
-
-    // Activate tab based on URL parameter & start auto-sync
-    document.addEventListener("DOMContentLoaded", function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const activeTab = urlParams.get('tab');
-        if (activeTab) {
-            const tabButton = document.querySelector(`button[data-bs-target="#${activeTab}"]`);
-            if (tabButton) {
-                const tab = new bootstrap.Tab(tabButton);
-                tab.show();
-            }
-        }
-        handleExportSemesterChange();
-        
-        // Auto-calculate OT hours from start and end time
-        const sInput = document.getElementById('ot_start_time');
-        const eInput = document.getElementById('ot_end_time');
-        const hInput = document.getElementById('ot_hours');
-        function calcOtHours() {
-            if (sInput && eInput && hInput && sInput.value && eInput.value) {
-                const [sh, sm] = sInput.value.split(':').map(Number);
-                const [eh, em] = eInput.value.split(':').map(Number);
-                let diff = (eh * 60 + em) - (sh * 60 + sm);
-                if (diff < 0) diff += 24 * 60;
-                const hours = Math.round((diff / 60) * 10) / 10;
-                if (hours > 0) hInput.value = hours;
-            }
-        }
-        if (sInput && eInput) {
-            sInput.addEventListener('change', calcOtHours);
-            eInput.addEventListener('change', calcOtHours);
-        }
-
-        // Lắng nghe sự kiện chuyển Tab để cập nhật URL và reset lại bộ đếm reload 30s
-        const tabBtns = document.querySelectorAll('#adminTabs button[data-bs-toggle="tab"]');
-        tabBtns.forEach(btn => {
-            btn.addEventListener('shown.bs.tab', function(e) {
-                const targetId = (e.target.getAttribute('data-bs-target') || '').replace('#', '');
-                const url = new URL(window.location.href);
-                url.searchParams.set('tab', targetId);
-                history.replaceState(null, '', url.toString());
-                
-                autoReloadSeconds = 30;
-                updateAutoReloadUI();
-            });
-        });
-
-        startAutoReloadWatcher();
-        setInterval(syncNetworkStatus, 15000);
-        initDeployChecklistUI();
-        applyContributorReadOnlyLock();
-    });
-
-    const IS_CONTRIBUTOR_READONLY = {{ (is_contributor or false) | tojson }};
-
-    function applyContributorReadOnlyLock() {
-        if (!IS_CONTRIBUTOR_READONLY) return;
-
-        // Vô hiệu hóa tất cả các form POST (thêm, sửa, duyệt, xóa, lưu cấu hình)
-        document.querySelectorAll('form[method="POST"], form[method="post"]').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                alert('Tài khoản Contributor chỉ có quyền XEM, không có quyền chỉnh sửa, duyệt hoặc xóa!');
-                return false;
-            }, true);
-            form.querySelectorAll('button, input, select, textarea').forEach(el => {
-                el.disabled = true;
-                el.title = 'Tài khoản Contributor chỉ có quyền xem';
-            });
-        });
-
-        // Vô hiệu hóa các dropdown đổi trạng thái, checkbox chọn xóa và các nút mở Modal thêm/sửa/xóa
-        const actionSelectors = [
-            'select[onchange*="handleAdminStatusDropdownChange"]',
-            'select[onchange*="handleScheduleDoorDropdownChange"]',
-            'input[type="checkbox"][class*="item-check-"]',
-            'input[type="checkbox"][id^="selectAll"]',
-            'button[data-bs-target="#addScheduleModal"]',
-            'button[data-bs-target="#importModal"]',
-            'button[onclick*="openEditScheduleModal"]',
-            'button[onclick*="openUpdateWeeksModal"]',
-            'button[onclick*="openAddWorklogModal"]',
-            'button[onclick*="openEditWorklogModal"]',
-            'button[onclick*="completePhaseACurrentRoom"]',
-            'button[onclick*="completeAllStepsCurrentRoom"]',
-            'button[onclick*="resetCurrentRoomSteps"]',
-            'button[onclick*="copyPhaseAToAllRooms"]',
-            'button[onclick*="logCurrentDeployToWorklog"]',
-            'button[onclick*="saveCurrentRoomDeployState"]',
-            'button[onclick*="sendTestSmtpEmail"]',
-            '#deployRoomNoteInput'
-        ];
-        document.querySelectorAll(actionSelectors.join(', ')).forEach(el => {
-            el.disabled = true;
-            el.style.opacity = '0.65';
-            el.style.cursor = 'not-allowed';
-            el.title = 'Tài khoản Contributor chỉ có quyền xem';
-        });
-    }
-
-    // ==========================================
-    // QUẢN LÝ NHẬT KÝ CÔNG VIỆC (WORK LOG) & CHECKLIST DEPLOY 8 PHÒNG MÁY
-    // ==========================================
-    let currentWorklogCategory = 'all';
-
-    function switchWorklogSubView(mode) {
-        const dailySec = document.getElementById('wlDailySection');
-        const deploySec = document.getElementById('wlDeploySection');
-        const btnDaily = document.getElementById('btnSubViewDaily');
-        const btnDeploy = document.getElementById('btnSubViewDeploy');
-        if (!dailySec || !deploySec) return;
-
-        if (mode === 'deploy') {
-            dailySec.classList.add('d-none');
-            deploySec.classList.remove('d-none');
-            btnDeploy.classList.add('bg-white', 'text-dark', 'shadow-sm');
-            btnDeploy.classList.remove('text-white');
-            btnDaily.classList.remove('bg-white', 'text-dark', 'shadow-sm');
-            btnDaily.classList.add('text-white');
-        } else {
-            deploySec.classList.add('d-none');
-            dailySec.classList.remove('d-none');
-            btnDaily.classList.add('bg-white', 'text-dark', 'shadow-sm');
-            btnDaily.classList.remove('text-white');
-            btnDeploy.classList.remove('bg-white', 'text-dark', 'shadow-sm');
-            btnDeploy.classList.add('text-white');
-        }
-
-        const url = new URL(window.location.href);
-        url.searchParams.set('tab', 'worklog');
-        url.searchParams.set('wl_view', mode);
-        history.replaceState(null, '', url.toString());
-    }
-
-    function filterWorklogCategory(catVal, btnEl) {
-        currentWorklogCategory = catVal;
-        document.querySelectorAll('button[data-wl-cat]').forEach(b => {
-            b.classList.remove('active-all');
-        });
-        if (btnEl) btnEl.classList.add('active-all');
-        applyWorklogFilters();
-    }
-
-    function applyWorklogFilters() {
-        const searchInput = document.getElementById('searchInput-worklogs');
-        const roomSelect = document.getElementById('roomFilter-worklogs');
-        const statusSelect = document.getElementById('statusFilter-worklogs');
-
-        const keyword = (searchInput ? searchInput.value : '').trim().toLowerCase();
-        const roomVal = roomSelect ? roomSelect.value : 'all';
-        const statusVal = statusSelect ? statusSelect.value : 'all';
-
-        const items = document.querySelectorAll('.admin-list-item-worklogs');
-        items.forEach(item => {
-            const itemCat = item.getAttribute('data-category') || '';
-            const itemStatus = item.getAttribute('data-status') || '';
-            const itemRoom = item.getAttribute('data-room') || '';
-            const itemSearch = item.getAttribute('data-search') || '';
-
-            const matchCat = (currentWorklogCategory === 'all') || (itemCat === currentWorklogCategory);
-            const matchStatus = (statusVal === 'all') || (itemStatus === statusVal);
-            const matchRoom = (roomVal === 'all') || itemRoom.toLowerCase().includes(roomVal.toLowerCase()) || itemRoom.includes('Tất cả');
-            const matchSearch = (!keyword) || itemSearch.includes(keyword);
-
-            if (matchCat && matchStatus && matchRoom && matchSearch) {
-                item.style.display = '';
-            } else {
-                item.style.display = 'none';
-            }
-        });
-        updateSelectedCount('worklogs');
-    }
-
-    function syncRoomChipsWithInput() {
-        const inputEl = document.getElementById('wl_target_rooms');
-        if (!inputEl) return;
-        const currentParts = inputEl.value.split(',').map(s => s.trim()).filter(Boolean);
-        document.querySelectorAll('#wlRoomChipsContainer .wl-room-chip').forEach(chip => {
-            const val = chip.getAttribute('data-room-val');
-            if (currentParts.includes(val)) {
-                chip.classList.add('active');
-            } else {
-                chip.classList.remove('active');
-            }
-        });
-    }
-
-    function toggleWlRoomChip(chipEl) {
-        chipEl.classList.toggle('active');
-        const selected = [];
-        document.querySelectorAll('#wlRoomChipsContainer .wl-room-chip.active').forEach(c => {
-            selected.push(c.getAttribute('data-room-val'));
-        });
-        const inputEl = document.getElementById('wl_target_rooms');
-        if (inputEl) {
-            inputEl.value = selected.join(', ');
-        }
-    }
-
-    function openAddWorklogModal() {
-        const form = document.getElementById('worklogForm');
-        form.action = "{{ url_for('add_worklog') }}";
-        document.getElementById('worklogModalTitle').textContent = 'Thêm Công Việc Thường Nhật Mới';
-        document.getElementById('worklogSubmitBtn').textContent = 'Lưu vào Nhật ký công việc';
-
-        document.getElementById('wl_work_date').value = "{{ today_date_str }}";
-        document.getElementById('wl_shift_name').value = 'Ca sáng';
-        document.getElementById('wl_priority').value = 'normal';
-        document.getElementById('wl_category').value = 'server_net';
-        document.getElementById('wl_status').value = 'in_progress';
-        document.getElementById('wl_target_rooms').value = '5.1';
-        document.getElementById('wl_content').value = '';
-        document.getElementById('wl_notes').value = '';
-
-        syncRoomChipsWithInput();
-        const modal = new bootstrap.Modal(document.getElementById('worklogModal'));
-        modal.show();
-    }
-
-    function openEditWorklogModal(btnEl) {
-        const id = btnEl.getAttribute('data-id');
-        const form = document.getElementById('worklogForm');
-        form.action = `/admin/worklog/edit/${id}`;
-        document.getElementById('worklogModalTitle').textContent = `Chỉnh Sửa Công Việc #${id}`;
-        document.getElementById('worklogSubmitBtn').textContent = 'Lưu Cập Nhật';
-
-        document.getElementById('wl_work_date').value = btnEl.getAttribute('data-date') || "{{ today_date_str }}";
-        document.getElementById('wl_shift_name').value = btnEl.getAttribute('data-shift') || 'Ca sáng';
-        document.getElementById('wl_priority').value = btnEl.getAttribute('data-priority') || 'normal';
-        document.getElementById('wl_category').value = btnEl.getAttribute('data-category') || 'server_net';
-        document.getElementById('wl_status').value = btnEl.getAttribute('data-status') || 'in_progress';
-        document.getElementById('wl_target_rooms').value = btnEl.getAttribute('data-rooms') || '';
-        document.getElementById('wl_content').value = btnEl.getAttribute('data-content') || '';
-        document.getElementById('wl_notes').value = btnEl.getAttribute('data-notes') || '';
-
-        syncRoomChipsWithInput();
-        const modal = new bootstrap.Modal(document.getElementById('worklogModal'));
-        modal.show();
-    }
-
-    // ====================================================
-    // LOGIC CHECKLIST DEPLOY 8 PHÒNG MÁY (23 BƯỚC CHUẨN SOP)
-    // ====================================================
-    const DEPLOY_PHASE_A_STEPS = [
-        { id: 'A0', label: 'A. Recovery từ file Acronis lên 2 máy mẫu (Sinh viên và Giáo viên)', hint: 'Lưu ý: File có sẵn Veyon dành cho Client' },
-        { id: 'A1', label: '1. Kiểm tra Power Option', hint: 'Chỉnh High Performance, Turn off display / Sleep = Never' },
-        { id: 'A2', label: '2. Cài đặt Driver', hint: 'Kiểm tra Device Manager nhận đủ toàn bộ thiết bị' },
-        { id: 'A3', label: '3. Tắt Fast Startup', hint: 'Control Panel ➔ Power Options ➔ Choose what the power buttons do ➔ Bỏ tích Fast Startup' },
-        { id: 'A4', label: '4. Kiểm tra Date and Time', hint: 'Đúng múi giờ (UTC+07:00) Bangkok, Hanoi, Jakarta & đồng bộ giờ chuẩn' },
-        { id: 'A5', label: '5. Clean ổ D và This PC', hint: 'Dọn sạch dữ liệu cũ trên ổ D, Desktop, Downloads, Documents, Recycle Bin' },
-        { id: 'A6', label: '6. Xóa Temp', hint: 'Chạy Run: temp, %temp%, prefetch và xóa sạch' },
-        { id: 'A7', label: '7. Kiểm tra Windows Active', hint: 'Đảm bảo Windows & Office đã báo Activated bản quyền' },
-        { id: 'A8', label: '8. Backup lại 1 file với đầy đủ các bước trên máy thực', hint: 'Để sau này cập nhật phần mềm chỉ cần cài phần mềm là okay' },
-        { id: 'A9', label: '9. Chuyển sang Administrator ➔ Paste source Script Automation ➔ Run file "first run" ➔ PC Shutdown', hint: 'Thực hiện đúng trình tự trên tài khoản Administrator trước khi bắt Image' },
-        { id: 'A10', label: '10. Tạo file Image chuẩn (7 máy giáo viên (Dell) và các máy sinh viên)', hint: 'Hoàn tất file Master Image chuẩn bị bung hàng loạt' }
-    ];
-
-    const DEPLOY_PHASE_B_STEPS = [
-        { id: 'B1', label: '1. Kiểm tra tốc độ mạng của phòng phải đủ 1 Gbps', hint: 'Kiểm tra Link Speed = 1.0 Gbps trên máy mẫu & Switch trước khi chạy Clonezilla' },
-        { id: 'B2', label: '2. Bung Image lên máy Giáo viên (GV) trước', hint: 'Khôi phục máy GV hoàn tất để dùng máy GV làm Clonezilla Lite Server' },
-        { divider: '3. Từ máy giáo viên triển khai Clonezilla Lite Server lên máy con:' },
-        { id: 'B3_1', sub: true, label: '3.1. Chọn mode: <span class="deploy-code-pill">lite-server</span>' },
-        { id: 'B3_2', sub: true, label: '3.2. Chọn <span class="deploy-code-pill">Netboot</span>' },
-        { id: 'B3_3', sub: true, label: '3.3. Chọn <span class="deploy-code-pill">Using existing DHCP</span>' },
-        { id: 'B3_4', sub: true, label: '3.4. Chọn <span class="deploy-code-pill">DHCP use DHCP broadcast</span>' },
-        { id: 'B3_5', sub: true, label: '3.5. Chọn <span class="deploy-code-pill">Choose number client</span> (Nhập đúng số máy con)' },
-        { id: 'B3_6', sub: true, label: '3.6. Chọn <span class="deploy-code-pill">Reboot client</span> sau khi triển khai thành công' },
-        { divider: '4. Cấu hình máy Giáo viên (GV):' },
-        { id: 'B4_1', sub: true, label: '4.1. Đặt IP tĩnh cho máy Giáo viên' },
-        { id: 'B4_2', sub: true, label: '4.2. Chép <span class="deploy-code-pill">t3h</span> và cài đặt phần mềm thi trắc nghiệm' },
-        { id: 'B4_3', sub: true, label: '4.3. Chỉnh sửa quyền của ổ <span class="deploy-code-pill">Z</span> trong Logon, pass là <span class="deploy-secret-pill">giaovien</span>' },
-        { id: 'B5', label: '5. Hoàn tất triển khai phòng máy', hint: 'Kiểm tra Veyon Master nhìn thấy đủ máy con & nghiệm thu phòng máy' }
-    ];
-
-    const ALL_DEPLOY_STEP_IDS = [
-        ...DEPLOY_PHASE_A_STEPS.map(s => s.id),
-        ...DEPLOY_PHASE_B_STEPS.filter(s => !s.divider).map(s => s.id)
-    ];
-
-    const DEPLOY_ROOMS_LIST = ['5.1', '5.2', '5.3', '6.1', '6.2', '6.3', '6.5', '6.6'];
-    let deployRoomStateMap = {{ (deploy_data['room_map'] if deploy_data else {}) | tojson | safe }};
-    let activeDeployRoom = '5.1';
-
-    function initDeployChecklistUI() {
-        DEPLOY_ROOMS_LIST.forEach(r => {
-            if (!deployRoomStateMap[r]) {
-                deployRoomStateMap[r] = { room: r, checked: [], notes: '', updated_by: 'Admin', updated_at: '' };
-            }
-        });
-        renderDeployUI();
-    }
-
-    function changeDeployCampaign(campaignName) {
-        const url = new URL(window.location.href);
-        url.searchParams.set('tab', 'worklog');
-        url.searchParams.set('wl_view', 'deploy');
-        url.searchParams.set('deploy_campaign', campaignName);
-        window.location.href = url.toString();
-    }
-
-    function selectDeployRoom(roomCode) {
-        activeDeployRoom = roomCode;
-        renderDeployUI();
-    }
-
-    function renderDeployUI() {
-        const gridEl = document.getElementById('deployRoomsGrid');
-        if (!gridEl) return;
-
-        const totalSteps = ALL_DEPLOY_STEP_IDS.length;
-        let completedRoomsCount = 0;
-
-        gridEl.innerHTML = DEPLOY_ROOMS_LIST.map(r => {
-            const st = deployRoomStateMap[r] || { checked: [], notes: '' };
-            const doneCount = (st.checked || []).length;
-            const pct = Math.round((doneCount / totalSteps) * 100);
-            const isDone = doneCount >= totalSteps;
-            if (isDone) completedRoomsCount++;
-            const isActive = (r === activeDeployRoom);
-
-            return `
-                <div class="deploy-room-card ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}" onclick="selectDeployRoom('${r}')">
-                    <div class="fw-bold" style="color: #0F2942; font-size: 0.86rem;">
-                        Phòng ${r}
-                    </div>
-                    <div class="fw-bold mt-1" style="font-size: 0.74rem; color: ${isDone ? '#15803D' : (isActive ? '#0D9488' : '#64748B')};">
-                        ${doneCount}/${totalSteps} bước (${pct}%)
-                    </div>
-                    <div class="progress mt-1" style="height: 5px; background-color: #E2E8F0;">
-                        <div class="progress-bar" role="progressbar"
-                             style="width: ${pct}%; background-color: ${isDone ? '#22C55E' : '#0D9488'};"></div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        const summaryBadge = document.getElementById('overallDeploySummaryBadge');
-        if (summaryBadge) {
-            summaryBadge.textContent = `Tổng tiến độ đợt này: ${completedRoomsCount} / 8 phòng hoàn tất 100%`;
-        }
-
-        const curState = deployRoomStateMap[activeDeployRoom] || { checked: [], notes: '', updated_at: '' };
-        const checkedSet = new Set(curState.checked || []);
-        const curDone = checkedSet.size;
-        const curPct = Math.round((curDone / totalSteps) * 100);
-
-        document.getElementById('deployActiveRoomBadge').textContent = `PHÒNG ${activeDeployRoom}`;
-        document.getElementById('deployNoteRoomLabel').textContent = `Phòng ${activeDeployRoom}`;
-        document.getElementById('deployActiveRoomProgressText').textContent = `Tiến độ Phòng ${activeDeployRoom}: ${curDone} / ${totalSteps} bước (${curPct}%)`;
-        document.getElementById('deployActiveRoomMeta').textContent = curState.updated_at
-            ? `Cập nhật lần cuối: ${curState.updated_at} bởi ${curState.updated_by || 'Admin'}`
-            : 'Tự động lưu vào cơ sở dữ liệu ngay khi tích chọn';
-        document.getElementById('deployRoomNoteInput').value = curState.notes || '';
-
-        // Render Phase A
-        const phaseAHtml = DEPLOY_PHASE_A_STEPS.map(s => {
-            const isChecked = checkedSet.has(s.id);
-            return `
-                <div class="deploy-step-item ${isChecked ? 'checked' : ''}" onclick="toggleDeployStep('${s.id}')">
-                    <input type="checkbox" class="form-check-input mt-1 flex-shrink-0" ${isChecked ? 'checked' : ''}
-                           onclick="event.stopPropagation(); toggleDeployStep('${s.id}')">
-                    <div>
-                        <div class="deploy-step-title fw-semibold text-dark" style="font-size: 0.82rem;">${s.label}</div>
-                        ${s.hint ? `<div class="text-muted" style="font-size: 0.73rem;">${s.hint}</div>` : ''}
-                    </div>
-                </div>
-            `;
-        }).join('');
-        document.getElementById('deployPhaseAList').innerHTML = phaseAHtml;
-
-        // Render Phase B
-        const phaseBHtml = DEPLOY_PHASE_B_STEPS.map(s => {
-            if (s.divider) {
-                return `<div class="fw-bold text-uppercase mt-2 mb-1 px-1" style="font-size: 0.73rem; color: #0F2942;">${s.divider}</div>`;
-            }
-            const isChecked = checkedSet.has(s.id);
-            return `
-                <div class="deploy-step-item ${s.sub ? 'sub-step' : ''} ${isChecked ? 'checked' : ''}" onclick="toggleDeployStep('${s.id}')">
-                    <input type="checkbox" class="form-check-input mt-1 flex-shrink-0" ${isChecked ? 'checked' : ''}
-                           onclick="event.stopPropagation(); toggleDeployStep('${s.id}')">
-                    <div>
-                        <div class="deploy-step-title fw-semibold text-dark" style="font-size: 0.82rem;">${s.label}</div>
-                        ${s.hint ? `<div class="text-muted" style="font-size: 0.73rem;">${s.hint}</div>` : ''}
-                    </div>
-                </div>
-            `;
-        }).join('');
-        document.getElementById('deployPhaseBList').innerHTML = phaseBHtml;
-
-        const aDone = DEPLOY_PHASE_A_STEPS.filter(s => checkedSet.has(s.id)).length;
-        const bCheckable = DEPLOY_PHASE_B_STEPS.filter(s => !s.divider);
-        const bDone = bCheckable.filter(s => checkedSet.has(s.id)).length;
-
-        document.getElementById('deployPhaseACountBadge').textContent = `${aDone}/${DEPLOY_PHASE_A_STEPS.length} bước`;
-        document.getElementById('deployPhaseBCountBadge').textContent = `${bDone}/${bCheckable.length} bước`;
-    }
-
-    function toggleDeployStep(stepId) {
-        if (IS_CONTRIBUTOR_READONLY) {
-            alert('Tài khoản Contributor chỉ có quyền XEM, không có quyền tích chọn hoặc chỉnh sửa Checklist Deploy!');
-            return;
-        }
-        const st = deployRoomStateMap[activeDeployRoom];
-        const arr = st.checked || [];
-        const idx = arr.indexOf(stepId);
-        if (idx >= 0) {
-            arr.splice(idx, 1);
-        } else {
-            arr.push(stepId);
-        }
-        st.checked = arr;
-        renderDeployUI();
-        saveCurrentRoomDeployState();
-    }
-
-    function completePhaseACurrentRoom() {
-        const st = deployRoomStateMap[activeDeployRoom];
-        const set = new Set(st.checked || []);
-        DEPLOY_PHASE_A_STEPS.forEach(s => set.add(s.id));
-        st.checked = Array.from(set);
-        renderDeployUI();
-        saveCurrentRoomDeployState();
-    }
-
-    function completeAllStepsCurrentRoom() {
-        deployRoomStateMap[activeDeployRoom].checked = [...ALL_DEPLOY_STEP_IDS];
-        renderDeployUI();
-        saveCurrentRoomDeployState();
-    }
-
-    function resetCurrentRoomSteps() {
-        if (!confirm(`Bạn có chắc muốn Reset toàn bộ tích chọn của Phòng ${activeDeployRoom} về 0% không?`)) return;
-        deployRoomStateMap[activeDeployRoom].checked = [];
-        renderDeployUI();
-        saveCurrentRoomDeployState();
-    }
-
-    async function saveCurrentRoomDeployState(showNotice = false) {
-        const campaignSelect = document.getElementById('deployCampaignSelect');
-        const campaignName = campaignSelect ? campaignSelect.value : '';
-        const noteInput = document.getElementById('deployRoomNoteInput');
-        const st = deployRoomStateMap[activeDeployRoom];
-        if (noteInput) {
-            st.notes = noteInput.value;
-        }
-
-        try {
-            const res = await fetch('/api/deploy-checklist/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    campaign_name: campaignName,
-                    room: activeDeployRoom,
-                    checked_steps: st.checked || [],
-                    notes: st.notes || ''
-                })
-            });
-            const data = await res.json();
-            if (data && data.success) {
-                st.updated_at = data.updated_at;
-                st.updated_by = data.updated_by;
-                document.getElementById('deployActiveRoomMeta').textContent =
-                    `Đã lưu tự động lúc ${data.updated_at} bởi ${data.updated_by}`;
-                if (showNotice) {
-                    alert(`Đã lưu ghi chú và tiến độ của Phòng ${activeDeployRoom}!`);
-                }
-            }
-        } catch (err) {
-            console.error('Save deploy checklist error:', err);
-        }
-    }
-
-    async function copyPhaseAToAll8Rooms() {
-        if (!confirm('Đánh dấu hoàn thành 11 bước Phần A (Đã chuẩn bị xong Master Image) cho cả 8 phòng máy trong đợt này?')) return;
-        const campaignSelect = document.getElementById('deployCampaignSelect');
-        const campaignName = campaignSelect ? campaignSelect.value : '';
-        try {
-            const res = await fetch('/api/deploy-checklist/copy-phase-a-all', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ campaign_name: campaignName })
-            });
-            const data = await res.json();
-            if (data && data.success && data.room_map) {
-                deployRoomStateMap = data.room_map;
-                renderDeployUI();
-                alert('Đã đánh dấu xong Phần A (Master Image) cho toàn bộ 8 phòng máy!');
-            }
-        } catch (err) {
-            console.error(err);
-        }
-    }
-
-    async function logCurrentRoomDeployToWorklog() {
-        const campaignSelect = document.getElementById('deployCampaignSelect');
-        const campaignName = campaignSelect ? campaignSelect.value : '';
-        const st = deployRoomStateMap[activeDeployRoom] || { checked: [], notes: '' };
-        const noteVal = document.getElementById('deployRoomNoteInput').value || st.notes || '';
-        const doneCount = (st.checked || []).length;
-        const totalCount = ALL_DEPLOY_STEP_IDS.length;
-
-        try {
-            await saveCurrentRoomDeployState(false);
-            const res = await fetch('/api/deploy-checklist/log-to-worklog', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    campaign_name: campaignName,
-                    room: activeDeployRoom,
-                    done_count: doneCount,
-                    total_count: totalCount,
-                    notes: noteVal
-                })
-            });
-            const data = await res.json();
-            if (data && data.success) {
-                if (confirm(`${data.message}\n\nBạn có muốn chuyển sang xem Bảng Nhật ký công việc ngay không?`)) {
-                    window.location.href = `/admin/panel?tab=worklog&wl_view=daily`;
-                }
-            }
-        } catch (err) {
-            console.error(err);
-        }
-    }
-
-    // ==========================================
-    // XỬ LÝ MODAL PHẢN HỒI & TRẢ KẾT QUẢ QUA EMAIL CHO USER
-    // ==========================================
-    let currentReplyContext = {};
-
-    const QUICK_REPLY_TEMPLATES = {
-        booking: {
-            Processing: [
-                'QTTB đã tiếp nhận yêu cầu và đang kiểm tra lịch phòng máy.',
-                'Đang tiến hành cài đặt phần mềm theo yêu cầu của Quý Thầy/Cô.',
-                'Đã tiếp nhận, sẽ phản hồi kết quả duyệt phòng sớm nhất.'
-            ],
-            Approved: [
-                'Đã duyệt phòng và cập nhật vào Thời khóa biểu. Đã báo bộ phận trực mở cửa phòng đúng giờ.',
-                'Đã duyệt mượn phòng và hoàn tất cài đặt phần mềm phục vụ giảng dạy.',
-                'Phòng máy đã sẵn sàng, kính mời Quý Thầy/Cô sử dụng theo lịch đăng ký.'
-            ],
-            Rejected: [
-                'Khung giờ này phòng máy đã có lịch học chính khóa hoặc lịch bảo trì định kỳ.',
-                'Hiện tại tất cả các phòng máy đều đã kín lịch trong ca này, mong Quý Thầy/Cô thông cảm chọn khung giờ khác.',
-                'Phần mềm yêu cầu không tương thích với cấu hình hiện tại của phòng máy này.'
-            ]
-        },
-        issue: {
-            Processing: [
-                'Kỹ thuật viên QTTB đã tiếp nhận báo cáo và đang xuống phòng máy kiểm tra.',
-                'Đã ghi nhận sự cố máy tính, kỹ thuật sẽ xử lý trước ca học tiếp theo.'
-            ],
-            Resolved: [
-                'Đã kiểm tra và khắc phục hoàn tất sự cố phần cứng/phần mềm trên máy.',
-                'Đã bung lại Image / cài đặt lại phần mềm, máy hoạt động ổn định bình thường.',
-                'Đã thay thế thiết bị ngoại vi (chuột/bàn phím/dây mạng) mới cho máy.'
-            ]
-        },
-        cancellation: {
-            Processing: [
-                'QTTB đã tiếp nhận thông báo nghỉ học và đang chuyển thông tin cho bộ phận trực phòng.',
-                'Đã ghi nhận lịch báo vắng của Quý Thầy/Cô.'
-            ],
-            Approved: [
-                'Đã xác nhận lịch báo nghỉ và thông báo chị Hân khóa cửa phòng máy trong ca này.',
-                'Đã duyệt thông báo nghỉ và giải phóng ca phòng trống trên hệ thống. Quý Thầy/Cô có thể đăng ký dạy bù ở mục Mượn phòng.'
-            ]
-        }
-    };
-
-    const STATUS_DROPDOWN_LABELS = {
-        booking: {
-            Processing: 'Đã tiếp nhận yêu cầu mượn phòng',
-            Approved: 'Đã duyệt yêu cầu mượn phòng',
-            Rejected: 'Từ chối yêu cầu mượn phòng'
-        },
-        issue: {
-            Processing: 'Đã tiếp nhận báo cáo sự cố',
-            Resolved: 'Đã xong / Đã khắc phục sự cố'
-        },
-        cancellation: {
-            Processing: 'Đã tiếp nhận thông báo nghỉ gấp',
-            Approved: 'Đã duyệt thông báo nghỉ gấp'
-        }
-    };
-
-    function handleScheduleDoorDropdownChange(selectEl) {
-        const curVal = selectEl.getAttribute('data-current') || 'open';
-        const newVal = selectEl.value;
-        const subject = selectEl.getAttribute('data-subject') || 'Môn học';
-        const room = selectEl.getAttribute('data-room') || '';
-
-        if (newVal === 'locked') {
-            if (!confirm(`Đánh dấu môn "${subject}" (P.${room}) kết thúc sớm? Hệ thống sẽ báo Khóa cửa phòng và giải phóng phòng trống.`)) {
-                selectEl.value = curVal;
-                return;
-            }
-        }
-        selectEl.form.submit();
-    }
-
-    // ==========================================
-    // XỬ LÝ THÊM LỊCH (1 MÔN HOẶC NHIỀU MÔN) & SỬA LỊCH MÔN HỌC
-    // ==========================================
-    let adminScheduleCart = [];
-
-    function prepareAddScheduleModal(returnTab, defaultRoom) {
-        const retEl = document.getElementById('addScheduleReturnTab');
-        if (retEl) retEl.value = returnTab || 'schedules';
-        if (defaultRoom) {
-            const roomSel = document.getElementById('add_room');
-            if (roomSel) roomSel.value = defaultRoom;
-        }
-    }
-
-    function setAddScheduleInputsRequired(isReq) {
-        ['add_start_period', 'add_end_period', 'add_subject_name', 'add_department'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                if (isReq) el.setAttribute('required', 'required');
-                else el.removeAttribute('required');
-            }
-        });
-    }
-
-    function addScheduleToAdminCart() {
-        const room = document.getElementById('add_room').value.trim();
-        const day_of_week = document.getElementById('add_day_of_week').value;
-        const start_period = parseFloat(document.getElementById('add_start_period').value);
-        const end_period = parseFloat(document.getElementById('add_end_period').value);
-        const subject_name = document.getElementById('add_subject_name').value.trim();
-        const class_code = document.getElementById('add_class_code').value.trim();
-        const department = document.getElementById('add_department').value;
-        const study_period = document.getElementById('add_study_period').value.trim();
-        const num_weeks = parseInt(document.getElementById('add_num_weeks').value) || 15;
-        const notes = document.getElementById('add_notes').value.trim();
-
-        if (!room || isNaN(start_period) || isNaN(end_period) || !subject_name || !department) {
-            alert('Vui lòng nhập đầy đủ Phòng, Tiết BĐ, Tiết KT, Tên Môn và chọn Đơn vị trước khi thêm vào danh sách!');
-            return;
-        }
-        if (start_period >= end_period) {
-            alert('Tiết bắt đầu phải nhỏ hơn tiết kết thúc!');
-            return;
-        }
-        if (start_period < 1 || end_period > 10) {
-            alert('Tiết học phải nằm trong khoảng từ 1 đến 10!');
-            return;
-        }
-
-        adminScheduleCart.push({
-            room,
-            day_of_week: parseInt(day_of_week),
-            start_period,
-            end_period,
-            subject_name,
-            class_code,
-            department,
-            study_period,
-            num_weeks,
-            notes
-        });
-
-        // Reset nhanh Mã lớp & Ghi chú để nhập ca tiếp theo nhanh hơn (giữ lại Tên môn, Đơn vị, Giai đoạn)
-        document.getElementById('add_class_code').value = '';
-        document.getElementById('add_notes').value = '';
-        renderAdminScheduleCart();
-    }
-
-    function removeScheduleFromAdminCart(idx) {
-        adminScheduleCart.splice(idx, 1);
-        renderAdminScheduleCart();
-    }
-
-    function clearAdminScheduleCart() {
-        adminScheduleCart = [];
-        renderAdminScheduleCart();
-    }
-
-    function renderAdminScheduleCart() {
-        const sec = document.getElementById('adminScheduleCartSection');
-        const tbody = document.getElementById('adminScheduleCartBody');
-        const countEl = document.getElementById('adminScheduleCartCount');
-        const submitBtn = document.getElementById('btnSubmitAddSchedule');
-        const bulkInput = document.getElementById('addScheduleBulkJson');
-
-        if (!sec || !tbody) return;
-        countEl.textContent = adminScheduleCart.length;
-
-        if (adminScheduleCart.length === 0) {
-            sec.classList.add('d-none');
-            tbody.innerHTML = '';
-            bulkInput.value = '';
-            submitBtn.textContent = 'Lưu Lịch';
-            setAddScheduleInputsRequired(true);
-            return;
-        }
-
-        sec.classList.remove('d-none');
-        setAddScheduleInputsRequired(false);
-        submitBtn.textContent = `Lưu Tất Cả (${adminScheduleCart.length} môn)`;
-        bulkInput.value = JSON.stringify(adminScheduleCart);
-
-        tbody.innerHTML = adminScheduleCart.map((item, idx) => `
-            <tr>
-                <td class="text-center text-muted">${idx + 1}</td>
-                <td><span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">P.${item.room}</span></td>
-                <td class="text-nowrap"><strong>Thứ ${item.day_of_week}</strong> (T.${item.start_period}-${item.end_period})</td>
-                <td>
-                    <strong>${item.subject_name}</strong>
-                    ${item.class_code ? `<span class="text-muted">(${item.class_code})</span>` : ''}
-                </td>
-                <td>${item.department}</td>
-                <td class="text-nowrap">${item.study_period || '—'} (${item.num_weeks}T)</td>
-                <td class="text-muted">${item.notes || '—'}</td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeScheduleFromAdminCart(${idx})">&times;</button>
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    function handleAddScheduleSubmit(event) {
-        const bulkInput = document.getElementById('addScheduleBulkJson');
-        if (adminScheduleCart.length > 0) {
-            bulkInput.value = JSON.stringify(adminScheduleCart);
-            return true;
-        }
-        const s = parseFloat(document.getElementById('add_start_period').value);
-        const e = parseFloat(document.getElementById('add_end_period').value);
-        const dept = document.getElementById('add_department').value;
-        if (!dept) {
-            alert('Vui lòng chọn Đơn vị!');
-            event.preventDefault();
-            return false;
-        }
-        if (isNaN(s) || isNaN(e) || s >= e) {
-            alert('Tiết bắt đầu phải nhỏ hơn tiết kết thúc!');
-            event.preventDefault();
-            return false;
-        }
-        return true;
-    }
-
-    function openEditScheduleModal(btnEl) {
-        const id = btnEl.getAttribute('data-id');
-        const room = btnEl.getAttribute('data-room') || '5.1';
-        const day = btnEl.getAttribute('data-day') || '2';
-        const start = btnEl.getAttribute('data-start') || '1';
-        const end = btnEl.getAttribute('data-end') || '5';
-        const cls = btnEl.getAttribute('data-class') || '';
-        const subject = btnEl.getAttribute('data-subject') || '';
-        const dept = btnEl.getAttribute('data-dept') || 'Khác';
-        const period = btnEl.getAttribute('data-period') || '';
-        const weeks = btnEl.getAttribute('data-weeks') || '15';
-        const notes = btnEl.getAttribute('data-notes') || '';
-
-        const form = document.getElementById('editScheduleForm');
-        form.action = `/admin/edit_schedule/${id}`;
-
-        document.getElementById('edit_room').value = room;
-        document.getElementById('edit_day_of_week').value = day;
-        document.getElementById('edit_start_period').value = start;
-        document.getElementById('edit_end_period').value = end;
-        document.getElementById('edit_class_code').value = cls;
-        document.getElementById('edit_subject_name').value = subject;
-        document.getElementById('edit_study_period').value = period;
-        document.getElementById('edit_num_weeks').value = weeks;
-        document.getElementById('edit_notes').value = notes;
-
-        const deptSel = document.getElementById('edit_department');
-        let foundOption = Array.from(deptSel.options).some(opt => opt.value === dept);
-        if (!foundOption && dept) {
-            const customOpt = document.createElement('option');
-            customOpt.value = dept;
-            customOpt.textContent = dept;
-            deptSel.appendChild(customOpt);
-        }
-        deptSel.value = dept || 'Khác';
-
-        const modal = new bootstrap.Modal(document.getElementById('editScheduleModal'));
-        modal.show();
-    }
-
-    function handleAdminStatusDropdownChange(selectEl) {
-        const actionUrl = selectEl.getAttribute('data-action') || '';
-        const reqType = selectEl.getAttribute('data-type') || 'booking';
-        const prevStatus = selectEl.getAttribute('data-current') || 'Processing';
-        const status = selectEl.value;
-        const userName = selectEl.getAttribute('data-user') || 'Giảng viên';
-        const userEmail = selectEl.getAttribute('data-email') || '';
-        const summary = selectEl.getAttribute('data-summary') || '';
-        const existingNote = selectEl.getAttribute('data-note') || '';
-
-        // Khôi phục lại giá trị hiển thị của select phòng trường hợp Admin đóng Modal hủy thao tác
-        selectEl.value = prevStatus;
-
-        const typeLabels = STATUS_DROPDOWN_LABELS[reqType] || {};
-        const statusLabel = typeLabels[status] || 'Cập nhật trạng thái';
-
-        currentReplyContext = { actionUrl, reqType, status, statusLabel, userName, userEmail, summary };
-
-        const formEl = document.getElementById('statusReplyForm');
-        formEl.action = actionUrl;
-        document.getElementById('srHiddenStatus').value = status;
-        document.getElementById('srBadgeLabel').textContent = statusLabel;
-        document.getElementById('srUserLabel').textContent = userName;
-        document.getElementById('srSummaryText').textContent = summary;
-        document.getElementById('srEmailText').textContent = userEmail ? userEmail : 'Không có email đính kèm';
-        document.getElementById('srNoteInput').value = existingNote;
-
-        const badgeEl = document.getElementById('srBadgeLabel');
-        const submitBtn = document.getElementById('srSubmitBtn');
-        if (status === 'Processing') {
-            badgeEl.className = 'badge bg-info text-dark rounded-pill px-3 py-1 fw-bold';
-            submitBtn.className = 'btn btn-sm btn-info text-dark fw-bold px-3 shadow-sm';
-            submitBtn.innerHTML = 'Xác nhận Đã tiếp nhận &amp; Gửi Email';
-        } else if (status === 'Resolved') {
-            badgeEl.className = 'badge bg-success rounded-pill px-3 py-1 fw-bold';
-            submitBtn.className = 'btn btn-sm btn-success fw-bold px-3 shadow-sm';
-            submitBtn.innerHTML = 'Xác nhận Đã xong &amp; Gửi Email';
-        } else if (status === 'Approved') {
-            badgeEl.className = 'badge bg-success rounded-pill px-3 py-1 fw-bold';
-            submitBtn.className = 'btn btn-sm btn-success fw-bold px-3 shadow-sm';
-            submitBtn.innerHTML = 'Xác nhận Đã duyệt &amp; Gửi Email';
-        } else {
-            badgeEl.className = 'badge bg-danger rounded-pill px-3 py-1 fw-bold';
-            submitBtn.className = 'btn btn-sm btn-danger fw-bold px-3 shadow-sm';
-            submitBtn.innerHTML = 'Xác nhận Từ chối &amp; Gửi Email';
-        }
-
-        const gmailBtn = document.getElementById('srGmailWebBtn');
-        if (gmailBtn) {
-            gmailBtn.style.display = userEmail ? 'inline-block' : 'none';
-        }
-
-        const chipsWrap = document.getElementById('srQuickChips');
-        chipsWrap.innerHTML = '';
-        const typeGroup = QUICK_REPLY_TEMPLATES[reqType] || {};
-        const templates = typeGroup[status] || [];
-        templates.forEach(tpl => {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'btn btn-sm btn-outline-secondary rounded-pill py-0 px-2 text-start';
-            b.style.fontSize = '0.71rem';
-            b.textContent = '+ ' + tpl;
-            b.onclick = () => {
-                document.getElementById('srNoteInput').value = tpl;
-            };
-            chipsWrap.appendChild(b);
-        });
-
-        const modal = new bootstrap.Modal(document.getElementById('statusReplyModal'));
-        modal.show();
-    }
-
-    function openGmailComposeFallback() {
-        const to = (currentReplyContext.userEmail || '').trim();
-        if (!to) {
-            alert('Yêu cầu này không có địa chỉ email của người gửi.');
-            return;
-        }
-        const note = (document.getElementById('srNoteInput').value || '').trim();
-        let reqTypeLabel = 'đăng ký mượn phòng máy';
-        if (currentReplyContext.reqType === 'issue') {
-            reqTypeLabel = 'báo cáo sự cố kỹ thuật';
-        } else if (currentReplyContext.reqType === 'cancellation') {
-            reqTypeLabel = 'thông báo nghỉ học';
-        }
-        const cleanStatus = (currentReplyContext.statusLabel || '').replace(/^[^\wÀ-ỹ]+/, '').trim();
-        const subject = `Phản hồi yêu cầu ${reqTypeLabel} (${currentReplyContext.summary}) - Phòng máy tính B4.2`;
-        const bodyLines = [
-            `Kính gửi Thầy/Cô ${currentReplyContext.userName},`,
-            ``,
-            `Hệ thống Quản lý Phòng máy tính Tòa B4.2 (Phòng Quản trị Thiết bị) xin thông báo kết quả xử lý yêu cầu:`,
-            `- Trạng thái: ${cleanStatus}`,
-            `- Chi tiết yêu cầu: ${currentReplyContext.summary}`,
-            note ? `- Phản hồi từ Quản trị viên Phòng máy (QTTB): ${note}` : ``,
-            ``,
-            `Trân trọng,`,
-            `Bộ phận quản lý phòng máy`
-        ].filter(Boolean).join('\n');
-
-        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines)}`;
-        window.open(gmailUrl, '_blank');
-    }
-
-    async function sendTestSmtpEmail() {
-        const btn = document.getElementById('btnTestSmtp');
-        const resBox = document.getElementById('ecTestResult');
-        const smtpEmail = document.getElementById('ecSmtpEmail').value.trim();
-        const smtpPassword = document.getElementById('ecSmtpPassword').value.trim();
-        const senderName = document.getElementById('ecSenderName').value.trim();
-
-        btn.disabled = true;
-        btn.textContent = 'Đang gửi thử...';
-        resBox.classList.remove('d-none', 'text-success', 'text-danger');
-        resBox.textContent = 'Đang kết nối tới máy chủ smtp.gmail.com:587...';
-
-        try {
-            const resp = await fetch('/admin/email-test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    to_email: smtpEmail,
-                    smtp_email: smtpEmail,
-                    smtp_password: smtpPassword,
-                    smtp_sender_name: senderName
-                })
-            });
-            const data = await resp.json();
-            if (data.success) {
-                resBox.classList.add('text-success');
-                resBox.textContent = data.message + ' — Hãy bấm "Lưu cấu hình Email" để áp dụng!';
-            } else {
-                resBox.classList.add('text-danger');
-                resBox.textContent = data.message;
-            }
-        } catch (err) {
-            resBox.classList.add('text-danger');
-            resBox.textContent = 'Lỗi kết nối: ' + err;
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'Gửi Email Test';
-        }
-    }
-
-    // ==========================================
-    // AUTO-RELOAD SAU 30S CHO CÁC TAB XỬ LÝ GẤP
-    // (Yêu cầu, Báo vắng/nghỉ, Sự cố)
-    // ==========================================
-    let autoReloadTimer = null;
-    let autoReloadSeconds = 30;
-    let isAutoReloadPaused = false;
-    const URGENT_TABS = ['requests', 'cancellations', 'issues'];
-
-    function getActiveAdminTab() {
-        const activeTabEl = document.querySelector('#adminTabs .nav-link.active');
-        if (activeTabEl) {
-            const target = activeTabEl.getAttribute('data-bs-target') || '';
-            return target.replace('#', '');
-        }
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('tab') || 'dashboard';
-    }
-
-    function updateAutoReloadUI() {
-        const badges = document.querySelectorAll('.auto-reload-badge');
-        badges.forEach(b => {
-            const secSpan = b.querySelector('.auto-reload-sec');
-            const icon = b.querySelector('.auto-reload-icon');
-            if (isAutoReloadPaused) {
-                b.classList.add('paused');
-                b.setAttribute('title', 'Tự động làm mới đang TẠM DỪNG. Bấm để bật lại.');
-                if (secSpan) secSpan.textContent = 'Đã tạm dừng';
-                if (icon) icon.className = 'bi bi-pause-circle text-warning me-1 auto-reload-icon';
-            } else {
-                b.classList.remove('paused');
-                b.setAttribute('title', 'Tự động cập nhật sau mỗi 30s. Bấm để tạm dừng.');
-                if (secSpan) secSpan.textContent = autoReloadSeconds + 's';
-                if (icon) {
-                    const isSpinning = autoReloadSeconds <= 2 ? ' spin-reload-active' : '';
-                    icon.className = 'bi bi-arrow-repeat text-primary me-1 auto-reload-icon' + isSpinning;
-                }
-            }
-        });
-    }
-
-    function toggleAutoReload() {
-        isAutoReloadPaused = !isAutoReloadPaused;
-        if (!isAutoReloadPaused) {
-            autoReloadSeconds = 30;
-        }
-        updateAutoReloadUI();
-    }
-
-    function startAutoReloadWatcher() {
-        if (autoReloadTimer) clearInterval(autoReloadTimer);
-        autoReloadSeconds = 30;
-        updateAutoReloadUI();
-
-        autoReloadTimer = setInterval(() => {
-            const currentTab = getActiveAdminTab();
-            if (!URGENT_TABS.includes(currentTab)) {
-                return; // Chỉ đếm ngược khi đang ở các tab xử lý gấp
-            }
-
-            if (isAutoReloadPaused) {
-                return;
-            }
-
-            // Kiểm tra an toàn: Nếu admin đang thao tác (mở modal, nhập text, chọn checkbox xóa hàng loạt)
-            const isModalOpen = document.querySelector('.modal.show');
-            const activeEl = document.activeElement;
-            const isInputFocused = activeEl && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeEl.tagName);
-            const hasCheckedItem = document.querySelector('.item-check-requests:checked, .item-check-cancellations:checked, .item-check-issues:checked');
-
-            // Kiểm tra xem có từ khóa tìm kiếm đang gõ hay không
-            const searchInput = document.getElementById(`searchInput-${currentTab}`);
-            const hasSearchText = searchInput && searchInput.value.trim().length > 0;
-
-            if (isModalOpen || isInputFocused || hasCheckedItem || hasSearchText) {
-                // Đang bận thao tác, tạm hoãn và giữ ở mức 10s để không gây gián đoạn công việc
-                autoReloadSeconds = 10;
-                updateAutoReloadUI();
-                return;
-            }
-
-            autoReloadSeconds--;
-            if (autoReloadSeconds <= 0) {
-                autoReloadSeconds = 30;
-                // Giữ nguyên tab hiện tại khi tải lại
-                const url = new URL(window.location.href);
-                url.searchParams.set('tab', currentTab);
-                window.location.href = url.toString();
-            } else {
-                updateAutoReloadUI();
-            }
-        }, 1000);
-    }
+window.ADMIN_PANEL_CFG = {
+    exportMonthlyExcelUrl: {{ url_for('export_monthly_report_excel') | tojson }},
+    exportMonthlyWordUrl: {{ url_for('export_monthly_report_word') | tojson }},
+    addWorklogUrl: {{ url_for('add_worklog') | tojson }},
+    todayDateStr: {{ (today_date_str or '') | tojson }},
+    isContributorReadonly: {{ (is_contributor or false) | tojson }},
+    deployRoomStateMap: {{ (deploy_data['room_map'] if deploy_data else {}) | tojson | safe }}
+};
 </script>
+<script src="{{ url_for('static', filename='js/admin_panel.js') }}"></script>
 {% endblock %}
 
